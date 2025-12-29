@@ -1,3 +1,8 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -186,7 +191,7 @@ cython_debug/
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
 #  and can be added to the global gitignore or merged into this file. However, if you prefer, 
 #  you could uncomment the following to ignore the entire vscode folder
-# .vscode/
+.vscode/
 
 # Ruff stuff:
 .ruff_cache/
@@ -205,3 +210,36 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Terraform files
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+terraform.tfvars
+secrets.tfvars
+override.tf.json
+crash.log
+crash.*.log
+*.crash.log
+terraform_override.tf
+
+# AWS credentials (should use profiles/roles instead)
+.aws/credentials
+.aws/config
+
+# Data files from S3
+data/s3/
+data/s3/*.json
+!data/s3/sample_*.json
+
+# Configuration files
+*.cfg
+
+# Lambda deployment packages
+*.zip
+infrastructure/modules/lambda/lambda_function.zip
+
+# Lambda test responses
+response.json
+infrastructure/environments/*/response.json
