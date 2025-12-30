@@ -263,8 +263,11 @@ def process_operation(
             )
             raise IdealistaAPIError(f"Invalid JSON response: {e}")
 
-    logger.info(f"Completed {operation} operation: {total_pages} pages written to S3")
-    return total_pages
+    pages_processed = page - 1
+    logger.info(
+        f"Completed {operation} operation: {pages_processed} pages written to S3"
+    )
+    return pages_processed
 
 
 def lambda_handler(event, context) -> Dict:

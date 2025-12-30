@@ -123,9 +123,9 @@ class TestGetOAuthToken:
     @patch("idealista_listings_collector.requests.post")
     def test_get_oauth_token_failure(self, mock_post):
         """Test OAuth token retrieval failure."""
-        mock_response = Mock()
-        mock_response.raise_for_status.side_effect = Exception("Network error")
-        mock_post.return_value = mock_response
+        from requests.exceptions import RequestException
+
+        mock_post.side_effect = RequestException("Network error")
 
         with pytest.raises(IdealistaAPIError):
             get_oauth_token("test-key", "test-secret")
@@ -135,16 +135,16 @@ class TestQueryAPI:
     """Tests for query_api function."""
 
     @patch("idealista_listings_collector.get_oauth_token")
-    @patch("idealista_listings_collector.requests.get")
-    def test_query_api_success(self, mock_get, mock_get_token):
+    @patch("idealista_listings_collector.requests.post")
+    def test_query_api_success(self, mock_post, mock_get_token):
         """Test successful API query."""
         mock_get_token.return_value = "test-token"
 
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.text = '{"elementList": [{"propertyCode": "123"}]}'
-        mock_response.raise_for_status = Mock()
-        mock_get.return_value = mock_response
+        mock_response.raise_for_status = Mock(return_value=None)
+        mock_post.return_value = mock_response
 
         result = query_api("test-key", "test-secret", "https://test-url.com")
         assert '"elementList"' in result
@@ -231,19 +231,33 @@ class TestLambdaHandler:
         self, mock_get_secret, mock_process, mock_env_vars
     ):
         """Test lambda_handler in test mode."""
-        mock_get_secret.return_value = {"api_key": "key", "api_secret": "secret"}
-        mock_process.return_value = 1
+        with patch.dict(
+            os.environ,
+            {
+                "S3_BUCKET": "test-bucket",
+                "SECRET_NAME_LVW": "test-secret-lvw",
+                "SECRET_NAME_PMV": "test-secret-pmv",
+            },
+        ), patch(
+            "idealista_listings_collector.S3_BUCKET", "test-bucket"
+        ), patch(
+            "idealista_listings_collector.SECRET_NAME_LVW", "test-secret-lvw"
+        ), patch(
+            "idealista_listings_collector.SECRET_NAME_PMV", "test-secret-pmv"
+        ):
+            mock_get_secret.return_value = {"api_key": "key", "api_secret": "secret"}
+            mock_process.return_value = 1
 
-        event = {"test_mode": True}
-        context = {}
+            event = {"test_mode": True}
+            context = {}
 
-        response = lambda_handler(event, context)
+            response = lambda_handler(event, context)
 
-        assert response["statusCode"] == 200
-        body = json.loads(response["body"])
-        assert "message" in body
-        assert "sale_pages" in body
-        assert "rent_pages" in body
+            assert response["statusCode"] == 200
+            body = json.loads(response["body"])
+            assert "message" in body
+            assert "sale_pages" in body
+            assert "rent_pages" in body
 
     @patch("idealista_listings_collector.process_operation")
     @patch("idealista_listings_collector.get_secret")
@@ -251,30 +265,52 @@ class TestLambdaHandler:
         self, mock_get_secret, mock_process, mock_env_vars
     ):
         """Test lambda_handler in normal mode."""
-        mock_get_secret.return_value = {"api_key": "key", "api_secret": "secret"}
-        mock_process.return_value = 5
+        with patch.dict(
+            os.environ,
+            {
+                "S3_BUCKET": "test-bucket",
+                "SECRET_NAME_LVW": "test-secret-lvw",
+                "SECRET_NAME_PMV": "test-secret-pmv",
+            },
+        ), patch(
+            "idealista_listings_collector.S3_BUCKET", "test-bucket"
+        ), patch(
+            "idealista_listings_collector.SECRET_NAME_LVW", "test-secret-lvw"
+        ), patch(
+            "idealista_listings_collector.SECRET_NAME_PMV", "test-secret-pmv"
+        ):
+            mock_get_secret.return_value = {"api_key": "key", "api_secret": "secret"}
+            mock_process.return_value = 5
 
-        event = {}
-        context = {}
+            event = {}
+            context = {}
 
-        response = lambda_handler(event, context)
+            response = lambda_handler(event, context)
 
-        assert response["statusCode"] == 200
-        body = json.loads(response["body"])
-        assert "message" in body
-        assert body["sale_pages"] == 5
-        assert body["rent_pages"] == 5
+            assert response["statusCode"] == 200
+            body = json.loads(response["body"])
+            assert "message" in body
+            assert body["sale_pages"] == 5
+            assert body["rent_pages"] == 5
 
-    @patch("idealista_listings_collector.get_secret")
-    def test_lambda_handler_error(self, mock_get_secret, mock_env_vars):
+    def test_lambda_handler_error(self, mock_env_vars):
         """Test lambda_handler error handling."""
-        mock_get_secret.side_effect = Exception("Test error")
+        with patch.dict(
+            os.environ,
+            {
+                "S3_BUCKET": "test-bucket",
+                "SECRET_NAME_LVW": "test-secret-lvw",
+                "SECRET_NAME_PMV": "test-secret-pmv",
+            },
+        ):
+            with patch("idealista_listings_collector.get_secret") as mock_get_secret:
+                mock_get_secret.side_effect = Exception("Test error")
 
-        event = {}
-        context = {}
+                event = {}
+                context = {}
 
-        response = lambda_handler(event, context)
+                response = lambda_handler(event, context)
 
-        assert response["statusCode"] == 500
-        body = json.loads(response["body"])
-        assert "error" in body
+                assert response["statusCode"] == 500
+                body = json.loads(response["body"])
+                assert "error" in body
