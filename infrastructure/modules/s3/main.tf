@@ -11,7 +11,7 @@ resource "aws_s3_bucket" "listings" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "listings_encryption" {
   bucket = aws_s3_bucket.listings.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"

@@ -16,23 +16,23 @@ jobs:
     name: Deploy to ${{ github.event.inputs.environment }}
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: eu-central-1
-      
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.14.3
-      
+
       - name: Create secrets.tfvars
         run: |
           cat > infrastructure/environments/${{ github.event.inputs.environment }}/secrets.tfvars << EOF
@@ -41,19 +41,19 @@ jobs:
           pmv_api_key = "${{ secrets.PMV_API_KEY }}"
           pmv_api_secret = "${{ secrets.PMV_API_SECRET }}"
           EOF
-      
+
       - name: Terraform Init
         run: terraform init
         working-directory: infrastructure/environments/${{ github.event.inputs.environment }}
-      
+
       - name: Terraform Plan
         run: terraform plan -var-file="secrets.tfvars" -out=tfplan
         working-directory: infrastructure/environments/${{ github.event.inputs.environment }}
-      
+
       - name: Terraform Apply
         run: terraform apply -auto-approve tfplan
         working-directory: infrastructure/environments/${{ github.event.inputs.environment }}
-      
+
       - name: Test Lambda Function
         run: |
           aws lambda invoke \
@@ -61,5 +61,5 @@ jobs:
             --payload '{"test_mode": true}' \
             --region eu-central-1 \
             response.json
-          
+
           cat response.json
