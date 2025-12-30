@@ -238,9 +238,7 @@ class TestLambdaHandler:
                 "SECRET_NAME_LVW": "test-secret-lvw",
                 "SECRET_NAME_PMV": "test-secret-pmv",
             },
-        ), patch(
-            "idealista_listings_collector.S3_BUCKET", "test-bucket"
-        ), patch(
+        ), patch("idealista_listings_collector.S3_BUCKET", "test-bucket"), patch(
             "idealista_listings_collector.SECRET_NAME_LVW", "test-secret-lvw"
         ), patch(
             "idealista_listings_collector.SECRET_NAME_PMV", "test-secret-pmv"
@@ -272,9 +270,7 @@ class TestLambdaHandler:
                 "SECRET_NAME_LVW": "test-secret-lvw",
                 "SECRET_NAME_PMV": "test-secret-pmv",
             },
-        ), patch(
-            "idealista_listings_collector.S3_BUCKET", "test-bucket"
-        ), patch(
+        ), patch("idealista_listings_collector.S3_BUCKET", "test-bucket"), patch(
             "idealista_listings_collector.SECRET_NAME_LVW", "test-secret-lvw"
         ), patch(
             "idealista_listings_collector.SECRET_NAME_PMV", "test-secret-pmv"

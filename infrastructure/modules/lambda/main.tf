@@ -1,6 +1,6 @@
 terraform {
   required_version = ">= 1.2, < 2.0"
-  
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -112,7 +112,7 @@ resource "aws_lambda_layer_version" "requests" {
   filename            = "${path.module}/../../../src/lambda/lambda_layers/requests/requests.zip"
   layer_name          = "${var.environment}-requests-layer"
   compatible_runtimes = ["python3.12"]
-  
+
   description = "Requests library for Python 3.12"
 }
 
@@ -120,12 +120,12 @@ resource "aws_lambda_layer_version" "requests" {
 resource "aws_lambda_function" "idealista_collector" {
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = "${var.environment}-idealista-collector"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "idealista_listings_collector.lambda_handler"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "idealista_listings_collector.lambda_handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime         = "python3.12"
-  timeout         = 900  # 15 minutes
-  memory_size     = 256
+  runtime          = "python3.12"
+  timeout          = 900 # 15 minutes
+  memory_size      = 256
 
   layers = [aws_lambda_layer_version.requests.arn]
 
@@ -160,7 +160,7 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
 resource "aws_cloudwatch_event_rule" "weekly_trigger" {
   name                = "${var.environment}-idealista-collector-weekly"
   description         = "Trigger Idealista listings collector weekly"
-  schedule_expression = "cron(0 12 ? * SUN *)"  # Every Sunday at 12:00 UTC
+  schedule_expression = "cron(0 12 ? * SUN *)" # Every Sunday at 12:00 UTC
 
   tags = {
     Name        = "${var.environment}-idealista-collector-weekly"
