@@ -123,7 +123,9 @@ class TestGetOAuthToken:
     @patch("idealista_listings_collector.requests.post")
     def test_get_oauth_token_failure(self, mock_post):
         """Test OAuth token retrieval failure."""
-        mock_post.side_effect = Exception("Network error")
+        mock_response = Mock()
+        mock_response.raise_for_status.side_effect = Exception("Network error")
+        mock_post.return_value = mock_response
 
         with pytest.raises(IdealistaAPIError):
             get_oauth_token("test-key", "test-secret")
@@ -139,6 +141,7 @@ class TestQueryAPI:
         mock_get_token.return_value = "test-token"
 
         mock_response = Mock()
+        mock_response.status_code = 200
         mock_response.text = '{"elementList": [{"propertyCode": "123"}]}'
         mock_response.raise_for_status = Mock()
         mock_get.return_value = mock_response
@@ -176,14 +179,18 @@ class TestProcessOperation:
         }
         mock_query.return_value = json.dumps(api_response)
 
-        config = SearchConfig()
         result = process_operation(
-            "sale", config, "test-key", "test-secret", max_pages=1
+            operation="sale",
+            api_key="test-key",
+            api_secret="test-secret",
+            bucket="test-bucket",
+            timestamp="20250101_120000",
+            max_pages=1,
         )
 
         # Should only process 1 page
         assert mock_query.call_count == 1
-        assert result["pages_written"] == 1
+        assert result == 1
         assert mock_s3.put_object.call_count == 1
 
     @patch("idealista_listings_collector.query_api")
@@ -201,12 +208,17 @@ class TestProcessOperation:
         }
         mock_query.return_value = json.dumps(api_response)
 
-        config = SearchConfig()
-        result = process_operation("sale", config, "test-key", "test-secret")
+        result = process_operation(
+            operation="sale",
+            api_key="test-key",
+            api_secret="test-secret",
+            bucket="test-bucket",
+            timestamp="20250101_120000",
+        )
 
         # Should process all 3 pages
         assert mock_query.call_count == 3
-        assert result["pages_written"] == 3
+        assert result == 3
         assert mock_s3.put_object.call_count == 3
 
 
@@ -220,7 +232,7 @@ class TestLambdaHandler:
     ):
         """Test lambda_handler in test mode."""
         mock_get_secret.return_value = {"api_key": "key", "api_secret": "secret"}
-        mock_process.return_value = {"pages_written": 1, "total_pages": 5}
+        mock_process.return_value = 1
 
         event = {"test_mode": True}
         context = {}
@@ -229,8 +241,9 @@ class TestLambdaHandler:
 
         assert response["statusCode"] == 200
         body = json.loads(response["body"])
-        assert body["status"] == "success"
-        assert "test_mode" in body["message"]
+        assert "message" in body
+        assert "sale_pages" in body
+        assert "rent_pages" in body
 
     @patch("idealista_listings_collector.process_operation")
     @patch("idealista_listings_collector.get_secret")
@@ -239,7 +252,7 @@ class TestLambdaHandler:
     ):
         """Test lambda_handler in normal mode."""
         mock_get_secret.return_value = {"api_key": "key", "api_secret": "secret"}
-        mock_process.return_value = {"pages_written": 5, "total_pages": 5}
+        mock_process.return_value = 5
 
         event = {}
         context = {}
@@ -248,7 +261,9 @@ class TestLambdaHandler:
 
         assert response["statusCode"] == 200
         body = json.loads(response["body"])
-        assert body["status"] == "success"
+        assert "message" in body
+        assert body["sale_pages"] == 5
+        assert body["rent_pages"] == 5
 
     @patch("idealista_listings_collector.get_secret")
     def test_lambda_handler_error(self, mock_get_secret, mock_env_vars):
@@ -262,5 +277,4 @@ class TestLambdaHandler:
 
         assert response["statusCode"] == 500
         body = json.loads(response["body"])
-        assert body["status"] == "error"
         assert "error" in body
