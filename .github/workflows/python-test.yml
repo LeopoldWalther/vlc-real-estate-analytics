@@ -1,0 +1,83 @@
+name: Python Linting and Testing
+
+on:
+  pull_request:
+    paths:
+      - 'src/lambda/**'
+      - '.github/workflows/python-test.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/lambda/**'
+
+jobs:
+  lint:
+    name: Lint Python Code
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff black mypy
+          pip install -r src/lambda/requirements.txt
+          pip install -r src/lambda/requirements-dev.txt
+      
+      - name: Run Ruff
+        run: ruff check src/lambda/
+        continue-on-error: true
+      
+      - name: Check Black formatting
+        run: black --check src/lambda/
+        continue-on-error: true
+      
+      - name: Run MyPy
+        run: mypy src/lambda/idealista_listings_collector.py
+        continue-on-error: true
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    env:
+      AWS_DEFAULT_REGION: eu-central-1
+      AWS_ACCESS_KEY_ID: test-key-id
+      AWS_SECRET_ACCESS_KEY: test-secret-key
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r src/lambda/requirements.txt
+          pip install -r src/lambda/requirements-dev.txt
+      
+      - name: Run tests with coverage
+        run: |
+          cd src/lambda
+          pytest tests/ --cov=. --cov-report=xml --cov-report=term
+      
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        if: github.event_name == 'pull_request'
+        with:
+          files: ./src/lambda/coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
