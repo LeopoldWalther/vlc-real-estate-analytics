@@ -132,15 +132,22 @@ resource "aws_lambda_function" "idealista_collector" {
   environment {
     variables = {
       S3_BUCKET       = var.s3_bucket_name
+      S3_PREFIX       = "bronze/idealista/"
       SECRET_NAME_LVW = var.secret_name_lvw
       SECRET_NAME_PMV = var.secret_name_pmv
     }
+  }
+
+  # Prevent accidental deletion of Lambda function
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = {
     Name        = "${var.environment}-idealista-collector"
     Environment = var.environment
     ManagedBy   = "terraform"
+    Project     = "valencia-real-estate"
   }
 }
 
@@ -153,6 +160,7 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
     Name        = "${var.environment}-idealista-collector-logs"
     Environment = var.environment
     ManagedBy   = "terraform"
+    Project     = "valencia-real-estate"
   }
 }
 
@@ -166,6 +174,7 @@ resource "aws_cloudwatch_event_rule" "weekly_trigger" {
     Name        = "${var.environment}-idealista-collector-weekly"
     Environment = var.environment
     ManagedBy   = "terraform"
+    Project     = "valencia-real-estate"
   }
 }
 
