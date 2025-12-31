@@ -96,8 +96,8 @@ python3 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
 # Install Lambda dependencies for local testing
-cd src/lambda
-pip install -r requirements.txt
+cd src/etl
+pip install -r data_collection/requirements.txt
 
 # Install development dependencies (if available)
 pip install -r requirements-dev.txt  # For testing, linting, etc.
@@ -258,11 +258,11 @@ terraform plan -var-file="secrets.tfvars"
 ### Local Python Testing
 ```bash
 # Run tests (once test suite is created)
-cd src/lambda
-pytest tests/
+cd src/etl
+pytest data_collection/tests/
 
 # Type checking
-mypy idealista_listings_collector.py
+mypy data_collection/idealista_listings_collector.py
 
 # Linting
 ruff check .

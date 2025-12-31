@@ -16,7 +16,7 @@ terraform {
 # Data source to archive the Lambda function code
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_file = "${path.module}/../../../src/lambda/idealista_listings_collector.py"
+  source_file = "${path.module}/../../../src/etl/data_collection/idealista_listings_collector.py"
   output_path = "${path.module}/lambda_function.zip"
 }
 
@@ -109,7 +109,7 @@ resource "aws_iam_role_policy" "lambda_secrets" {
 
 # Lambda Layer for requests library
 resource "aws_lambda_layer_version" "requests" {
-  filename            = "${path.module}/../../../src/lambda/lambda_layers/requests/requests.zip"
+  filename            = "${path.module}/../../../src/etl/lambda_layers/requests/requests.zip"
   layer_name          = "${var.environment}-requests-layer"
   compatible_runtimes = ["python3.12"]
 
