@@ -3,13 +3,13 @@ name: Python Linting and Testing
 on:
   pull_request:
     paths:
-      - 'src/lambda/**'
+      - 'src/etl/**'
       - '.github/workflows/python-test.yml'
   push:
     branches:
       - main
     paths:
-      - 'src/lambda/**'
+      - 'src/etl/**'
 
 jobs:
   lint:
@@ -29,19 +29,19 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install ruff black mypy
-          pip install -r src/lambda/requirements.txt
-          pip install -r src/lambda/requirements-dev.txt
+          pip install -r src/etl/data_collection/requirements.txt
+          pip install -r src/etl/requirements-dev.txt
 
       - name: Run Ruff
-        run: ruff check src/lambda/
+        run: ruff check src/etl/
         continue-on-error: true
 
       - name: Check Black formatting
-        run: black --check src/lambda/
+        run: black --check src/etl/
         continue-on-error: true
 
       - name: Run MyPy
-        run: mypy src/lambda/idealista_listings_collector.py
+        run: mypy src/etl/data_collection/idealista_listings_collector.py
         continue-on-error: true
 
   test:
@@ -65,19 +65,19 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r src/lambda/requirements.txt
-          pip install -r src/lambda/requirements-dev.txt
+          pip install -r src/etl/data_collection/requirements.txt
+          pip install -r src/etl/requirements-dev.txt
 
       - name: Run tests with coverage
         run: |
-          cd src/lambda
-          pytest tests/ --cov=. --cov-report=xml --cov-report=term
+          cd src/etl
+          pytest data_collection/tests/ --cov=data_collection --cov-report=xml --cov-report=term
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         if: github.event_name == 'pull_request'
         with:
-          files: ./src/lambda/coverage.xml
+          files: ./src/etl/coverage.xml
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false

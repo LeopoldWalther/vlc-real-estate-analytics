@@ -8,7 +8,7 @@ Automated infrastructure for collecting Valencia real estate listings from the I
 
 ### 1. Lambda Function
 
-**File**: [src/lambda/idealista_listings_collector.py](../src/lambda/idealista_listings_collector.py)
+**File**: [src/etl/data_collection/idealista_listings_collector.py](../src/etl/data_collection/idealista_listings_collector.py)
 
 **Features**:
 - Python 3.12 with type hints
@@ -89,9 +89,9 @@ module "idealista_collector" {
 
 ### 5. Additional Files
 
-- [src/lambda/README.md](../src/lambda/README.md): Function documentation
-- [src/lambda/requirements.txt](../src/lambda/requirements.txt): Python dependencies (requests, boto3)
-- [src/lambda/lambda_layers/requests/requests.zip](../src/lambda/lambda_layers/requests/): Python 3.12 requests library
+- [src/etl/README.md](../src/etl/README.md): Function documentation
+- [src/etl/data_collection/requirements.txt](../src/etl/data_collection/requirements.txt): Python dependencies (requests, boto3)
+- [src/etl/lambda_layers/requests/requests.zip](../src/etl/lambda_layers/requests/): Python 3.12 requests library
 - [src/notebooks/copy_s3_listings.ipynb](../src/notebooks/copy_s3_listings.ipynb): Notebook to migrate data from old bucket
 - Updated [.gitignore](../.gitignore): Excludes Lambda ZIP files and secrets.tfvars
 

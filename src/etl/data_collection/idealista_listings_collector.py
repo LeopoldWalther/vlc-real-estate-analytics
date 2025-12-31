@@ -3,6 +3,12 @@ Lambda function to collect Valencia real estate listings from Idealista API.
 
 This function queries the Idealista API for both sale and rent listings,
 stores the results in S3, and uses AWS Secrets Manager for API credentials.
+
+Architecture:
+- Strategy Pattern: SearchConfig encapsulates API search parameters
+- Dependency Injection: AWS clients can be injected for testing
+- Single Responsibility: Each function has one clear purpose
+- Error Handling: Custom exceptions for domain-specific errors
 """
 
 import base64
@@ -26,9 +32,17 @@ secrets_client = boto3.client("secretsmanager")
 
 # Environment variables (validated in lambda_handler)
 S3_BUCKET = os.environ.get("S3_BUCKET")
+S3_PREFIX = os.environ.get(
+    "S3_PREFIX", "bronze/idealista/"
+)  # Medallion Architecture: bronze layer
 SECRET_NAME_LVW = os.environ.get("SECRET_NAME_LVW")
 SECRET_NAME_PMV = os.environ.get("SECRET_NAME_PMV")
 # AWS_REGION is automatically provided by Lambda runtime
+
+# Constants
+API_TIMEOUT_SECONDS = 30
+OAUTH_TOKEN_URL = "https://api.idealista.com/oauth/token"
+DEFAULT_MAX_PAGES = None  # Process all pages unless specified
 
 
 class IdealistaAPIError(Exception):
@@ -134,10 +148,10 @@ def get_oauth_token(api_key: str, api_secret: str) -> str:
         params = {"grant_type": "client_credentials", "scope": "read"}
 
         response = requests.post(
-            "https://api.idealista.com/oauth/token",
+            OAUTH_TOKEN_URL,
             headers=headers,
             params=params,
-            timeout=30,
+            timeout=API_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
 
@@ -169,7 +183,7 @@ def query_api(api_key: str, api_secret: str, url: str) -> str:
             "Authorization": f"Bearer {token}",
         }
 
-        response = requests.post(url, headers=headers, timeout=30)
+        response = requests.post(url, headers=headers, timeout=API_TIMEOUT_SECONDS)
         response.raise_for_status()
 
         if not response.text:
@@ -252,8 +266,8 @@ def process_operation(
             # Update total pages from API response
             total_pages = response_data.get("totalPages", total_pages)
 
-            # Upload to S3
-            filename = f"{operation}_{timestamp}_{page}.json"
+            # Upload to S3 (with prefix for bronze layer)
+            filename = f"{S3_PREFIX}{operation}_{timestamp}_{page}.json"
             upload_to_s3(bucket, filename, response_json)
 
             page += 1

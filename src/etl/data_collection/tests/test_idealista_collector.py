@@ -32,6 +32,7 @@ def mock_env_vars():
         os.environ,
         {
             "S3_BUCKET": "test-bucket",
+            "S3_PREFIX": "bronze/idealista/",
             "SECRET_NAME_LVW": "test-secret-lvw",
             "SECRET_NAME_PMV": "test-secret-pmv",
         },

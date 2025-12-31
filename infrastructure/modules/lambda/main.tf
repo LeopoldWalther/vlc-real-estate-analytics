@@ -16,7 +16,7 @@ terraform {
 # Data source to archive the Lambda function code
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_file = "${path.module}/../../../src/lambda/idealista_listings_collector.py"
+  source_file = "${path.module}/../../../src/etl/data_collection/idealista_listings_collector.py"
   output_path = "${path.module}/lambda_function.zip"
 }
 
@@ -109,7 +109,7 @@ resource "aws_iam_role_policy" "lambda_secrets" {
 
 # Lambda Layer for requests library
 resource "aws_lambda_layer_version" "requests" {
-  filename            = "${path.module}/../../../src/lambda/lambda_layers/requests/requests.zip"
+  filename            = "${path.module}/../../../src/etl/lambda_layers/requests/requests.zip"
   layer_name          = "${var.environment}-requests-layer"
   compatible_runtimes = ["python3.12"]
 
@@ -132,15 +132,22 @@ resource "aws_lambda_function" "idealista_collector" {
   environment {
     variables = {
       S3_BUCKET       = var.s3_bucket_name
+      S3_PREFIX       = "bronze/idealista/"
       SECRET_NAME_LVW = var.secret_name_lvw
       SECRET_NAME_PMV = var.secret_name_pmv
     }
+  }
+
+  # Prevent accidental deletion of Lambda function
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = {
     Name        = "${var.environment}-idealista-collector"
     Environment = var.environment
     ManagedBy   = "terraform"
+    Project     = "valencia-real-estate"
   }
 }
 
@@ -153,6 +160,7 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
     Name        = "${var.environment}-idealista-collector-logs"
     Environment = var.environment
     ManagedBy   = "terraform"
+    Project     = "valencia-real-estate"
   }
 }
 
@@ -166,6 +174,7 @@ resource "aws_cloudwatch_event_rule" "weekly_trigger" {
     Name        = "${var.environment}-idealista-collector-weekly"
     Environment = var.environment
     ManagedBy   = "terraform"
+    Project     = "valencia-real-estate"
   }
 }
 
