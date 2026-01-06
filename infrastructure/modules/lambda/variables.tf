@@ -42,3 +42,8 @@ variable "secret_arn_pmv" {
   description = "ARN of the Secrets Manager secret for pmv credentials"
   type        = string
 }
+
+variable "sns_topic_arn" {
+  description = "ARN of the SNS topic for Lambda notifications"
+  type        = string
+}

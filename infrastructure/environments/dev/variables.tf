@@ -34,6 +34,12 @@ variable "idealista_api_secret_pmv" {
   sensitive   = true
 }
 
+variable "notification_email" {
+  description = "Email address to receive Lambda execution notifications"
+  type        = string
+  default     = "leopold.walther@gmail.com"
+}
+
 
 # variable "state_bucket_allowed_principals" {
 #   description = <<-EOT

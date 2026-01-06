@@ -226,10 +226,17 @@ class TestProcessOperation:
 class TestLambdaHandler:
     """Tests for lambda_handler function."""
 
+    @patch("idealista_listings_collector.send_notification")
+    @patch("idealista_listings_collector.s3_client")
     @patch("idealista_listings_collector.process_operation")
     @patch("idealista_listings_collector.get_secret")
     def test_lambda_handler_test_mode(
-        self, mock_get_secret, mock_process, mock_env_vars
+        self,
+        mock_get_secret,
+        mock_process,
+        mock_s3_client,
+        mock_send_notification,
+        mock_env_vars,
     ):
         """Test lambda_handler in test mode."""
         with patch.dict(
@@ -238,14 +245,19 @@ class TestLambdaHandler:
                 "S3_BUCKET": "test-bucket",
                 "SECRET_NAME_LVW": "test-secret-lvw",
                 "SECRET_NAME_PMV": "test-secret-pmv",
+                "SNS_TOPIC_ARN": "arn:aws:sns:eu-central-1:123456789012:test-topic",
             },
         ), patch("idealista_listings_collector.S3_BUCKET", "test-bucket"), patch(
             "idealista_listings_collector.SECRET_NAME_LVW", "test-secret-lvw"
         ), patch(
             "idealista_listings_collector.SECRET_NAME_PMV", "test-secret-pmv"
+        ), patch(
+            "idealista_listings_collector.SNS_TOPIC_ARN",
+            "arn:aws:sns:eu-central-1:123456789012:test-topic",
         ):
             mock_get_secret.return_value = {"api_key": "key", "api_secret": "secret"}
             mock_process.return_value = 1
+            mock_s3_client.list_objects_v2.return_value = {"Contents": [{"Size": 1000}]}
 
             event = {"test_mode": True}
             context = {}
@@ -257,11 +269,20 @@ class TestLambdaHandler:
             assert "message" in body
             assert "sale_pages" in body
             assert "rent_pages" in body
+            # send_notification should not be called in test mode
+            mock_send_notification.assert_not_called()
 
+    @patch("idealista_listings_collector.send_notification")
+    @patch("idealista_listings_collector.s3_client")
     @patch("idealista_listings_collector.process_operation")
     @patch("idealista_listings_collector.get_secret")
     def test_lambda_handler_normal_mode(
-        self, mock_get_secret, mock_process, mock_env_vars
+        self,
+        mock_get_secret,
+        mock_process,
+        mock_s3_client,
+        mock_send_notification,
+        mock_env_vars,
     ):
         """Test lambda_handler in normal mode."""
         with patch.dict(
@@ -270,14 +291,19 @@ class TestLambdaHandler:
                 "S3_BUCKET": "test-bucket",
                 "SECRET_NAME_LVW": "test-secret-lvw",
                 "SECRET_NAME_PMV": "test-secret-pmv",
+                "SNS_TOPIC_ARN": "arn:aws:sns:eu-central-1:123456789012:test-topic",
             },
         ), patch("idealista_listings_collector.S3_BUCKET", "test-bucket"), patch(
             "idealista_listings_collector.SECRET_NAME_LVW", "test-secret-lvw"
         ), patch(
             "idealista_listings_collector.SECRET_NAME_PMV", "test-secret-pmv"
+        ), patch(
+            "idealista_listings_collector.SNS_TOPIC_ARN",
+            "arn:aws:sns:eu-central-1:123456789012:test-topic",
         ):
             mock_get_secret.return_value = {"api_key": "key", "api_secret": "secret"}
             mock_process.return_value = 5
+            mock_s3_client.list_objects_v2.return_value = {"Contents": [{"Size": 1000}]}
 
             event = {}
             context = {}
@@ -289,6 +315,8 @@ class TestLambdaHandler:
             assert "message" in body
             assert body["sale_pages"] == 5
             assert body["rent_pages"] == 5
+            # send_notification should be called in normal mode
+            mock_send_notification.assert_called_once()
 
     def test_lambda_handler_error(self, mock_env_vars):
         """Test lambda_handler error handling."""

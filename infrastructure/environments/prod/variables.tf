@@ -33,3 +33,9 @@ variable "idealista_api_secret_pmv" {
   type        = string
   sensitive   = true
 }
+
+variable "notification_email" {
+  description = "Email address to receive Lambda execution notifications"
+  type        = string
+  default     = "leopold.walther@gmail.com"
+}
