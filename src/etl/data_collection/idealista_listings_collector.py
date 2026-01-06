@@ -29,6 +29,7 @@ logger.setLevel(logging.INFO)
 # Initialize AWS clients
 s3_client = boto3.client("s3")
 secrets_client = boto3.client("secretsmanager")
+sns_client = boto3.client("sns")
 
 # Environment variables (validated in lambda_handler)
 S3_BUCKET = os.environ.get("S3_BUCKET")
@@ -37,6 +38,7 @@ S3_PREFIX = os.environ.get(
 )  # Medallion Architecture: bronze layer
 SECRET_NAME_LVW = os.environ.get("SECRET_NAME_LVW")
 SECRET_NAME_PMV = os.environ.get("SECRET_NAME_PMV")
+SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
 # AWS_REGION is automatically provided by Lambda runtime
 
 # Constants
@@ -284,6 +286,76 @@ def process_operation(
     return pages_processed
 
 
+def send_notification(
+    topic_arn: str,
+    timestamp: str,
+    sale_pages: int,
+    rent_pages: int,
+    duration_seconds: float,
+    total_size_mb: float,
+) -> None:
+    """
+    Send execution summary notification via SNS.
+
+    Args:
+        topic_arn: ARN of the SNS topic
+        timestamp: Timestamp of execution
+        sale_pages: Number of sale listing pages processed
+        rent_pages: Number of rent listing pages processed
+        duration_seconds: Execution duration in seconds
+        total_size_mb: Total size of uploaded files in MB
+
+    Raises:
+        IdealistaAPIError: If notification fails
+    """
+    try:
+        # Format timestamp for email
+        dt = datetime.strptime(timestamp, "%Y%m%d_%H%M%S")
+        formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+
+        # Build subject
+        subject = f"✅ Idealista Listings Collected Successfully - {formatted_time} UTC"
+
+        # Build message body
+        message = f"""Idealista Listings Collection - Execution Summary
+{'=' * 60}
+
+Execution Details:
+  • Time: {formatted_time} UTC
+  • Duration: {duration_seconds:.1f} seconds
+  • Result: Successfully completed
+
+Files Created:
+  • Sale listings: {sale_pages} pages (sale_{timestamp}_1.json through {sale_pages}.json)
+  • Rent listings: {rent_pages} pages (rent_{timestamp}_1.json through {rent_pages}.json)
+  • Total: {sale_pages + rent_pages} files uploaded to bronze/idealista/ folder
+  • Total size: ~{total_size_mb:.1f} MB
+
+Storage Location:
+  s3://prod-vlc-real-estate-analytics-listings/bronze/idealista/
+
+Next Execution:
+  Next Sunday at 12:00 UTC
+
+{'=' * 60}
+Automated notification from AWS Lambda
+"""
+
+        # Publish to SNS
+        sns_client.publish(
+            TopicArn=topic_arn,
+            Subject=subject,
+            Message=message,
+        )
+        logger.info("Successfully sent notification email")
+    except ClientError as e:
+        logger.error(f"Error sending notification: {e}")
+        # Don't raise exception - notification failure shouldn't fail the Lambda
+    except Exception as e:
+        logger.error(f"Unexpected error sending notification: {e}")
+        # Don't raise exception - notification failure shouldn't fail the Lambda
+
+
 def lambda_handler(event, context) -> Dict:
     """
     AWS Lambda handler function.
@@ -295,6 +367,8 @@ def lambda_handler(event, context) -> Dict:
     Returns:
         Response dictionary with status code and message
     """
+    start_time = datetime.now()
+
     try:
         # Check for test mode
         test_mode = event.get("test_mode", False) if isinstance(event, dict) else False
@@ -304,15 +378,16 @@ def lambda_handler(event, context) -> Dict:
             logger.info("Running in TEST MODE - will only process 1 page per operation")
 
         # Validate environment variables
-        if not all([S3_BUCKET, SECRET_NAME_LVW, SECRET_NAME_PMV]):
+        if not all([S3_BUCKET, SECRET_NAME_LVW, SECRET_NAME_PMV, SNS_TOPIC_ARN]):
             raise IdealistaAPIError(
-                "Missing required environment variables: S3_BUCKET, SECRET_NAME_LVW, SECRET_NAME_PMV"
+                "Missing required environment variables: S3_BUCKET, SECRET_NAME_LVW, SECRET_NAME_PMV, SNS_TOPIC_ARN"
             )
 
         # Type assertions for mypy
         assert S3_BUCKET is not None
         assert SECRET_NAME_LVW is not None
         assert SECRET_NAME_PMV is not None
+        assert SNS_TOPIC_ARN is not None
 
         # Generate timestamp for filenames
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -344,11 +419,44 @@ def lambda_handler(event, context) -> Dict:
             max_pages=max_pages,
         )
 
+        # Calculate execution metrics
+        end_time = datetime.now()
+        duration_seconds = (end_time - start_time).total_seconds()
+
+        # Calculate total file size by listing uploaded objects
+        total_size_bytes = 0
+        try:
+            prefix = f"{S3_PREFIX}sale_{timestamp}"
+            response = s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=prefix)
+            if "Contents" in response:
+                total_size_bytes += sum(obj["Size"] for obj in response["Contents"])
+
+            prefix = f"{S3_PREFIX}rent_{timestamp}"
+            response = s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=prefix)
+            if "Contents" in response:
+                total_size_bytes += sum(obj["Size"] for obj in response["Contents"])
+        except ClientError as e:
+            logger.warning(f"Could not calculate file sizes: {e}")
+            total_size_bytes = 0
+
+        total_size_mb = total_size_bytes / (1024 * 1024)
+
         message = (
             f"Successfully collected listings: "
             f"{sale_pages} sale pages, {rent_pages} rent pages"
         )
         logger.info(message)
+
+        # Send notification email (only in production, not in test mode)
+        if not test_mode:
+            send_notification(
+                topic_arn=SNS_TOPIC_ARN,
+                timestamp=timestamp,
+                sale_pages=sale_pages,
+                rent_pages=rent_pages,
+                duration_seconds=duration_seconds,
+                total_size_mb=total_size_mb,
+            )
 
         return {
             "statusCode": 200,
@@ -358,6 +466,8 @@ def lambda_handler(event, context) -> Dict:
                     "timestamp": timestamp,
                     "sale_pages": sale_pages,
                     "rent_pages": rent_pages,
+                    "duration_seconds": duration_seconds,
+                    "total_size_mb": round(total_size_mb, 2),
                 }
             ),
         }

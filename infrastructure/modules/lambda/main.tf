@@ -107,6 +107,25 @@ resource "aws_iam_role_policy" "lambda_secrets" {
   })
 }
 
+# Policy for SNS publish access
+resource "aws_iam_role_policy" "lambda_sns" {
+  name = "${var.environment}-idealista-collector-sns"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = var.sns_topic_arn
+      }
+    ]
+  })
+}
+
 # Lambda Layer for requests library
 resource "aws_lambda_layer_version" "requests" {
   filename            = "${path.module}/../../../src/etl/lambda_layers/requests/requests.zip"
@@ -135,6 +154,7 @@ resource "aws_lambda_function" "idealista_collector" {
       S3_PREFIX       = "bronze/idealista/"
       SECRET_NAME_LVW = var.secret_name_lvw
       SECRET_NAME_PMV = var.secret_name_pmv
+      SNS_TOPIC_ARN   = var.sns_topic_arn
     }
   }
 
