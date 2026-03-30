@@ -80,6 +80,13 @@ resource "aws_iam_role_policy" "lambda_s3" {
           "s3:PutObjectAcl"
         ]
         Resource = "${var.s3_bucket_arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = var.s3_bucket_arn
       }
     ]
   })
