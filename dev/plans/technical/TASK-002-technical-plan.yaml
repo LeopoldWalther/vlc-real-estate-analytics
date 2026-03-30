@@ -1,0 +1,278 @@
+technical_plan:
+  metadata:
+    created_by: "reviewer_agent"
+    for_task: "TASK-002"
+    created_at: "2026-03-29T00:00:00Z"
+    version: "1.1"
+    reviewed_plan: "dev/reviews/REVIEW-TASK-002.md"
+
+  validation:
+    auto_validate_on_tag_change: true
+    required_checks:
+      - "tests"
+      - "types"
+      - "lint"
+      - "coverage"
+      - "terraform-validate"
+      - "phase-gate-validation"
+    min_coverage: 80
+
+  tasks:
+    - id: "1.1"
+      title: "Create notebook MVP scaffold"
+      description: "Create notebook structure with config model, custom exception, and local-only execution path without AWS dependencies."
+      status: "done"
+      complexity: "low"
+      estimated_hours: 2
+      depends_on: []
+      branch: "feature/idealista-web-scraper/1.1-notebook-scaffold"
+      commit_message: "feat(scraper): scaffold notebook MVP with local execution"
+      acceptance_criteria:
+        - "✓ Notebook file exists at src/notebooks/idealista_web_scraper.ipynb"
+        - "✓ Notebook includes config, exception, and parser class scaffolding"
+        - "✓ Local output path supports data/s3 without AWS credentials"
+        - "✓ Public functions and classes include type hints and docstrings"
+      allowed_files:
+        - "src/notebooks/idealista_web_scraper.ipynb"
+      forbidden_files:
+        - "infrastructure/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "1.2"
+      title: "Implement notebook scraping flow"
+      description: "Implement session/retry, parsing, pagination, and local JSON output in notebook cells."
+      status: "planned"
+      complexity: "medium"
+      estimated_hours: 3
+      depends_on: ["1.1"]
+      branch: "feature/idealista-web-scraper/1.2-notebook-scrape-flow"
+      commit_message: "feat(scraper): implement notebook scraping flow"
+      acceptance_criteria:
+        - "✓ Notebook runs rent and sale scraping workflow end-to-end"
+        - "✓ Pagination terminates correctly when last page is reached"
+        - "✓ Output JSON envelope contains elementList and metadata keys"
+        - "✓ No hard dependency on boto3/S3 for local run"
+      allowed_files:
+        - "src/notebooks/idealista_web_scraper.ipynb"
+      forbidden_files:
+        - "infrastructure/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "1.3"
+      title: "Add notebook contract check cell"
+      description: "Add explicit schema compatibility checks against existing API JSON shape with required-key assertions and nullability rules."
+      status: "planned"
+      complexity: "low"
+      estimated_hours: 1
+      depends_on: ["1.2"]
+      branch: "feature/idealista-web-scraper/1.3-notebook-contract-check"
+      commit_message: "test(scraper): add notebook schema contract checks"
+      acceptance_criteria:
+        - "✓ Required keys are asserted for each listing"
+        - "✓ Missing values are represented as null, not absent keys"
+        - "✓ Notebook contains a clear pass/fail contract output"
+      allowed_files:
+        - "src/notebooks/idealista_web_scraper.ipynb"
+      forbidden_files:
+        - "infrastructure/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "1.4"
+      title: "Freeze realistic HTML fixtures"
+      description: "Create and store rent/sale HTML fixtures for deterministic parser testing."
+      status: "planned"
+      complexity: "low"
+      estimated_hours: 1
+      depends_on: ["1.2"]
+      branch: "feature/idealista-web-scraper/1.4-freeze-fixtures"
+      commit_message: "test(scraper): add frozen rent and sale html fixtures"
+      acceptance_criteria:
+        - "✓ Fixture file exists for rent search results"
+        - "✓ Fixture file exists for sale search results"
+        - "✓ Fixtures are static snapshots and tests run without network"
+      allowed_files:
+        - "src/etl/data_collection/tests/fixtures/search_results_rent.html"
+        - "src/etl/data_collection/tests/fixtures/search_results_sale.html"
+      forbidden_files:
+        - "infrastructure/**"
+      can_run_parallel_with: ["1.3"]
+      reversible: true
+
+    - id: "2.1"
+      title: "Extract notebook logic into production Python module"
+      description: "Create idealista_web_scraper.py with typed classes/functions, CLI local mode, lambda handler, and operational kill switch."
+      status: "planned"
+      complexity: "medium"
+      estimated_hours: 4
+      depends_on: ["1.3", "1.4"]
+      branch: "feature/idealista-web-scraper/2.1-python-module"
+      commit_message: "feat(scraper): add production web scraper module with lambda handler"
+      acceptance_criteria:
+        - "✓ Module exists at src/etl/data_collection/idealista_web_scraper.py"
+        - "✓ Includes ScraperConfig, ParsedListing, session, parser, lambda_handler, and main()"
+        - "✓ Supports SCRAPER_ENABLED environment kill switch"
+        - "✓ Local CLI mode writes output to configurable directory"
+        - "✓ Google-style docstrings and full type hints on all public APIs"
+      allowed_files:
+        - "src/etl/data_collection/idealista_web_scraper.py"
+        - "src/etl/data_collection/scraper_requirements.txt"
+        - "src/etl/requirements-dev.txt"
+      forbidden_files:
+        - "infrastructure/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "2.2"
+      title: "Add parser robustness tests"
+      description: "Add tests using frozen fixtures for rent/sale, fallback selectors, and missing selector paths."
+      status: "planned"
+      complexity: "medium"
+      estimated_hours: 3
+      depends_on: ["2.1"]
+      branch: "feature/idealista-web-scraper/2.2-parser-tests"
+      commit_message: "test(scraper): add parser robustness and selector fallback tests"
+      acceptance_criteria:
+        - "✓ Tests located under src/etl/data_collection/tests/"
+        - "✓ Tests cover fallback/missing selector paths"
+      allowed_files:
+        - "src/etl/data_collection/tests/test_web_scraper.py"
+        - "src/etl/data_collection/tests/fixtures/search_results_rent.html"
+        - "src/etl/data_collection/tests/fixtures/search_results_sale.html"
+      forbidden_files:
+        - "infrastructure/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "2.3"
+      title: "Add pagination, retry, and handler failure tests"
+      description: "Add tests for pagination stop logic, retry/backoff behavior, and lambda error notification paths."
+      status: "planned"
+      complexity: "medium"
+      estimated_hours: 2
+      depends_on: ["2.2"]
+      branch: "feature/idealista-web-scraper/2.3-handler-retry-tests"
+      commit_message: "test(scraper): add pagination retry and handler failure tests"
+      acceptance_criteria:
+        - "✓ Tests cover pagination stop conditions"
+        - "✓ Tests cover retry/backoff on transient errors"
+        - "✓ Lambda error path triggers notification handling"
+      allowed_files:
+        - "src/etl/data_collection/tests/test_web_scraper.py"
+      forbidden_files:
+        - "infrastructure/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "2.4"
+      title: "Enforce schema contract and coverage gates"
+      description: "Add required-key contract tests and verify minimum coverage threshold for scraper module."
+      status: "planned"
+      complexity: "low"
+      estimated_hours: 1
+      depends_on: ["2.3"]
+      branch: "feature/idealista-web-scraper/2.4-contract-coverage-gates"
+      commit_message: "test(scraper): enforce schema contract and coverage gates"
+      acceptance_criteria:
+        - "✓ Contract test ensures required keys are always present"
+        - "✓ Nullability behavior is validated"
+        - "✓ Coverage for scraper module is >= 80%"
+      allowed_files:
+        - "src/etl/data_collection/tests/test_web_scraper.py"
+      forbidden_files:
+        - "infrastructure/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "3.0"
+      title: "Compliance and rollout gate checklist"
+      description: "Create explicit pre-production checklist for policy/robots review, operational kill switch defaults, and rollout approval notes."
+      status: "planned"
+      complexity: "low"
+      estimated_hours: 1
+      depends_on: ["2.4"]
+      branch: "feature/idealista-web-scraper/3.0-compliance-rollout-gate"
+      commit_message: "docs(scraper): add compliance and rollout gating checklist"
+      acceptance_criteria:
+        - "✓ Checklist added to documentation"
+        - "✓ Includes SCRAPER_ENABLED default behavior"
+        - "✓ Includes required dev soak gate before prod enablement"
+      allowed_files:
+        - "documentation/DATA_COLLECTION_LAYER.md"
+      forbidden_files:
+        - "infrastructure/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "3.1"
+      title: "Create Terraform scraper lambda module"
+      description: "Add Terraform module for scraper Lambda, IAM, log group, event rule, target, and permissions with operational controls."
+      status: "planned"
+      complexity: "medium"
+      estimated_hours: 3
+      depends_on: ["3.0"]
+      branch: "feature/idealista-web-scraper/3.1-terraform-module"
+      commit_message: "feat(terraform): add scraper lambda module with weekly schedule"
+      acceptance_criteria:
+        - "✓ Module files created under infrastructure/modules/scraper_lambda/"
+        - "✓ Lambda uses python3.12 and weekly schedule cron(0 13 ? * SUN *)"
+        - "✓ IAM policy includes logs, s3 put/list, sns publish only"
+        - "✓ Includes SCRAPER_ENABLED env var wiring"
+      allowed_files:
+        - "infrastructure/modules/scraper_lambda/main.tf"
+        - "infrastructure/modules/scraper_lambda/variables.tf"
+        - "infrastructure/modules/scraper_lambda/outputs.tf"
+      forbidden_files:
+        - "infrastructure/modules/lambda/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "3.2"
+      title: "Wire dev environment and validate"
+      description: "Instantiate scraper module in dev root, run terraform validation, and prepare controlled rollout."
+      status: "planned"
+      complexity: "low"
+      estimated_hours: 1
+      depends_on: ["3.1"]
+      branch: "feature/idealista-web-scraper/3.2-dev-wire-validate"
+      commit_message: "feat(terraform): wire scraper module in dev and validate"
+      acceptance_criteria:
+        - "✓ Dev environment root includes scraper module block"
+        - "✓ terraform validate passes in dev environment"
+        - "✓ Dev deployment keeps SCRAPER_ENABLED=false by default"
+      allowed_files:
+        - "infrastructure/environments/dev/main.tf"
+      forbidden_files:
+        - "infrastructure/environments/prod/**"
+        - "src/notebooks/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "3.3"
+      title: "Wire prod environment after dev soak"
+      description: "Instantiate scraper module in prod root only after successful dev soak and checklist completion."
+      status: "planned"
+      complexity: "low"
+      estimated_hours: 1
+      depends_on: ["3.2"]
+      branch: "feature/idealista-web-scraper/3.3-prod-wire-after-soak"
+      commit_message: "feat(terraform): wire scraper module in prod after dev soak"
+      acceptance_criteria:
+        - "✓ Prod environment root includes scraper module block"
+        - "✓ terraform validate passes in prod environment"
+        - "✓ Rollout note confirms dev soak completion before prod enablement"
+      allowed_files:
+        - "infrastructure/environments/prod/main.tf"
+        - "documentation/DATA_COLLECTION_LAYER.md"
+      forbidden_files:
+        - "src/notebooks/**"
+      can_run_parallel_with: []
+      reversible: true
+
+  summary:
+    total_tasks: 12
+    estimated_total_hours: 23
+    critical_path: ["1.1", "1.2", "1.3", "2.1", "2.2", "2.3", "2.4", "3.0", "3.1", "3.2", "3.3"]
+    parallelizable_tasks: 1
