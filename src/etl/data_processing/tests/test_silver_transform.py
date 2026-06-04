@@ -24,7 +24,12 @@ import pytest
 
 # Import the module under test using the same convention as data_collection.
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from silver_transform import parse_key_metadata  # noqa: E402
+from silver_transform import (  # noqa: E402
+    SCHEMA_VERSION,
+    build_aggregation_json,
+    clean,
+    parse_key_metadata,
+)
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "bronze"
 FIXTURE_FILES = [
@@ -107,3 +112,119 @@ class TestRealBronzeSchemaContract:
                 assert "neighborhood" in element, f"neighborhood missing in {name}"
                 assert "operation" in element, f"operation missing in {name}"
                 assert element["operation"] in {"rent", "sale"}
+
+
+class TestClean:
+    """Tests for the pure ``clean`` aggregation."""
+
+    def test_clean_injects_snapshot_date_and_aggregates_price_by_area(self) -> None:
+        """clean groups by neighborhood and aggregates priceByArea mean/count."""
+        elements = [
+            {"neighborhood": "El Pilar", "priceByArea": 16.0},
+            {"neighborhood": "El Pilar", "priceByArea": 20.0},
+            {"neighborhood": "Sant Francesc", "priceByArea": 10.0},
+        ]
+
+        rows = clean(elements, date(2023, 4, 9), "rent")
+
+        # One row per neighborhood, sorted deterministically by neighborhood.
+        assert [r["neighborhood"] for r in rows] == ["El Pilar", "Sant Francesc"]
+
+        el_pilar = rows[0]
+        assert el_pilar["snapshot_date"] == date(2023, 4, 9)
+        assert el_pilar["operation"] == "rent"
+        assert el_pilar["price_by_area_mean"] == 18.0  # (16 + 20) / 2
+        assert el_pilar["listing_count"] == 2
+
+        sant_francesc = rows[1]
+        assert sant_francesc["price_by_area_mean"] == 10.0
+        assert sant_francesc["listing_count"] == 1
+
+    def test_clean_drops_null_pricebyarea_and_missing_neighborhood(self) -> None:
+        """Rows with null priceByArea or missing/empty neighborhood are dropped."""
+        elements = [
+            {"neighborhood": "El Pilar", "priceByArea": None},  # null price
+            {"neighborhood": "", "priceByArea": 12.0},  # empty neighborhood
+            {"priceByArea": 14.0},  # missing neighborhood
+            {"neighborhood": "El Pilar", "priceByArea": 16.0},  # valid
+        ]
+
+        rows = clean(elements, date(2023, 4, 9), "rent")
+
+        assert len(rows) == 1
+        assert rows[0]["neighborhood"] == "El Pilar"
+        assert rows[0]["price_by_area_mean"] == 16.0
+        assert rows[0]["listing_count"] == 1
+
+    def test_clean_empty_elements_returns_empty(self) -> None:
+        """An empty element list yields no rows without raising."""
+        assert clean([], date(2023, 4, 9), "rent") == []
+
+    def test_clean_collapses_multiple_pages_to_one_row(self) -> None:
+        """Combined pages of one snapshot collapse to one row per neighborhood."""
+        # Simulate two paginated responses already concatenated into one list.
+        page_1 = [{"neighborhood": "El Pilar", "priceByArea": 10.0}]
+        page_2 = [
+            {"neighborhood": "El Pilar", "priceByArea": 20.0},
+            {"neighborhood": "El Pilar", "priceByArea": 30.0},
+        ]
+
+        rows = clean(page_1 + page_2, date(2023, 4, 9), "rent")
+
+        assert len(rows) == 1
+        assert rows[0]["listing_count"] == 3
+        assert rows[0]["price_by_area_mean"] == 20.0  # (10 + 20 + 30) / 3
+
+
+class TestBuildAggregationJson:
+    """Tests for the dashboard JSON builder."""
+
+    def test_build_aggregation_json_has_schema_version_and_timeseries(self) -> None:
+        """The dashboard dict carries schema_version and a per-neighborhood series."""
+        history = [
+            {
+                "operation": "rent",
+                "neighborhood": "El Pilar",
+                "snapshot_date": date(2023, 4, 16),
+                "price_by_area_mean": 18.0,
+                "listing_count": 2,
+            },
+            {
+                "operation": "rent",
+                "neighborhood": "El Pilar",
+                "snapshot_date": date(2023, 4, 9),
+                "price_by_area_mean": 16.0,
+                "listing_count": 1,
+            },
+            {
+                "operation": "sale",
+                "neighborhood": "Sant Francesc",
+                "snapshot_date": date(2023, 4, 9),
+                "price_by_area_mean": 2800.0,
+                "listing_count": 3,
+            },
+        ]
+
+        result = build_aggregation_json(history)
+
+        assert result["schema_version"] == SCHEMA_VERSION
+
+        rent_series = result["operations"]["rent"]["El Pilar"]
+        # Time-series sorted ascending by snapshot_date (ISO strings).
+        assert [point["snapshot_date"] for point in rent_series] == [
+            "2023-04-09",
+            "2023-04-16",
+        ]
+        assert rent_series[0]["price_by_area_mean"] == 16.0
+        assert rent_series[1]["listing_count"] == 2
+
+        sale_series = result["operations"]["sale"]["Sant Francesc"]
+        assert len(sale_series) == 1
+        assert sale_series[0]["price_by_area_mean"] == 2800.0
+
+    def test_build_aggregation_json_empty_history(self) -> None:
+        """An empty history yields an empty operations map with schema_version."""
+        result = build_aggregation_json([])
+
+        assert result["schema_version"] == SCHEMA_VERSION
+        assert result["operations"] == {}
