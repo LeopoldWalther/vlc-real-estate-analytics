@@ -1,0 +1,45 @@
+{
+  "elementList": [
+    {
+      "propertyCode": "100247774",
+      "price": 1790.0,
+      "propertyType": "studio",
+      "operation": "rent",
+      "size": 109.0,
+      "rooms": 0,
+      "bathrooms": 1,
+      "district": "Ciutat Vella",
+      "neighborhood": "El Pilar",
+      "municipality": "València",
+      "province": "València",
+      "latitude": 39.4700352,
+      "longitude": -0.379552,
+      "status": "good",
+      "priceByArea": 16.0,
+      "floor": "1",
+      "exterior": true
+    },
+    {
+      "propertyCode": "94778405",
+      "price": 1200.0,
+      "propertyType": "flat",
+      "operation": "rent",
+      "size": 115.0,
+      "rooms": 4,
+      "bathrooms": 2,
+      "district": "Ciutat Vella",
+      "neighborhood": "Sant Francesc",
+      "municipality": "València",
+      "province": "València",
+      "latitude": 39.4698732,
+      "longitude": -0.3802975,
+      "status": "good",
+      "priceByArea": 10.0,
+      "floor": "1",
+      "exterior": true
+    }
+  ],
+  "total": 257,
+  "totalPages": 6,
+  "actualPage": 1
+}

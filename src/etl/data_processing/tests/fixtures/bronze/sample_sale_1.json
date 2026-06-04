@@ -1,0 +1,45 @@
+{
+  "elementList": [
+    {
+      "propertyCode": "95992212",
+      "price": 420000.0,
+      "propertyType": "flat",
+      "operation": "sale",
+      "size": 150.0,
+      "rooms": 5,
+      "bathrooms": 2,
+      "district": "Ciutat Vella",
+      "neighborhood": "Sant Francesc",
+      "municipality": "València",
+      "province": "València",
+      "latitude": 39.469077,
+      "longitude": -0.3799074,
+      "status": "good",
+      "priceByArea": 2800.0,
+      "floor": "2",
+      "exterior": true
+    },
+    {
+      "propertyCode": "100186052",
+      "price": 260000.0,
+      "propertyType": "flat",
+      "operation": "sale",
+      "size": 107.0,
+      "rooms": 3,
+      "bathrooms": 2,
+      "district": "Ciutat Vella",
+      "neighborhood": "Sant Francesc",
+      "municipality": "València",
+      "province": "València",
+      "latitude": 39.4692874,
+      "longitude": -0.3788613,
+      "status": "renew",
+      "priceByArea": 2430.0,
+      "floor": "1",
+      "exterior": true
+    }
+  ],
+  "total": 817,
+  "totalPages": 17,
+  "actualPage": 1
+}

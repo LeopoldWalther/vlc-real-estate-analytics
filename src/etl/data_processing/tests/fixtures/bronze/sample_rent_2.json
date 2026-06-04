@@ -1,0 +1,45 @@
+{
+  "elementList": [
+    {
+      "propertyCode": "100976390",
+      "price": 925.0,
+      "propertyType": "flat",
+      "operation": "rent",
+      "size": 103.0,
+      "rooms": 3,
+      "bathrooms": 1,
+      "district": "Extramurs",
+      "neighborhood": "Arrancapins",
+      "municipality": "València",
+      "province": "València",
+      "latitude": 39.4652029,
+      "longitude": -0.3805883,
+      "status": "good",
+      "priceByArea": 9.0,
+      "floor": "2",
+      "exterior": true
+    },
+    {
+      "propertyCode": "94128315",
+      "price": 2500.0,
+      "propertyType": "flat",
+      "operation": "rent",
+      "size": 110.0,
+      "rooms": 2,
+      "bathrooms": 2,
+      "district": "L'Eixample",
+      "neighborhood": "Russafa",
+      "municipality": "València",
+      "province": "València",
+      "latitude": 39.4669784,
+      "longitude": -0.3749664,
+      "status": "good",
+      "priceByArea": 23.0,
+      "floor": "4",
+      "exterior": true
+    }
+  ],
+  "total": 257,
+  "totalPages": 6,
+  "actualPage": 2
+}
