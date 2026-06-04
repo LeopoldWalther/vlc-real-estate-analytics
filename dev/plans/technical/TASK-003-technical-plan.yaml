@@ -1,0 +1,188 @@
+technical_plan:
+  metadata:
+    created_by: "reviewer_agent"
+    for_task: "TASK-003"
+    created_at: "2026-06-04T00:00:00Z"
+    version: "1.0"
+    reviewed_plan: "dev/reviews/REVIEW-TASK-003.md"
+
+  validation:
+    auto_validate_on_tag_change: true
+    required_checks:
+      - "python-lint-and-test"
+      - "terraform-validate"
+      - "workflow-consistency"
+    min_coverage: 80
+
+  tasks:
+    - id: "3.1"
+      title: "Schema contract, key parsing, and real bronze fixtures"
+      description: >-
+        Establish the data contract first. Add parse_key_metadata to derive
+        (operation, snapshot_date, page) from the bronze object key, commit a
+        small curated set of real bronze JSON fixtures, add a failing
+        schema-contract test, and an exploratory script that validates real
+        local data in data/s3 before any transform/infra is built.
+      status: "done"
+      complexity: "medium"
+      estimated_hours: 3
+      depends_on: []
+      branch: "feature/silver-cleaning-lambda/3.1-schema-contract-fixtures"
+      commit_message: "test(silver): add key parsing, real bronze fixtures, and schema contract"
+      acceptance_criteria:
+        - "✓ RED: test_parse_key_metadata_extracts_operation_date_page fails before implementation"
+        - "✓ RED: test_real_fixture_has_pricebyarea_neighborhood_operation fails before fixtures exist"
+        - "✓ GREEN: parse_key_metadata returns (operation, snapshot_date, page) for real key formats"
+        - "✓ REFACTOR: helper extracted with type hints and Google-style docstring, suite green"
+        - "✓ 3–5 real, curated bronze JSON fixtures committed under tests/fixtures/bronze/"
+        - "✓ Schema-contract test asserts elementList present/non-empty and priceByArea, neighborhood, operation per element"
+        - "✓ explore_bronze.py loads real data/s3 files and reports null priceByArea and missing neighborhood counts"
+        - "✓ Unit coverage for new code >= 80%"
+      allowed_files:
+        - "src/etl/data_processing/silver_transform.py"
+        - "src/etl/data_processing/explore_bronze.py"
+        - "src/etl/data_processing/tests/test_silver_transform.py"
+        - "src/etl/data_processing/tests/fixtures/bronze/sample_rent_1.json"
+        - "src/etl/data_processing/tests/fixtures/bronze/sample_rent_2.json"
+        - "src/etl/data_processing/tests/fixtures/bronze/sample_sale_1.json"
+        - "src/etl/data_processing/tests/fixtures/bronze/sample_sale_2.json"
+        - "src/etl/data_processing/tests/__init__.py"
+      forbidden_files:
+        - "infrastructure/**"
+        - "src/etl/data_collection/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "3.2"
+      title: "Pure transform: clean and aggregate to silver shape"
+      description: >-
+        Implement the pure, AWS-free transformation. Inject snapshot_date from
+        parse_key_metadata, drop rows with null priceByArea or missing
+        neighborhood, group by neighborhood + snapshot_date, aggregate
+        priceByArea (mean, count), and build the dashboard JSON (with
+        schema_version) from the full history.
+      status: "planned"
+      complexity: "medium"
+      estimated_hours: 3
+      depends_on: ["3.1"]
+      branch: "feature/silver-cleaning-lambda/3.2-pure-transform"
+      commit_message: "feat(silver): add pure clean/aggregate transform with snapshot_date"
+      acceptance_criteria:
+        - "✓ RED: test_clean_injects_snapshot_date_and_aggregates_price_by_area fails first"
+        - "✓ RED: test_clean_drops_null_pricebyarea_and_missing_neighborhood fails first"
+        - "✓ GREEN: clean() returns one row per (neighborhood, snapshot_date) with mean and count"
+        - "✓ GREEN: build_aggregation_json(history_df) returns dict with schema_version and time-series"
+        - "✓ Empty elementList yields empty output without raising"
+        - "✓ Multiple pages of the same snapshot collapse to one row per (neighborhood, snapshot_date)"
+        - "✓ REFACTOR: helpers split, full type hints + docstrings, suite green"
+        - "✓ Unit coverage for transform module >= 80%"
+      allowed_files:
+        - "src/etl/data_processing/silver_transform.py"
+        - "src/etl/data_processing/tests/test_silver_transform.py"
+      forbidden_files:
+        - "infrastructure/**"
+        - "src/etl/data_processing/silver_cleaning_lambda.py"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "3.3"
+      title: "Lambda handler: combine snapshot pages, write Parquet + latest.json"
+      description: >-
+        Implement the AWS-edge handler triggered by schedule. List the latest
+        snapshot's paginated JSON objects under bronze/idealista, combine pages,
+        call the pure transform, write Parquet partitioned by
+        operation/snapshot_date, and rebuild latest.json from the entire silver
+        history. JSON only, idempotent on full snapshot_date.
+      status: "planned"
+      complexity: "medium"
+      estimated_hours: 3
+      depends_on: ["3.2"]
+      branch: "feature/silver-cleaning-lambda/3.3-lambda-handler"
+      commit_message: "feat(silver): add scheduled lambda handler writing partitioned parquet"
+      acceptance_criteria:
+        - "✓ RED: test_lambda_combines_pages_writes_partitioned_parquet_and_rebuilds_latest_json fails first (moto)"
+        - "✓ GREEN: handler combines all snapshot pages and writes one Parquet under operation=.../snapshot_date=YYYY-MM-DD/part.parquet"
+        - "✓ GREEN: latest.json is rebuilt from full silver history, not the single input"
+        - "✓ Re-running the same snapshot is idempotent (same key, no duplicate rows)"
+        - "✓ Only JSON is read (no CSV path)"
+        - "✓ REFACTOR: AWS edges isolated from pure logic, type hints + docstrings, suite green"
+        - "✓ Handler uses AWS-managed pandas layer assumption (no custom pyarrow build)"
+        - "✓ Unit/integration coverage for handler >= 80%"
+      allowed_files:
+        - "src/etl/data_processing/silver_cleaning_lambda.py"
+        - "src/etl/data_processing/requirements.txt"
+        - "src/etl/data_processing/tests/test_silver_cleaning_lambda.py"
+        - "src/etl/requirements-dev.txt"
+      forbidden_files:
+        - "infrastructure/**"
+        - "src/etl/data_collection/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "3.4"
+      title: "Terraform: scheduled silver lambda module"
+      description: >-
+        Add a Terraform module for the silver Lambda triggered by a scheduled
+        EventBridge rule (not per-object S3 notification). Scope IAM to read
+        bronze/idealista and write silver only, add a CloudWatch log group and
+        SNS error alarm, and expose the managed-layer ARN as a region-aware
+        variable.
+      status: "planned"
+      complexity: "medium"
+      estimated_hours: 3
+      depends_on: ["3.3"]
+      branch: "feature/silver-cleaning-lambda/3.4-terraform-module"
+      commit_message: "feat(terraform): add scheduled silver cleaning lambda module"
+      acceptance_criteria:
+        - "✓ Module files created under infrastructure/modules/lambda_silver/"
+        - "✓ Trigger is an EventBridge schedule cron(30 12 ? * SUN *), not an S3 object notification"
+        - "✓ Lambda runtime is python3.12 with 512 MB memory"
+        - "✓ IAM allows read on bronze/idealista/* and write on silver/* only (prefix-scoped)"
+        - "✓ Managed pandas layer ARN is a region-aware variable, not hardcoded"
+        - "✓ CloudWatch log group and SNS error alarm wired to existing topic"
+        - "✓ terraform fmt -check and terraform validate pass"
+      allowed_files:
+        - "infrastructure/modules/lambda_silver/main.tf"
+        - "infrastructure/modules/lambda_silver/variables.tf"
+        - "infrastructure/modules/lambda_silver/outputs.tf"
+      forbidden_files:
+        - "infrastructure/modules/lambda/**"
+        - "infrastructure/environments/prod/**"
+        - "src/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "3.5"
+      title: "Wire dev + docs, optional gated real-bucket smoke test"
+      description: >-
+        Instantiate the silver module in the dev environment root, validate,
+        add the silver layer documentation, and add an optional gated
+        real-bucket smoke test (RUN_S3_IT) reading 1–2 real objects from the dev
+        bucket. Prod wiring is deferred until after a dev soak.
+      status: "planned"
+      complexity: "low"
+      estimated_hours: 2
+      depends_on: ["3.4"]
+      branch: "feature/silver-cleaning-lambda/3.5-dev-wire-docs-smoke"
+      commit_message: "feat(terraform): wire silver lambda in dev with docs and gated smoke test"
+      acceptance_criteria:
+        - "✓ Dev environment root includes the lambda_silver module block"
+        - "✓ terraform validate passes in dev environment"
+        - "✓ documentation/DATA_PROCESSING_LAYER.md describes the silver layer architecture"
+        - "✓ Optional RUN_S3_IT smoke test reads 1–2 real objects from the dev bucket and is skipped by default"
+        - "✓ Prod wiring intentionally deferred until after dev soak"
+        - "✓ workflow-consistency validator passes"
+      allowed_files:
+        - "infrastructure/environments/dev/main.tf"
+        - "documentation/DATA_PROCESSING_LAYER.md"
+        - "src/etl/data_processing/tests/test_silver_cleaning_lambda.py"
+      forbidden_files:
+        - "infrastructure/environments/prod/**"
+      can_run_parallel_with: []
+      reversible: true
+
+  summary:
+    total_tasks: 5
+    estimated_total_hours: 14
+    critical_path: ["3.1", "3.2", "3.3", "3.4", "3.5"]
+    parallelizable_tasks: 0
