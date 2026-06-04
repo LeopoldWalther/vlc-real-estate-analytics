@@ -1,0 +1,44 @@
+{
+  "elementList": [
+    {
+      "propertyCode": "94128981",
+      "price": 430000.0,
+      "propertyType": "flat",
+      "operation": "sale",
+      "size": 160.0,
+      "rooms": 4,
+      "bathrooms": 2,
+      "district": "Extramurs",
+      "neighborhood": "La Roqueta",
+      "municipality": "València",
+      "province": "València",
+      "latitude": 39.469251,
+      "longitude": -0.3827213,
+      "status": "good",
+      "priceByArea": 2688.0,
+      "floor": "8",
+      "exterior": true
+    },
+    {
+      "propertyCode": "100820216",
+      "price": 305000.0,
+      "propertyType": "flat",
+      "operation": "sale",
+      "size": 140.0,
+      "rooms": 3,
+      "bathrooms": 2,
+      "district": "Extramurs",
+      "neighborhood": "La Roqueta",
+      "municipality": "València",
+      "province": "València",
+      "latitude": 39.4679234,
+      "longitude": -0.3821373,
+      "status": "newdevelopment",
+      "priceByArea": 2179.0,
+      "exterior": false
+    }
+  ],
+  "total": 817,
+  "totalPages": 17,
+  "actualPage": 2
+}
