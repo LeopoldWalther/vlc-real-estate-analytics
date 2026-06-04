@@ -61,7 +61,7 @@ technical_plan:
         neighborhood, group by neighborhood + snapshot_date, aggregate
         priceByArea (mean, count), and build the dashboard JSON (with
         schema_version) from the full history.
-      status: "planned"
+      status: "done"
       complexity: "medium"
       estimated_hours: 3
       depends_on: ["3.1"]
