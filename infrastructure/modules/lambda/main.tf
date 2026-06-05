@@ -210,6 +210,10 @@ resource "aws_cloudwatch_event_target" "lambda_target" {
   rule      = aws_cloudwatch_event_rule.weekly_trigger.name
   target_id = "IdealistaCollectorLambda"
   arn       = aws_lambda_function.idealista_collector.arn
+
+  # In test mode, limit the scheduled run to 1 page per operation to respect
+  # Idealista API limits (used in dev). Omitted entirely in full-collection mode.
+  input = var.test_mode ? jsonencode({ test_mode = true }) : null
 }
 
 # Permission for EventBridge to invoke Lambda

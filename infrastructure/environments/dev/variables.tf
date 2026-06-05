@@ -40,6 +40,16 @@ variable "notification_email" {
   default     = "leopold.walther@gmail.com"
 }
 
+variable "pandas_layer_arn" {
+  description = <<-EOT
+    ARN of the AWS-managed AWSSDKPandas-Python312 Lambda layer for this region.
+    Default targets eu-central-1. Look up the latest version at:
+    https://aws-sdk-pandas.readthedocs.io/en/stable/layers.html
+  EOT
+  type        = string
+  default     = "arn:aws:lambda:eu-central-1:336392948345:layer:AWSSDKPandas-Python312:16"
+}
+
 
 # variable "state_bucket_allowed_principals" {
 #   description = <<-EOT
