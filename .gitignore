@@ -218,6 +218,8 @@ __marimo__/
 .terraform.lock.hcl
 terraform.tfvars
 secrets.tfvars
+**/terraform.tfvars
+**/secrets.tfvars
 override.tf.json
 crash.log
 crash.*.log
