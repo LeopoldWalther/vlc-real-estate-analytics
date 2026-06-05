@@ -136,9 +136,7 @@ src/
 │   ├── lambda_layers/                       # requests library as Lambda Layer
 │   └── requirements-dev.txt                 # Dev: pytest, moto, black, ruff, mypy
 └── notebooks/
-    ├── valenciaRealEstatePriceAnalysis.ipynb
-    ├── idealista_listings_collector.ipynb
-    └── copy_s3_listings.ipynb
+    └── valenciaRealEstatePriceAnalysis.ipynb
 ```
 
 ## Getting Started
