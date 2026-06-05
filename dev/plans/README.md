@@ -10,7 +10,7 @@ small, version-controlled, independently testable tasks.
 |----|-------|--------|--------|--------|----------|-------|
 | FEATURE-002 | Idealista web scraper — notebook MVP + Lambda | 🟡 | `feature/idealista-web-scraper` | 4–5 d | High | @implementer |
 | FEATURE-003 | Silver cleaning Lambda (bronze → cleaned listings) | 🟢 | `feature/silver-cleaning-lambda` | 1.5–2 d | High | @implementer |
-| FEATURE-004 | Gold aggregation Lambda (silver → aggregations JSON) | 🔵 | `feature/gold-aggregation-lambda` | 1–1.5 d | High | Unassigned |
+| FEATURE-004 | Gold aggregation Lambda (silver → aggregations JSON) | 🟡 | `feature/gold-aggregation-lambda` | 1–1.5 d | High | Unassigned |
 | FEATURE-005 | Static visualization web app (S3 + CloudFront) | 🔵 | `feature/static-visualization-webapp` | 1–1.5 d | Medium | Unassigned |
 
 **Status:** 🔵 planned · 🟡 in progress · 🟢 complete · 🔴 blocked
