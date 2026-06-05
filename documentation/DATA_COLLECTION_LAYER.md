@@ -1,278 +1,202 @@
-# Valencia Real Estate Analytics - Data Collection Layer
+# VLC Real Estate Analytics — Data Collection Layer (Bronze)
 
 ## Overview
 
-Automated infrastructure for collecting Valencia real estate listings from the Idealista API using AWS Lambda, Secrets Manager, and S3.
+The Bronze Collector is a scheduled AWS Lambda function that fetches Valencia real estate listings from the Idealista API and stores raw paginated JSON responses in the S3 bronze layer. It is the entry point of the medallion architecture.
 
-## Components
+## Architecture
 
-### 1. Lambda Function
+```
+┌──────────────────┐
+│   EventBridge    │  cron(0 12 ? * SUN *)  — every Sunday 12:00 UTC
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐     ┌───────────────────────────────┐
+│  Bronze Collector│────▶│  AWS Secrets Manager           │
+│  Python 3.12     │     │  lvw-api-credentials           │
+│  256 MB / 900 s  │     │  pmv-api-credentials           │
+└────────┬─────────┘     └───────────────────────────────┘
+         │  OAuth2 token → paginated JSON pages
+         │  PutObject: bronze/idealista/{op}_{YYYYMMDD}_{HHMMSS}_{page}.json
+         ▼
+┌──────────────────┐     ┌───────────────────────────────┐
+│  S3 Bronze Layer │     │  SNS Topic (error alerts)      │
+│  bronze/idealista│     │  prod only (test_mode skips)   │
+└──────────────────┘     └───────────────────────────────┘
+```
+
+## S3 Key Format
+
+```
+bronze/idealista/{operation}_{YYYYMMDD}_{HHMMSS}_{page}.json
+```
+
+Examples:
+```
+bronze/idealista/sale_20260601_120044_1.json
+bronze/idealista/sale_20260601_120044_2.json
+bronze/idealista/rent_20260601_120044_1.json
+```
+
+Each file is one raw Idealista API response page (up to 50 listings).
+
+## Source Code
 
 **File**: [src/etl/data_collection/idealista_listings_collector.py](../src/etl/data_collection/idealista_listings_collector.py)
 
-**Features**:
-- Python 3.12 with type hints
-- AWS Secrets Manager integration for API credentials
-- Test mode support (limits to 1 page per operation)
-- Comprehensive error handling and logging
-- Structured configuration via `SearchConfig` class
-- HTTP timeouts (30s) to prevent hanging
+### Key Functions
 
-**Search Parameters**:
-- Location: Valencia city center (39.4693441,-0.379561)
-- Radius: 1500m
-- Property type: Homes
-- Size: 100-160 m²
-- Features: Elevator, air conditioning, good preservation
+| Function | Purpose |
+|---|---|
+| `lambda_handler(event, context)` | Entry point; reads `test_mode` from event payload |
+| `process_operation(operation, ...)` | Paginates through all API pages for one operation |
+| `get_secret(secret_name)` | Reads API credentials from Secrets Manager |
+| `send_notification(...)` | Sends SNS email on success (skipped in test_mode) |
 
-### 2. Terraform Module Structure
+### Search Parameters
 
-Lambda module: `infrastructure/modules/lambda/`
+- **Location**: Valencia city center (39.4693441, −0.379561), 1500 m radius
+- **Property Type**: Homes, 100–160 m², elevator, good preservation
+- **Operations**: `sale` (LVW credentials) and `rent` (PMV credentials)
 
-```
-modules/
-  lambda/
-    ├── main.tf        # Lambda function, IAM, EventBridge
-    ├── variables.tf   # Input variables
-    └── outputs.tf     # Module outputs
-```
+### Test Mode
 
-#### Resources Created:
+When invoked with `{"test_mode": true}` in the event payload:
+- Limits collection to 1 page per operation (2 API calls total)
+- Suppresses SNS notification email
 
-**Lambda Function**:
-- Runtime: Python 3.12
-- Timeout: 900 seconds (15 minutes)
-- Memory: 256 MB
-- Handler: `idealista_listings_collector.lambda_handler`
+In dev, EventBridge automatically passes `{"test_mode": true}` via the target `input` field, so the scheduled run never exceeds 2 API calls per week.
 
-**IAM Role & Policies**:
-- CloudWatch Logs: Write permissions
-- S3: PutObject on listings bucket
-- Secrets Manager: GetSecretValue for both credential sets
+## Terraform Module
 
-**Lambda Layer**:
-- Requests library (Python 3.12 compatible)
-- Reusable across Lambda versions
-
-**EventBridge Scheduling**:
-- Trigger: Weekly on Sundays at 12:00 UTC
-- Cron expression: `cron(0 12 ? * SUN *)`
-
-**CloudWatch Log Group**:
-- Log retention: 30 days
-- Auto-created with proper naming
-
-### 3. Integration with Existing Infrastructure
-
-```terraform
-module "idealista_collector" {
-  source = "../../modules/lambda"
-
-  environment      = var.environment
-  aws_region       = var.aws_region
-  s3_bucket_name   = module.listings_bucket.listings_bucket_name
-  s3_bucket_arn    = module.listings_bucket.listings_bucket_arn
-  secret_name_lvw  = module.idealista_secrets.secret_name_lvw
-  secret_arn_lvw   = module.idealista_secrets.secret_arn_lvw
-  secret_name_pmv  = module.idealista_secrets.secret_name_pmv
-  secret_arn_pmv   = module.idealista_secrets.secret_arn_pmv
-}
-```
-
-### 4. Security Best Practices
-
-✅ **Principle of Least Privilege**: IAM policies grant only necessary permissions
-✅ **No Hardcoded Secrets**: All credentials in Secrets Manager
-✅ **Encrypted Storage**: S3 bucket has server-side encryption
-✅ **Log Retention**: Automatic cleanup after 30 days
-✅ **Version Control**: `.gitignore` excludes sensitive files
-
-### 5. Additional Files
-
-- [src/etl/README.md](../src/etl/README.md): Function documentation
-- [src/etl/data_collection/requirements.txt](../src/etl/data_collection/requirements.txt): Python dependencies (requests, boto3)
-- [src/etl/lambda_layers/requests/requests.zip](../src/etl/lambda_layers/requests/): Python 3.12 requests library
-- [src/notebooks/copy_s3_listings.ipynb](../src/notebooks/copy_s3_listings.ipynb): Notebook to migrate data from old bucket
-- Updated [.gitignore](../.gitignore): Excludes Lambda ZIP files and secrets.tfvars
-
-## Architecture Diagram
+**Path**: `infrastructure/modules/lambda_bronze/`
 
 ```
-┌─────────────────┐
-│  EventBridge    │ Weekly trigger (Sundays 12:00 UTC)
-│   Cron Rule     │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│     Lambda      │
-│   Function      │
-│  (Python 3.12)  │
-└────────┬────────┘
-         │
-         ├─────────► AWS Secrets Manager
-         │           ├─ lvw credentials
-         │           └─ pmv credentials
-         │
-         └─────────► S3 Bucket
-                     ├─ dev-vlc-real-estate-analytics-listings
-                     └─ prod-vlc-real-estate-analytics-listings
+modules/lambda_bronze/
+├── main.tf        # Lambda, IAM, EventBridge, CloudWatch log group
+├── variables.tf   # Input variables (including test_mode)
+└── outputs.tf     # function_name, function_arn, log_group_name, etc.
 ```
 
-## Deployment Instructions
+### Key Variables
 
-### Environments
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `environment` | string | — | `dev` or `prod` |
+| `aws_region` | string | — | AWS region |
+| `s3_bucket_name` | string | — | Target S3 bucket |
+| `sns_topic_arn` | string | — | SNS topic for alerts |
+| `test_mode` | bool | `false` | Pass `{"test_mode":true}` as EventBridge input |
 
-Two environments are configured:
-- **Dev**: `infrastructure/environments/dev/` - For testing
-- **Prod**: `infrastructure/environments/prod/` - For production data collection
+### Resources Created
 
-### Prerequisites
+| Resource | Name pattern |
+|---|---|
+| Lambda function | `{env}-idealista-collector` |
+| IAM role | `{env}-idealista-collector-lambda-role` |
+| Lambda layer | `{env}-requests-layer` |
+| EventBridge rule | `{env}-idealista-collector-weekly` |
+| CloudWatch log group | `/aws/lambda/{env}-idealista-collector` |
 
-1. Ensure secrets are populated in `secrets.tfvars` (excluded from git)
-2. Navigate to the environment directory
+### IAM Permissions
 
-### Deploy Infrastructure
+- **CloudWatch Logs**: `CreateLogGroup`, `CreateLogStream`, `PutLogEvents`
+- **S3**: `PutObject`, `PutObjectAcl`, `ListBucket` on the listings bucket
+- **Secrets Manager**: `GetSecretValue` on LVW + PMV secret ARNs
+- **SNS**: `Publish` on the notifications topic
+
+## Deployment
 
 ```bash
-# For Dev
-cd infrastructure/environments/dev
+cd infrastructure/environments/dev   # or prod
 
-# For Prod
-cd infrastructure/environments/prod
-
-# Initialize Terraform (first time only)
+# First time
 terraform init
 
-# Review changes
+# Review
 terraform plan -var-file="secrets.tfvars"
 
-# Apply changes
+# Apply
 terraform apply -var-file="secrets.tfvars"
 ```
 
-### Expected Resources Created
+**`secrets.tfvars`** (gitignored):
+```hcl
+idealista_api_key_lvw    = "..."
+idealista_api_secret_lvw = "..."
+idealista_api_key_pmv    = "..."
+idealista_api_secret_pmv = "..."
+notification_email       = "your@email.com"
+```
 
-**Dev Environment**:
-1. **Lambda Function**: `dev-idealista-collector`
-2. **IAM Role**: `dev-idealista-collector-lambda-role`
-3. **Lambda Layer**: `dev-requests-layer`
-4. **Log Group**: `/aws/lambda/dev-idealista-collector`
-5. **EventBridge Rule**: `dev-idealista-collector-weekly`
-6. **S3 Bucket**: `dev-vlc-real-estate-analytics-listings`
-7. **Secrets**: `dev/idealista/lvw-api-credentials`, `dev/idealista/pmv-api-credentials`
+## Testing
 
-**Prod Environment**:
-Same resources with `prod-` prefix instead of `dev-`
-
-### Test the Lambda Function
+### Manual Invocation
 
 ```bash
-# Test mode (only 2 API calls - 1 sale page + 1 rent page)
+# Full run (prod)
+aws lambda invoke \
+  --function-name prod-idealista-collector \
+  --region eu-central-1 \
+  response.json && cat response.json | jq .
+
+# Limited run — 1 page each (same as scheduled dev run)
 aws lambda invoke \
   --function-name dev-idealista-collector \
   --region eu-central-1 \
   --cli-binary-format raw-in-base64-out \
   --payload '{"test_mode": true}' \
   response.json
+```
 
-cat response.json | jq .
+### Unit & Integration Tests
 
-# Full production run
-aws lambda invoke \
-  --function-name prod-idealista-collector \
-  --region eu-central-1 \
-  --cli-binary-format raw-in-base64-out \
-  response.json
+```bash
+cd src/etl
+pytest data_collection/tests/ -v --cov=data_collection
+```
 
-# View logs
+### Verify S3 Output
+
+```bash
+aws s3 ls s3://dev-vlc-real-estate-analytics-listings/bronze/idealista/ \
+  --recursive --region eu-central-1
+```
+
+## Monitoring
+
+```bash
+# Live logs
 aws logs tail /aws/lambda/prod-idealista-collector --region eu-central-1 --follow
 
-# Check S3 uploads
-aws s3 ls s3://prod-vlc-real-estate-analytics-listings/ --region eu-central-1
+# Filter errors
+aws logs filter-log-events \
+  --log-group-name /aws/lambda/prod-idealista-collector \
+  --filter-pattern "ERROR" \
+  --region eu-central-1
 ```
-## Cost Estimate
 
-### Lambda
-- Invocations: ~4/month (weekly)
-- Duration: ~2 minutes per invocation
-- Memory: 256 MB
-- **Estimated cost**: <$1/month (within free tier)
+## Troubleshooting
 
-### Secrets Manager
-- 2 secrets
-- ~4 retrievals/month
-- **Estimated cost**: ~$0.80/month
+| Problem | Solution |
+|---|---|
+| Lambda times out | Check API rate limits; reduce `max_items` in `SearchConfig` |
+| Permission denied on S3 | Verify IAM policy includes the correct bucket ARN |
+| Secrets not found | Check secret names in `variables.tf` match Secrets Manager |
+| API 401 / token error | Credentials may have expired; rotate in Secrets Manager |
+| EventBridge not triggering | Check rule is enabled: `aws events list-rules --region eu-central-1` |
+| State lock | `terraform force-unlock <LOCK_ID>` |
 
-### S3
-- Storage: Minimal (JSON files)
-- Requests: ~200 PUT operations/month
-- **Estimated cost**: <$1/month
+## Security
 
-### CloudWatch Logs
-- Log data: ~10 MB/month
-- Retention: 30 days
-- **Estimated cost**: <$0.50/month
+- API credentials stored exclusively in AWS Secrets Manager
+- `secrets.tfvars` excluded from version control via `.gitignore`
+- S3 bucket has AES-256 server-side encryption
+- IAM role follows least-privilege principle
+- CloudWatch logs retained 30 days then auto-deleted
 
-**Total estimated cost**: ~$2-3/month
+## Related Documentation
 
-## Monitoring & Troubleshooting
-
-### CloudWatch Metrics
-- **Invocations**: Number of times Lambda runs
-- **Duration**: Execution time
-- **Errors**: Failed invocations
-- **Throttles**: Rate limit hits
-
-### Common Issues
-
-**Problem**: Lambda times out
-- **Solution**: Increase timeout in `modules/lambda/main.tf`
-
-**Problem**: Permission denied on S3
-- **Solution**: Check IAM policy in `modules/lambda/main.tf`
-
-**Problem**: Cannot retrieve secrets
-- **Solution**: Verify secret names and IAM permissions
-
-**Problem**: API rate limit exceeded
-- **Solution**: Reduce frequency or stagger requests
-
-## Future Enhancements
-
-1. **Dead Letter Queue (DLQ)**: Capture failed invocations
-2. **X-Ray Tracing**: Detailed performance insights
-3. **SNS Notifications**: Alert on failures
-5. **CI/CD Pipeline**: Automated deployments
-6. **Unit Tests**: Test Lambda function logic
-7. **API Gateway**: Trigger Lambda via HTTP endpoint
-
-## Rollback Plan
-
-If issues occur, you can:
-
-1. **Disable EventBridge rule**: Prevents automatic execution
-   ```bash
-   aws events disable-rule --name dev-idealista-collector-weekly
-   ```
-
-2. **Revert to manual execution**: Use AWS Console to invoke legacy function
-
-3. **Destroy Terraform resources**:
-   ```bash
-   terraform destroy -var-file="secrets.tfvars"
-   ```
-
-## References
-
-- [AWS Lambda Best Practices](https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html)
-- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
-- [Python Type Hints](https://docs.python.org/3/library/typing.html)
-- [AWS Secrets Manager](https://docs.aws.amazon.com/secretsmanager/)
-
-## Questions & Support
-
-For issues or questions about this infrastructure:
-1. Check CloudWatch Logs for Lambda errors
-2. Review Terraform plan output before applying
-3. Consult AWS documentation for service-specific issues
+- [DATA_PROCESSING_LAYER.md](DATA_PROCESSING_LAYER.md) — Silver Cleaner (Bronze → Parquet)
+- [../README.md](../README.md) — Project overview and full architecture

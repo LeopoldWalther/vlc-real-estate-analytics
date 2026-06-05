@@ -47,3 +47,14 @@ variable "sns_topic_arn" {
   description = "ARN of the SNS topic for Lambda notifications"
   type        = string
 }
+
+variable "test_mode" {
+  description = <<-EOT
+    When true, the scheduled EventBridge trigger invokes the collector with
+    {"test_mode": true}, limiting it to 1 page per operation (2 API calls total)
+    and suppressing SNS notifications. Use in dev to stay within Idealista API
+    limits. Defaults to false (full weekly collection).
+  EOT
+  type        = bool
+  default     = false
+}

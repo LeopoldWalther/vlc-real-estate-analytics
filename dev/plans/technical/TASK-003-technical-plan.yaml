@@ -164,7 +164,7 @@ technical_plan:
         add the silver layer documentation, and add an optional gated
         real-bucket smoke test (RUN_S3_IT) reading 1–2 real objects from the dev
         bucket. Prod wiring is deferred until after a dev soak.
-      status: "planned"
+      status: "done"
       complexity: "low"
       estimated_hours: 2
       depends_on: ["3.4"]
