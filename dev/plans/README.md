@@ -11,7 +11,7 @@ This planning system helps organize software development by breaking down comple
 |----|-------|--------|--------|--------|----------|----------|
 | TASK-001 | Merge debug features into production | 🔵 | `feature/merge-debug-features` | 30 min | High | @coder |
 | TASK-002 | Idealista Web Scraper — Notebook MVP + Lambda | 🟡 | `feature/idealista-web-scraper` | 4–5 days | High | @coder |
-| TASK-003 | Silver Cleaning Lambda (Bronze → Silver cleaned listings) | 🟡 | `feature/silver-cleaning-lambda` | 1.5–2 days | High | Unassigned |
+| TASK-003 | Silver Cleaning Lambda (Bronze → Silver cleaned listings) | 🟢 | `feature/silver-cleaning-lambda` | 1.5–2 days | High | Unassigned |
 | TASK-004 | Gold Aggregation Lambda (Silver → Gold aggregations JSON) | 🔵 | `feature/gold-aggregation-lambda` | 1–1.5 days | High | Unassigned |
 | TASK-005 | Static Visualization Web App (S3 + CloudFront) | 🔵 | `feature/static-visualization-webapp` | 1–1.5 days | Medium | Unassigned |
 
