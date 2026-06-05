@@ -1,0 +1,31 @@
+name: Workflow Consistency
+
+on:
+  pull_request:
+    paths:
+      - '.github/**'
+      - 'dev/**'
+      - '.github/workflows/workflow-consistency.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/**'
+      - 'dev/**'
+
+jobs:
+  validate:
+    name: Validate Agent Workflow
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run consistency validation
+        run: python dev/tools/validate_agent_workflow.py

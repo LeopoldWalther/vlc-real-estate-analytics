@@ -1,0 +1,277 @@
+technical_plan:
+  metadata:
+    created_by: "reviewer_agent"
+    for_task: "TASK-004"
+    created_at: "2026-06-05T00:00:00Z"
+    version: "1.0"
+    reviewed_plan: "dev/reviews/REVIEW-TASK-004.md"
+    considers_downstream: "TASK-005 (static visualization web app)"
+
+  validation:
+    auto_validate_on_tag_change: true
+    required_checks:
+      - "python-lint-and-test"
+      - "terraform-validate"
+      - "workflow-consistency"
+    min_coverage: 80
+
+  # ---------------------------------------------------------------------------
+  # Frozen gold->frontend JSON contract (schema_version 1.0). TASK-005 depends
+  # on this exact shape. Records-oriented; aggregate-only; no raw rows. Two
+  # symmetric populations: 'general' (all scoped listings) and 'relevant'
+  # (the 'apartments like ours' filter). Covers every notebook chart
+  # (sections 4.1-4.5 and 6) per the full chart audit in the review.
+  # ---------------------------------------------------------------------------
+  json_contract:
+    schema_version: "1.0"
+    top_level_keys:
+      - "schema_version"      # "1.0"
+      - "generated_at"        # ISO-8601 UTC
+      - "scope_districts"     # ["Extramurs", "Ciutat Vella", "L'Eixample"]
+      - "min_count"           # int, default 5
+      - "relevant_filter"     # echo of the relevant-population predicate
+      - "general"             # population block (all scoped listings)
+      - "relevant"            # population block (apartments like ours)
+    population_block_keys:
+      general:
+        - "price_time_series_neighborhood"
+        - "price_time_series_district"
+        - "rent_vs_sale_ratio"
+        - "rent_vs_sale_ratio_time_series"
+        - "boxplot_by_neighborhood"
+      relevant:
+        - "rent_vs_sale_ratio"
+        - "rent_vs_sale_ratio_time_series"
+        - "boxplot_by_neighborhood"
+    price_time_series_neighborhood_record:
+      ["operation", "district", "neighborhood", "snapshot_date",
+       "count_listings", "mean_priceByArea", "mean_size", "mean_price"]
+    price_time_series_district_record:
+      ["operation", "district", "snapshot_date",
+       "count_listings", "mean_priceByArea", "mean_size", "mean_price"]
+    rent_vs_sale_ratio_record:
+      ["district", "neighborhood", "mean_priceByArea_sale",
+       "mean_priceByArea_rent", "mean_sales_price_by_rent_ratio",
+       "count_listings_sale", "count_listings_rent"]
+    rent_vs_sale_ratio_time_series_record:
+      ["district", "neighborhood", "snapshot_date", "mean_priceByArea_sale",
+       "mean_priceByArea_rent", "mean_sales_price_by_rent_ratio",
+       "count_listings_sale", "count_listings_rent"]
+    boxplot_by_neighborhood_record:
+      ["operation", "district", "neighborhood",
+       "count", "min", "q1", "median", "q3", "max"]
+    relevant_filter:
+      hasLift: true
+      floor_not: "1"      # floor is a STRING in the data
+      size_gt: 120
+      rooms_gte: 2
+      bathrooms_gte: 2
+    decisions:
+      - "NO global drop_duplicates(propertyCode); dedup only within (operation, snapshot_date, propertyCode) so the time-series survives"
+      - "TWO populations ship: 'general' (all scoped listings, notebook 4.2) and 'relevant' (apartments-like-ours filter, notebook 4.3)"
+      - "each population emits the rent-vs-sale ratio BOTH as a full-history value (scatter) AND as a time-series (line)"
+      - "price_time_series_district uses COUNT-WEIGHTED mean across neighborhoods, NOT mean-of-means"
+      - "boxplot_by_neighborhood ships a 5-number summary (min/q1/median/q3/max)+count, not raw rows; Plotly box renders from quartiles; emitted for BOTH populations"
+      - "listing_counts dropped as a separate dataset; counts-over-time derives from general.price_time_series_neighborhood.count_listings"
+      - "use key 'mean_price' everywhere (never 'mean_prize')"
+      - "floor is a string: compare floor != '1'"
+      - "min_count default 5, overridable via env RATIO_MIN_COUNT; applies to ratio datasets in both populations"
+      - "scope districts: Extramurs, Ciutat Vella, L'Eixample (assert via real fixture strings; L'Eixample has an apostrophe)"
+      - "write one generic aggregation helper parameterized by a row-filter; call it twice (identity vs relevant predicate)"
+
+  tasks:
+    - id: "4.1"
+      title: "Pure gold aggregation: scope + two populations + full JSON contract"
+      description: >-
+        Implement the pure, AWS-free aggregation in gold_aggregate.py. Given a
+        combined silver DataFrame (cleaned individual listings across the full
+        history), filter to the 3 scope districts, then build TWO symmetric
+        population blocks via one generic helper parameterized by a row-filter:
+        'general' (identity filter = all scoped listings, notebook 4.2) and
+        'relevant' (hasLift==True & floor!='1' & size>120 & rooms>=2 &
+        bathrooms>=2, notebook 4.3). For general emit price_time_series at
+        neighborhood AND district grain (district = COUNT-WEIGHTED mean, not
+        mean-of-means), plus rent_vs_sale_ratio (full history),
+        rent_vs_sale_ratio_time_series and boxplot_by_neighborhood. For relevant
+        emit rent_vs_sale_ratio, rent_vs_sale_ratio_time_series and
+        boxplot_by_neighborhood (5-number summary per operation+neighborhood).
+        Both populations carry boxplot_by_neighborhood. Assemble build_aggregation_json into
+        the frozen schema v1.0. CRITICAL: never drop_duplicates(propertyCode)
+        globally - dedup only within (operation, snapshot_date, propertyCode).
+        Standardize on 'mean_price' (no 'mean_prize'). floor is a string.
+      status: "planned"
+      complexity: "high"
+      estimated_hours: 7
+      depends_on: []
+      branch: "feature/gold-aggregation-lambda/4.1-aggregation-core"
+      commit_message: "feat(gold): add pure two-population aggregations with frozen json contract"
+      acceptance_criteria:
+        - "✓ RED: test_apply_scope_keeps_only_three_districts fails before implementation (uses real fixture district strings incl. L'Eixample)"
+        - "✓ RED: test_price_time_series_same_propertycode_two_snapshots_yields_two_points fails first"
+        - "✓ RED: test_relevant_filter_selects_apartments_like_ours fails first"
+        - "✓ RED: test_price_time_series_district_is_count_weighted fails first"
+        - "✓ RED: test_boxplot_returns_five_number_summary fails first"
+        - "✓ RED: test_ratio_time_series_per_snapshot fails first"
+        - "✓ RED: test_build_aggregation_json_matches_schema_v1_two_populations fails first"
+        - "✓ GREEN: apply_scope keeps only Extramurs, Ciutat Vella, L'Eixample"
+        - "✓ GREEN: dedup only within (operation, snapshot_date, propertyCode); same propertyCode across two snapshots yields TWO time-series points"
+        - "✓ GREEN: generic helper produces both 'general' (identity) and 'relevant' (hasLift/floor!='1'/size>120/rooms>=2/bathrooms>=2) populations"
+        - "✓ GREEN: general.price_time_series_neighborhood grouped by (operation, district, neighborhood, snapshot_date) with count_listings, mean_priceByArea, mean_size, mean_price"
+        - "✓ GREEN: general.price_time_series_district uses count-weighted mean = sum(count*mean)/sum(count) (asserted vs hand-computed value)"
+        - "✓ GREEN: rent_vs_sale_ratio (both populations) = mean_priceByArea_sale / mean_priceByArea_rent, filtered count_listings_sale>=min_count AND count_listings_rent>=min_count"
+        - "✓ GREEN: rent_vs_sale_ratio_time_series (both populations) computes the ratio per snapshot_date"
+        - "✓ GREEN: relevant.boxplot_by_neighborhood returns count + min/q1/median/q3/max per (operation, neighborhood) over full history"
+        - "✓ GREEN: general.boxplot_by_neighborhood returns count + min/q1/median/q3/max per (operation, neighborhood) over full history (symmetric with relevant)"
+        - "✓ GREEN: build_aggregation_json emits schema_version='1.0', generated_at, scope_districts, min_count, relevant_filter, and the 'general'+'relevant' blocks as records"
+        - "✓ Output keys use 'mean_price' (no 'mean_prize'); asserted by test"
+        - "✓ floor compared as string ('1'); asserted by test"
+        - "✓ Empty silver DataFrame yields valid JSON with empty datasets in both populations, no exception"
+        - "✓ Empty 'relevant' subset yields empty relevant datasets, no exception"
+        - "✓ REFACTOR: generic helper extracted, full type hints + Google-style docstrings, suite green"
+        - "✓ Unit coverage for gold_aggregate.py >= 80%"
+      allowed_files:
+        - "src/etl/data_processing/gold_aggregate.py"
+        - "src/etl/data_processing/tests/test_gold_aggregate.py"
+        - "src/etl/data_processing/tests/__init__.py"
+      forbidden_files:
+        - "infrastructure/**"
+        - "src/etl/data_collection/**"
+        - "src/etl/data_processing/silver_transform.py"
+        - "src/etl/data_processing/silver_cleaning_lambda.py"
+        - "src/etl/data_processing/gold_aggregation_lambda.py"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "4.2"
+      title: "Gold Lambda handler: read full silver history, write latest.json"
+      description: >-
+        Implement the AWS-edge handler gold_aggregation_lambda.py triggered by
+        schedule. List all silver Parquet objects under silver/idealista, read each
+        (relying on physical operation/snapshot_date columns, NOT Hive path
+        inference), concat into one DataFrame, call the pure build_aggregation_json,
+        and write the result to gold/aggregations/latest.json (idempotent overwrite).
+        Create the boto3 S3 client INSIDE the handler for moto capture. Empty history
+        writes a valid empty-datasets JSON. Read scope is silver only; write scope is
+        gold only.
+      status: "planned"
+      complexity: "medium"
+      estimated_hours: 3
+      depends_on: ["4.1"]
+      branch: "feature/gold-aggregation-lambda/4.2-lambda-handler"
+      commit_message: "feat(gold): add scheduled lambda handler writing aggregations latest.json"
+      acceptance_criteria:
+        - "✓ RED: test_lambda_reads_silver_history_writes_latest_json fails first (moto mock_aws)"
+        - "✓ RED: test_lambda_empty_silver_writes_valid_empty_json fails first"
+        - "✓ GREEN: handler lists silver/idealista Parquet, concats across operations/snapshots, writes gold/aggregations/latest.json"
+        - "✓ GREEN: silver read uses physical operation/snapshot_date columns (loud-fail test when a fixture lacks them)"
+        - "✓ GREEN: re-running is idempotent (same key, deterministic content)"
+        - "✓ GREEN: empty silver history writes valid JSON with empty datasets, no crash"
+        - "✓ boto3 S3 client created inside lambda_handler (moto-capturable)"
+        - "✓ Output JSON validates against schema v1.0 (schema_version, generated_at, scope_districts, min_count, relevant_filter, general+relevant population blocks)"
+        - "✓ REFACTOR: AWS edges isolated from pure logic, type hints + docstrings, suite green"
+        - "✓ Uses AWS-managed pandas layer assumption (no bundled pyarrow)"
+        - "✓ Integration coverage for handler >= 80%"
+      allowed_files:
+        - "src/etl/data_processing/gold_aggregation_lambda.py"
+        - "src/etl/data_processing/requirements.txt"
+        - "src/etl/data_processing/tests/test_gold_aggregation_lambda.py"
+        - "src/etl/requirements-dev.txt"
+      forbidden_files:
+        - "infrastructure/**"
+        - "src/etl/data_processing/gold_aggregate.py"
+        - "src/etl/data_collection/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "4.3"
+      title: "Terraform module lambda_gold: function, IAM, schedule, alarm"
+      description: >-
+        Create a new reusable module infrastructure/modules/lambda_gold, adapted
+        from lambda_silver. Package gold_aggregation_lambda.py + gold_aggregate.py
+        (archive_file excluding tests/__pycache__/requirements.txt). IAM role with
+        scoped policies: logging, s3 (read silver/idealista/*, write
+        gold/aggregations/*, ListBucket conditional on those prefixes), sns. Lambda
+        512MB/300s python3.12, handler gold_aggregation_lambda.lambda_handler,
+        layers=[pandas_layer_arn], env vars S3_BUCKET / SILVER_PREFIX='silver/idealista'
+        / GOLD_PREFIX='gold/aggregations' / RATIO_MIN_COUNT / SNS_TOPIC_ARN. CloudWatch
+        log group (30d), error metric alarm, EventBridge rule cron(45 12 ? * SUN *),
+        target, permission. Outputs: function_name, function_arn, function_role_arn,
+        log_group_name, event_rule_name.
+      status: "planned"
+      complexity: "medium"
+      estimated_hours: 3
+      depends_on: ["4.2"]
+      branch: "feature/gold-aggregation-lambda/4.3-terraform-module"
+      commit_message: "feat(terraform): add lambda_gold module with scheduled trigger and scoped iam"
+      acceptance_criteria:
+        - "✓ RED: terraform validate fails before module files exist / while incomplete"
+        - "✓ GREEN: terraform validate passes for the new module"
+        - "✓ archive_file packages gold_aggregation_lambda.py + gold_aggregate.py, excludes tests/__pycache__/requirements.txt"
+        - "✓ IAM s3 policy reads silver/idealista/* and writes gold/aggregations/* only (least privilege)"
+        - "✓ ListBucket conditional on silver+gold prefixes"
+        - "✓ Lambda is 512MB/300s, python3.12, handler gold_aggregation_lambda.lambda_handler, pandas layer attached"
+        - "✓ Env vars S3_BUCKET, SILVER_PREFIX, GOLD_PREFIX, RATIO_MIN_COUNT, SNS_TOPIC_ARN set"
+        - "✓ EventBridge rule cron(45 12 ? * SUN *) with target + lambda permission"
+        - "✓ CloudWatch log group 30d retention + Errors>0 metric alarm to SNS"
+        - "✓ Outputs expose function_name, function_arn, function_role_arn, log_group_name, event_rule_name"
+        - "✓ terraform fmt clean"
+      allowed_files:
+        - "infrastructure/modules/lambda_gold/main.tf"
+        - "infrastructure/modules/lambda_gold/variables.tf"
+        - "infrastructure/modules/lambda_gold/outputs.tf"
+      forbidden_files:
+        - "infrastructure/modules/lambda_silver/**"
+        - "infrastructure/modules/lambda_bronze/**"
+        - "src/etl/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "4.4"
+      title: "Wire lambda_gold in dev, docs, and gated smoke test"
+      description: >-
+        Instantiate module.gold_aggregator in infrastructure/environments/dev/main.tf
+        (pass s3 bucket name/arn, sns topic arn, pandas_layer_arn, ratio_min_count).
+        Do NOT wire prod yet (defer until dev soak, consistent with silver). Add a
+        gated/manual smoke test that invokes the gold lambda after silver has run and
+        asserts gold/aggregations/latest.json exists and validates against schema v1.0.
+        Write documentation/DATA_GOLD_LAYER.md (architecture, aggregations, JSON
+        contract v1.0 for TASK-005, terraform module, design decisions). Update
+        README medallion diagram + S3 layout to include the gold layer and latest.json.
+      status: "planned"
+      complexity: "low"
+      estimated_hours: 2
+      depends_on: ["4.3"]
+      branch: "feature/gold-aggregation-lambda/4.4-dev-wire-docs-smoke"
+      commit_message: "feat(terraform): wire gold lambda in dev with docs and gated smoke test"
+      acceptance_criteria:
+        - "✓ RED: terraform plan in dev shows the gold module resources missing before wiring"
+        - "✓ GREEN: module.gold_aggregator instantiated in dev/main.tf; terraform validate + plan green"
+        - "✓ prod NOT wired (deferred, matches silver rollout)"
+        - "✓ Gated smoke test (skipped by default) invokes gold lambda and asserts latest.json exists + schema v1.0 valid"
+        - "✓ documentation/DATA_GOLD_LAYER.md created with JSON contract v1.0 section for TASK-005"
+        - "✓ README medallion diagram + S3 layout updated to include gold/aggregations/latest.json"
+        - "✓ pre-commit hooks pass (fmt, ruff, black, mypy, end-of-file-fixer)"
+        - "✓ terraform validate green in dev"
+      allowed_files:
+        - "infrastructure/environments/dev/main.tf"
+        - "infrastructure/environments/dev/variables.tf"
+        - "src/etl/data_processing/tests/test_gold_smoke.py"
+        - "documentation/DATA_GOLD_LAYER.md"
+        - "README.md"
+      forbidden_files:
+        - "infrastructure/environments/prod/**"
+        - "src/etl/data_processing/gold_aggregate.py"
+        - "src/etl/data_processing/gold_aggregation_lambda.py"
+      can_run_parallel_with: []
+      reversible: true
+
+  summary:
+    total_tasks: 4
+    estimated_total_hours: 15
+    critical_path: ["4.1", "4.2", "4.3", "4.4"]
+    parallelizable_tasks: 0
+    notes:
+      - "Fully sequential: each subtask depends on the previous (pure -> handler -> infra -> wire)."
+      - "Bulk of risk/effort is in 4.1 (two-population aggregation + boxplots + frozen JSON contract for TASK-005)."
+      - "4.1 may optionally be split into 4.1a (general) and 4.1b (relevant + boxplots) if one branch feels too large; the generic helper keeps the second population cheap."
+      - "prod wiring intentionally deferred to a later task after dev soak, mirroring TASK-003 silver."
