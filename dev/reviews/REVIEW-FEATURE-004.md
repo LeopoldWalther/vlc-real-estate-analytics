@@ -1,9 +1,9 @@
-# REVIEW — TASK-004: Gold Aggregation Lambda (Silver → Gold Aggregations JSON)
+# REVIEW — FEATURE-004: Gold Aggregation Lambda (Silver → Gold Aggregations JSON)
 
 **Reviewer:** reviewer_agent
-**Reviewed plan:** [dev/plans/TASK-004-gold-aggregation-lambda.md](../plans/TASK-004-gold-aggregation-lambda.md)
+**Reviewed plan:** [dev/plans/FEATURE-004-gold-aggregation-lambda.md](../plans/FEATURE-004-gold-aggregation-lambda.md)
 **Date:** 2026-06-05
-**Considers downstream:** TASK-005 (Static Visualization Web App)
+**Considers downstream:** FEATURE-005 (Static Visualization Web App)
 
 ---
 
@@ -11,7 +11,7 @@
 
 **Verdict:** ⚠️ **Changes Recommended**
 
-The plan is architecturally sound and consistent with the medallion split already shipped in TASK-003 (bronze → silver). The scheduled-Lambda-over-full-silver-history approach is the right cost/complexity choice for this data volume. However, before implementation can proceed, **five correctness issues** must be resolved because they directly determine the public JSON contract that TASK-005 depends on:
+The plan is architecturally sound and consistent with the medallion split already shipped in FEATURE-003 (bronze → silver). The scheduled-Lambda-over-full-silver-history approach is the right cost/complexity choice for this data volume. However, before implementation can proceed, **five correctness issues** must be resolved because they directly determine the public JSON contract that FEATURE-005 depends on:
 
 1. 🔴 **Global `drop_duplicates(propertyCode)` would collapse the time-series.** Dedup only within `(operation, snapshot_date)`.
 2. 🔴 **The originally proposed 3-dataset schema did NOT cover all notebook charts.** A full chart-by-chart audit (below) shows the public JSON must carry **two populations** (`general` + `relevant`), **district-level** price series, **ratio time-series**, and **boxplot** distribution stats.
@@ -19,7 +19,7 @@ The plan is architecturally sound and consistent with the medallion split alread
 4. 🟡 **`build_aggregation_json` shape must be frozen** — it is the gold↔frontend contract (full schema v1.0 below).
 5. 🟡 **`mean_prize` typo** must not leak into the public JSON; standardize on `mean_price`.
 
-Once the pre-decisions in this review are baked into the technical plan (they are), the task is ready. The technical plan ([dev/plans/technical/TASK-004-technical-plan.yaml](technical/TASK-004-technical-plan.yaml)) encodes all decisions.
+Once the pre-decisions in this review are baked into the technical plan (they are), the task is ready. The technical plan ([dev/plans/technical/FEATURE-004-technical-plan.yaml](technical/FEATURE-004-technical-plan.yaml)) encodes all decisions.
 
 ---
 
@@ -30,7 +30,7 @@ Once the pre-decisions in this review are baked into the technical plan (they ar
 - ✅ **Pure/edge split.** `gold_aggregate.py` (pure pandas) vs `gold_aggregation_lambda.py` (AWS edges) mirrors the proven silver design and keeps tests AWS-free.
 - ✅ **TDD-first, real fixtures.** Reuses the curated bronze→silver fixtures for deterministic tests.
 - ✅ **Idempotent single output** (`latest.json` overwritten) — simple and correct for a rebuild-each-run aggregate.
-- ✅ **`schema_version` from day one** — essential for the TASK-005 contract.
+- ✅ **`schema_version` from day one** — essential for the FEATURE-005 contract.
 - ✅ **All notebook charts covered.** After the full §4.1–§6 audit, the two-population schema v1.0 supports every existing visualization (price series per neighborhood/district, both ratio definitions as scatter + time-series, and the relevant-listings boxplots) — the frontend never has to re-derive data from raw rows.
 
 ---
@@ -76,7 +76,7 @@ The notebook has **two** different neighborhood aggregations:
 
 ### 🟡 MEDIUM — H4: Frozen gold↔frontend contract (schema v1.0, full coverage)
 
-Because TASK-005 (`formatSeries(json)` → Plotly traces) consumes this JSON directly, the structure must be **explicit, records-oriented, and stable** — not a raw `df.to_dict()` dump. Frozen schema v1.0, organized into two populations so the frontend logic is symmetric:
+Because FEATURE-005 (`formatSeries(json)` → Plotly traces) consumes this JSON directly, the structure must be **explicit, records-oriented, and stable** — not a raw `df.to_dict()` dump. Frozen schema v1.0, organized into two populations so the frontend logic is symmetric:
 
 ```json
 {
@@ -143,7 +143,7 @@ Because TASK-005 (`formatSeries(json)` → Plotly traces) consumes this JSON dir
 
 ### 🟡 MEDIUM — H5: `mean_prize` typo must not enter the public contract
 
-The notebook and prototype use `mean_prize` (typo). The plan mixes `mean_price` and `mean_prize`. Since this JSON is a public, versioned contract consumed by TASK-005, **standardize on `mean_price`** everywhere in gold output. Add a test asserting the key is exactly `mean_price`.
+The notebook and prototype use `mean_prize` (typo). The plan mixes `mean_price` and `mean_prize`. Since this JSON is a public, versioned contract consumed by FEATURE-005, **standardize on `mean_price`** everywhere in gold output. Add a test asserting the key is exactly `mean_price`.
 
 ### 🟡 MEDIUM — H6: Partition columns must be physically present when reading silver
 
@@ -156,12 +156,12 @@ Gold reads `silver/idealista/operation=*/snapshot_date=*/part.parquet`. Confirme
 - **L1 — Separate module vs reuse:** Use a **separate** `infrastructure/modules/lambda_gold/` module (consistent with `lambda_bronze` / `lambda_silver`). Parameterizing the silver module would over-couple two different IAM/prefix scopes. *Decision: separate module.*
 - **L2 — Schedule:** `cron(45 12 ? * SUN *)` (15 min after silver's `30`). Acceptable; if silver is still running, gold simply uses the previous complete snapshot and self-heals next week. *Keep 45.*
 - **L3 — `min_count` threshold:** Function param `min_count=5`, overridable via env `RATIO_MIN_COUNT`. *Keep configurable.*
-- **L4 — Output location:** Write to `gold/aggregations/latest.json` in the **same listings bucket** (private). TASK-005 serves it via a CloudFront gold origin (OAC). Keep the prefix exactly `gold/aggregations/` so the TASK-005 IAM/origin can target it precisely.
+- **L4 — Output location:** Write to `gold/aggregations/latest.json` in the **same listings bucket** (private). FEATURE-005 serves it via a CloudFront gold origin (OAC). Keep the prefix exactly `gold/aggregations/` so the FEATURE-005 IAM/origin can target it precisely.
 - **L5 — District name exactness:** `L'Eixample` contains an apostrophe. Add a scope test using the **real fixture** district strings, not hand-typed literals, to avoid an invisible mismatch.
 
 ---
 
-## Cross-Task Analysis: TASK-005 (Web App) Dependency — FULL chart audit
+## Cross-Task Analysis: FEATURE-005 (Web App) Dependency — FULL chart audit
 
 The user asked specifically whether **every** notebook chart is covered — including the ones only in the `.ipynb`, not yet in `app.py`. Mapping **all** notebook visualizations (§4.1–§4.5 + §6) to the frozen schema v1.0:
 
@@ -183,9 +183,9 @@ The user asked specifically whether **every** notebook chart is covered — incl
 
 **Implications enforced by this review:**
 - The records-oriented, two-population schema (H4) makes `formatSeries()` a pure group-by with no pandas — ideal for a no-build static frontend, and renders `general`/`relevant` symmetrically.
-- `schema_version` + `generated_at` give TASK-005 a stable, cache-aware contract.
-- Keep `latest.json` **small** (aggregates + 5-number boxplot summaries, never raw rows) so CloudFront delivery stays < 1s (TASK-005 success criterion). Payload is bounded by ~20 neighborhoods × weekly snapshots × 2 operations — a few thousand flat records, trivially gzipped.
-- The notebook prototype only shipped Chart 1 (sale only). This review ensures gold emits **all** datasets for **both** operations and **both** populations so TASK-005 isn't blocked re-deriving data.
+- `schema_version` + `generated_at` give FEATURE-005 a stable, cache-aware contract.
+- Keep `latest.json` **small** (aggregates + 5-number boxplot summaries, never raw rows) so CloudFront delivery stays < 1s (FEATURE-005 success criterion). Payload is bounded by ~20 neighborhoods × weekly snapshots × 2 operations — a few thousand flat records, trivially gzipped.
+- The notebook prototype only shipped Chart 1 (sale only). This review ensures gold emits **all** datasets for **both** operations and **both** populations so FEATURE-005 isn't blocked re-deriving data.
 
 ---
 
@@ -196,7 +196,7 @@ The user asked specifically whether **every** notebook chart is covered — incl
 | Global dedup flattens time-series (H1) | High (it's in the prototype) | High | Dedup only within (operation, snapshot_date); test two-snapshot persistence |
 | Incomplete schema misses notebook charts (H2) | High (first cut missed 4) | High | Full chart audit + two-population schema v1.0 |
 | Wrong/partial ratio shipped (H3) | Medium | High | Both general + relevant populations, full-history + time-series |
-| Unstable JSON shape breaks TASK-005 (H4) | Medium | High | Frozen schema v1.0 + contract test |
+| Unstable JSON shape breaks FEATURE-005 (H4) | Medium | High | Frozen schema v1.0 + contract test |
 | Boxplot needs distribution not mean | Medium | Medium | Pre-compute 5-number summary per (operation, neighborhood) |
 | District price = mean-of-means (wrong) | Medium | Medium | Emit `price_time_series_district` via count-weighted aggregation |
 | `mean_prize` typo in public JSON (H5) | Medium | Medium | Standardize `mean_price` + key test |
@@ -208,9 +208,9 @@ The user asked specifically whether **every** notebook chart is covered — incl
 
 ## Effort Re-Estimation
 
-Plan estimate (M, ~12h across 4 subtasks) was based on **three** datasets. The two-population schema (general + relevant, district-level series, ratio time-series, boxplot stats) roughly **doubles the aggregation surface** in 4.1. Re-estimate 4.1 up; the rest is unchanged.
+Plan estimate (M, ~12h across 4 tasks) was based on **three** datasets. The two-population schema (general + relevant, district-level series, ratio time-series, boxplot stats) roughly **doubles the aggregation surface** in 4.1. Re-estimate 4.1 up; the rest is unchanged.
 
-| Subtask | Plan | Re-estimate | Note |
+| Task | Plan | Re-estimate | Note |
 |---|---|---|---|
 | 4.1 Aggregation core (pure) | 4h | 6–7h | Two populations + boxplot stats + district series + ratio time-series + contract tests |
 | 4.2 Gold Lambda handler (moto) | 3h | 3h | Mirrors silver handler closely |
@@ -243,7 +243,7 @@ Plan estimate (M, ~12h across 4 subtasks) was based on **three** datasets. The t
 **Critical findings (must address before implementation):**
 - **Never `drop_duplicates(propertyCode)` globally.** Dedup only within `(operation, snapshot_date, propertyCode)` so the weekly time-series survives.
 - **Two populations, not one.** `general` = all scoped listings (§4.2); `relevant` = the "apartments like ours" filter `hasLift==True & floor!='1' & size>120 & rooms>=2 & bathrooms>=2` (§4.3). The relevant filter is applied per `(operation, snapshot_date)` before aggregating.
-- **Freeze the JSON schema v1.0 exactly as in H4** — TASK-005 depends on it. Records orientation, `general`/`relevant` blocks, district + neighborhood price series, full-history + time-series ratios, boxplot 5-number summary.
+- **Freeze the JSON schema v1.0 exactly as in H4** — FEATURE-005 depends on it. Records orientation, `general`/`relevant` blocks, district + neighborhood price series, full-history + time-series ratios, boxplot 5-number summary.
 - **Write one generic helper** parameterized by a row-filter (identity for general, the relevant predicate for relevant) and call it twice — avoids duplicating aggregation logic across populations.
 
 **Watch-outs (common pitfalls):**

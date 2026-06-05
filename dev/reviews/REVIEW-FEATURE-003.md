@@ -1,7 +1,7 @@
-# REVIEW — TASK-003: Silver Cleaning Lambda (Bronze → Silver Parquet)
+# REVIEW — FEATURE-003: Silver Cleaning Lambda (Bronze → Silver Parquet)
 
 **Reviewer:** reviewer_agent
-**Reviewed plan:** [dev/plans/TASK-003-silver-cleaning-lambda.md](../plans/TASK-003-silver-cleaning-lambda.md)
+**Reviewed plan:** [dev/plans/FEATURE-003-silver-cleaning-lambda.md](../plans/FEATURE-003-silver-cleaning-lambda.md)
 **Date:** 2026-06-04
 **Verdict:** ⚠️ **Changes Recommended** — gutes Fundament, aber drei Datenmodell-/Trigger-Fehler und eine Lücke bei „früh mit echten S3-Daten testen" müssen vor der Umsetzung behoben werden.
 
@@ -73,7 +73,7 @@ Mehrere Wochen-Snapshots fallen in denselben Monat. `…/operation=sale/year=202
 **S1 — Frühes Testen mit echten S3-Daten fehlt (= die eigentliche Frage)**
 Der Plan testet nur mit moto (gemockt) + In-Memory-DataFrames. Es gibt aber **>1000 echte Bronze-JSONs** in `data/s3/`. Diese sollten **früh** genutzt werden:
 - **Schema-Contract-Test in Phase 1 (RED):** ein kuratiertes, eingechecktes Sample (3–5 echte, ggf. gekürzte Dateien) unter `src/etl/data_processing/tests/fixtures/bronze/` (Achtung: `data/s3/` ist gitignored → bewusst kopierte, kleine Fixtures committen). Test prüft: `priceByArea`, `neighborhood`, `operation` vorhanden; `elementList` nicht leer; Transform liefert nicht-leere Aggregation.
-- **Exploratives Skript/Notebook** (analog TASK-002-Pattern): lädt echte `data/s3`-Dateien lokal, validiert Verteilungen/Edge-Cases (null `priceByArea`, fehlende `neighborhood`) **bevor** Infra gebaut wird.
+- **Exploratives Skript/Notebook** (analog FEATURE-002-Pattern): lädt echte `data/s3`-Dateien lokal, validiert Verteilungen/Edge-Cases (null `priceByArea`, fehlende `neighborhood`) **bevor** Infra gebaut wird.
 - **Optionaler Real-Bucket-Smoke-Test:** hinter `RUN_S3_IT=1` + AWS-Creds gegated, liest 1–2 echte Objekte aus dem **dev**-Bucket → end-to-end Validierung früh statt erst beim manuellen Deploy.
 
 → **Fix:** Diese drei Punkte als Phase-1-Aufgaben (vor Handler/Infra) einplanen. Siehe Restructured Plan unten.
@@ -82,7 +82,7 @@ Der Plan testet nur mit moto (gemockt) + In-Memory-DataFrames. Es gibt aber **>1
 Plan/`requirements.txt` erwähnen „JSON oder CSV". Bronze ist **ausschließlich JSON**. Der CSV-Zweig war nur Input des alten Prototyps. → CSV-Lesepfad entfernen (weniger Code, weniger Fehlerfläche).
 
 **S3 — Aggregationsquelle für `latest.json` explizit machen**
-`latest.json` braucht **alle** Wochen. Klar spezifizieren: Lambda liest Silver-Historie (alle Parquet) und baut die Zeitreihe neu — nicht aus dem einzelnen Input. Schema-Version (`schema_version`) ins JSON aufnehmen (Forward-Compat mit TASK-004).
+`latest.json` braucht **alle** Wochen. Klar spezifizieren: Lambda liest Silver-Historie (alle Parquet) und baut die Zeitreihe neu — nicht aus dem einzelnen Input. Schema-Version (`schema_version`) ins JSON aufnehmen (Forward-Compat mit FEATURE-004).
 
 ### 🟢 MINOR
 
@@ -166,7 +166,7 @@ Plan/`requirements.txt` erwähnen „JSON oder CSV". Bronze ist **ausschließlic
 - [ ] S2: CSV-Pfad entfernt.
 - [ ] S3: `latest.json` baut aus Silver-Historie; `schema_version` enthalten.
 
-Nach Einarbeitung erstelle ich den technischen Plan `dev/plans/technical/TASK-003-technical-plan.yaml`.
+Nach Einarbeitung erstelle ich den technischen Plan `dev/plans/technical/FEATURE-003-technical-plan.yaml`.
 
 ---
 
@@ -183,13 +183,13 @@ Der ursprüngliche Plan (Review oben, 2026-06-04) hat Silver fälschlich als **A
 - **Notebook §1.3 + §3** erzeugen eine Tabelle **bereinigter EINZEL-Listings** (eine Zeile pro Listing).
 - Erst **§6 / wrangle_data.py** aggregieren für die Visualisierung.
 
-→ Korrekter Medallion-Split: **TASK-003 = Silver (cleaned listings)**, **TASK-004 = Gold (Aggregation + Scope)**, **TASK-005 = Web App**.
+→ Korrekter Medallion-Split: **FEATURE-003 = Silver (cleaned listings)**, **FEATURE-004 = Gold (Aggregation + Scope)**, **FEATURE-005 = Web App**.
 
 ## Verifikation gegen die echte Notebook-Quelle
 
 Die vier Cleaning-Schritte im Notebook wurden direkt geprüft:
 
-| Notebook-Schritt | Code (Zeile) | Silver (TASK-003)? | Gold (TASK-004)? |
+| Notebook-Schritt | Code (Zeile) | Silver (FEATURE-003)? | Gold (FEATURE-004)? |
 |---|---|---|---|
 | Issue 1: Spaltenreduktion | `df_reduced = df_all_pages[[...]]` (1828) | ✅ ja | — |
 | Issue 2: `bathrooms > 0.0` | `df_clean = df_reduced[df_reduced.bathrooms > 0.0]` (1908) | ✅ ja | — |
@@ -200,8 +200,8 @@ Die vier Cleaning-Schritte im Notebook wurden direkt geprüft:
 
 ## Konsistenzprüfung der Artefakte
 
-- ✅ [TASK-003-technical-plan.yaml](../plans/technical/TASK-003-technical-plan.yaml): 3.2 ist auf `status: planned` zurückgesetzt, Titel/Beschreibung/`commit_message`/Acceptance-Criteria auf cleaned-listings re-scoped; 3.3 schreibt cleaned-listings-Parquet, kein `latest.json`. 3.4/3.5 unverändert korrekt.
-- ✅ Workflow-Validator (`python dev/tools/validate_agent_workflow.py`): **passed** (nach Reparatur des Status-Headers, der ein U+FFFD-Replacement-Char statt 🟡 enthielt).
+- ✅ [FEATURE-003-technical-plan.yaml](../plans/technical/FEATURE-003-technical-plan.yaml): 3.2 ist auf `status: planned` zurückgesetzt, Titel/Beschreibung/`commit_message`/Acceptance-Criteria auf cleaned-listings re-scoped; 3.3 schreibt cleaned-listings-Parquet, kein `latest.json`. 3.4/3.5 unverändert korrekt.
+- ✅ Workflow-Validator (`python dev/tools/validate_workflow.py`): **passed** (nach Reparatur des Status-Headers, der ein U+FFFD-Replacement-Char statt 🟡 enthielt).
 - ✅ README-Tabelle + Mermaid: T002→T003→T004→T005, Status konsistent.
 
 ## Concerns (Re-Scope)
@@ -209,12 +209,12 @@ Die vier Cleaning-Schritte im Notebook wurden direkt geprüft:
 ### 🟡 SIGNIFICANT
 
 **RS1 — Branch-Wiederverwendung mit veralteten Commits**
-Subtask 3.2 nutzt im YAML denselben Branch `feature/silver-cleaning-lambda/3.2-pure-transform`, der bereits den **alten** (aggregierenden) Code mit `clean()`/`build_aggregation_json` enthält (gepusht, nicht gemerged). Re-Scope auf denselben Branch-Namen führt zu vermischter Historie.
+Task 3.2 nutzt im YAML denselben Branch `feature/silver-cleaning-lambda/3.2-pure-transform`, der bereits den **alten** (aggregierenden) Code mit `clean()`/`build_aggregation_json` enthält (gepusht, nicht gemerged). Re-Scope auf denselben Branch-Namen führt zu vermischter Historie.
 → **Empfehlung:** Entweder den Branch hart zurücksetzen (`git reset --hard main` vor Neuimplementierung) **oder** neuen Suffix verwenden (z. B. `3.2-cleaned-listings`). YAML entsprechend anpassen, falls neuer Branch.
 
 **RS2 — Veralteten Code + Tests aktiv entfernen (nicht nur überschreiben)**
 [silver_transform.py](../../src/etl/data_processing/silver_transform.py) enthält aktuell den aggregierenden `clean()` **und** `build_aggregation_json` + `SCHEMA_VERSION`; [test_silver_transform.py](../../src/etl/data_processing/tests/test_silver_transform.py) testet beide (`TestBuildAggregationJson`, `test_clean_..._aggregates_price_by_area`, `test_clean_collapses_multiple_pages_to_one_row`). Diese müssen **gelöscht/ersetzt** werden, sonst schlägt die Suite fehl oder die obsolete Aggregation bleibt im Silver-Modul.
-→ `build_aggregation_json` + `SCHEMA_VERSION` wandern nach `gold_aggregate.py` (TASK-004). `parse_key_metadata` **bleibt** unverändert (3.1, gemerged).
+→ `build_aggregation_json` + `SCHEMA_VERSION` wandern nach `gold_aggregate.py` (FEATURE-004). `parse_key_metadata` **bleibt** unverändert (3.1, gemerged).
 
 ### 🟢 MINOR
 
@@ -226,7 +226,7 @@ Subtask 3.2 nutzt im YAML denselben Branch `feature/silver-cleaning-lambda/3.2-p
 
 **Critical findings (zwingend):**
 - 3.2 = `clean()` gibt **eine Zeile pro Listing** zurück (KEINE Aggregation, KEIN `build_aggregation_json`, KEIN District-Filter).
-- `build_aggregation_json` + `SCHEMA_VERSION` aus `silver_transform.py` **entfernen** → gehören zu Gold (TASK-004).
+- `build_aggregation_json` + `SCHEMA_VERSION` aus `silver_transform.py` **entfernen** → gehören zu Gold (FEATURE-004).
 - Vor 3.2: Branch-Lage klären (RS1) — alten 3.2-Branch resetten oder neu benennen.
 
 **Watch-outs:**
@@ -238,7 +238,7 @@ Subtask 3.2 nutzt im YAML denselben Branch `feature/silver-cleaning-lambda/3.2-p
 - Silver-Spaltenliste = Notebook Issue 1 minus `dateDownload`, plus `snapshot_date` (key-abgeleitet).
 - `clean()` Signatur bleibt `clean(elements, snapshot_date, operation)` → liefert `List[Dict]` Einzel-Listings.
 - Validity-Filter: `bathrooms > 0`; sale `1000 < priceByArea < 10000`; rent ungefiltert; drop null `priceByArea`/leeres `neighborhood`.
-- District-Scope + alle Aggregation → ausschließlich Gold (TASK-004).
+- District-Scope + alle Aggregation → ausschließlich Gold (FEATURE-004).
 
 **Testing shortcuts:**
 - `pytest src/etl/data_processing/tests/test_silver_transform.py -v`
@@ -247,10 +247,10 @@ Subtask 3.2 nutzt im YAML denselben Branch `feature/silver-cleaning-lambda/3.2-p
 ## Approval Criteria (Re-Scope)
 
 - [x] Silver-Scope = cleaned individual listings (Issues 1/2/4 + null-Drop), kein District-Scope, keine Aggregation — im Plan + YAML.
-- [x] Gold-Aggregation + `latest.json` aus Silver verschoben (TASK-004).
+- [x] Gold-Aggregation + `latest.json` aus Silver verschoben (FEATURE-004).
 - [x] Technisches YAML 3.2 auf `planned` zurückgesetzt und re-scoped.
 - [x] Workflow-Validator grün.
 - [x] **RS1:** Branch in `feature/silver-cleaning-lambda/3.2-cleaned-listings` umbenannt und Pointer auf `main` zurückgesetzt (saubere Basis, keine vermischte Historie); YAML-Branch-Feld aktualisiert.
 - [x] **RS2:** Obsoleter Aggregations-Code (`clean`/`build_aggregation_json`/`SCHEMA_VERSION`) + Tests (`TestClean`/`TestBuildAggregationJson`) entfernt — `silver_transform.py` + `test_silver_transform.py` auf `main`-Stand (nur `parse_key_metadata` + Schema-Contract).
 
-**Fazit:** Plan und technisches YAML sind freigegeben; RS1/RS2 sind umgesetzt. `silver_transform.py` ist eine saubere Basis für die Neuimplementierung von 3.2 (cleaned individual listings) durch `@coder`.
+**Fazit:** Plan und technisches YAML sind freigegeben; RS1/RS2 sind umgesetzt. `silver_transform.py` ist eine saubere Basis für die Neuimplementierung von 3.2 (cleaned individual listings) durch `@implementer`.

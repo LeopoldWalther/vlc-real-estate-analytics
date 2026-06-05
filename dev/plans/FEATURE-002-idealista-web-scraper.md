@@ -1,8 +1,8 @@
-# TASK-002: Idealista Web Scraper — Notebook MVP + Lambda Production
+# FEATURE-002: Idealista Web Scraper — Notebook MVP + Lambda Production
 
 **Status:** 🟡 In Progress
 **Branch:** `feature/idealista-web-scraper`
-**Assignee:** @coder
+**Assignee:** @implementer
 **Created:** 2026-03-29
 **Updated:** 2026-06-03
 **Estimated Effort:** L (4–5 days total across both phases)
@@ -444,7 +444,7 @@ pip install -r scraper_requirements.txt \
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| Idealista blocks `cloudscraper` | Medium | High | Add proxy rotation (future TASK-003) |
+| Idealista blocks `cloudscraper` | Medium | High | Add proxy rotation (future FEATURE-003) |
 | DOM selectors change between plan and implementation | High | Medium | Capture fixture HTML immediately; use `DOM_SELECTORS` dict |
 | `lxml` Lambda Layer build fails on macOS | Medium | Low | Use Docker / `--platform manylinux2014_x86_64` flag |
 | Scraper runs while Idealista is under maintenance | Low | Low | SNS alert on HTTP 5xx; retry next week |
@@ -472,9 +472,9 @@ Build a web scraper for Idealista search-result pages: Jupyter notebook for loca
 - Lambda schedule: `cron(0 13 ? * SUN *)` — 1 h after API collector
 - Local execution: `--output-dir` CLI flag (no AWS credentials required for Phase 1)
 
-**Subtasks at a glance:**
+**Tasks at a glance:**
 
-| Subtask | Priority | Est. | Dependencies |
+| Task | Priority | Est. | Dependencies |
 |---------|----------|------|--------------|
 | 1.1 Install deps, validate cloudscraper | P0 | 0.5 h | None |
 | 1.2 Build notebook (ScraperConfig, Session, Parser, pagination, local save) | P0 | 1–2 d | 1.1 |

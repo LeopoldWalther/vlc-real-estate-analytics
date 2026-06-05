@@ -1,10 +1,10 @@
 technical_plan:
   metadata:
     created_by: "reviewer_agent"
-    for_task: "TASK-003"
+    for_feature: "FEATURE-003"
     created_at: "2026-06-04T00:00:00Z"
     version: "1.0"
-    reviewed_plan: "dev/reviews/REVIEW-TASK-003.md"
+    reviewed_plan: "dev/reviews/REVIEW-FEATURE-003.md"
 
   validation:
     auto_validate_on_tag_change: true
@@ -61,7 +61,7 @@ technical_plan:
         columns, drop bathrooms<=0, drop sale rows outside 1000<priceByArea<10000,
         and drop rows with null priceByArea or missing neighborhood. Returns one
         cleaned row per listing (NO aggregation, NO district scope filter, NO
-        dashboard JSON — those move to the Gold lambda, TASK-004).
+        dashboard JSON — those move to the Gold lambda, FEATURE-004).
       status: "done"
       complexity: "medium"
       estimated_hours: 3
@@ -96,7 +96,7 @@ technical_plan:
         snapshot's paginated JSON objects under bronze/idealista, combine pages,
         call the pure clean(), and write Parquet of cleaned individual listings
         partitioned by operation/snapshot_date. JSON only, idempotent on full
-        snapshot_date. No aggregation and no latest.json here (Gold/TASK-004).
+        snapshot_date. No aggregation and no latest.json here (Gold/FEATURE-004).
       status: "done"
       complexity: "medium"
       estimated_hours: 3

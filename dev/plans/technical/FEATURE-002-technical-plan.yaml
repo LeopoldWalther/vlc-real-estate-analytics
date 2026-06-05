@@ -1,10 +1,10 @@
 technical_plan:
   metadata:
     created_by: "reviewer_agent"
-    for_task: "TASK-002"
+    for_feature: "FEATURE-002"
     created_at: "2026-03-29T00:00:00Z"
     version: "1.1"
-    reviewed_plan: "dev/reviews/REVIEW-TASK-002.md"
+    reviewed_plan: "dev/reviews/REVIEW-FEATURE-002.md"
 
   validation:
     auto_validate_on_tag_change: true
