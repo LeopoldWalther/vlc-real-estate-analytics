@@ -9,12 +9,9 @@ technical_plan:
   validation:
     auto_validate_on_tag_change: true
     required_checks:
-      - "tests"
-      - "types"
-      - "lint"
-      - "coverage"
+      - "python-lint-and-test"
       - "terraform-validate"
-      - "phase-gate-validation"
+      - "workflow-consistency"
     min_coverage: 80
 
   tasks:

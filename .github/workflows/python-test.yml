@@ -34,15 +34,12 @@ jobs:
 
       - name: Run Ruff
         run: ruff check src/etl/
-        continue-on-error: true
 
       - name: Check Black formatting
         run: black --check src/etl/
-        continue-on-error: true
 
       - name: Run MyPy
-        run: mypy src/etl/data_collection/idealista_listings_collector.py
-        continue-on-error: true
+        run: mypy src/etl/data_collection/
 
   test:
     name: Run Tests
@@ -71,7 +68,7 @@ jobs:
       - name: Run tests with coverage
         run: |
           cd src/etl
-          pytest data_collection/tests/ --cov=data_collection --cov-report=xml --cov-report=term
+          pytest data_collection/tests/ --cov=data_collection --cov-report=xml --cov-report=term --cov-fail-under=80
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
