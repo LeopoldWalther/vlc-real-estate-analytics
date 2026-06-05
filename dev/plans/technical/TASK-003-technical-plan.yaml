@@ -97,7 +97,7 @@ technical_plan:
         call the pure clean(), and write Parquet of cleaned individual listings
         partitioned by operation/snapshot_date. JSON only, idempotent on full
         snapshot_date. No aggregation and no latest.json here (Gold/TASK-004).
-      status: "planned"
+      status: "done"
       complexity: "medium"
       estimated_hours: 3
       depends_on: ["3.2"]
