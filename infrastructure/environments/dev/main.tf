@@ -22,7 +22,7 @@ module "idealista_notifications" {
 }
 
 module "idealista_collector" {
-  source = "../../modules/lambda"
+  source = "../../modules/lambda_bronze"
 
   environment     = var.environment
   aws_region      = var.aws_region

@@ -1,88 +1,154 @@
 # VLC Real Estate Analytics
 
-An automated real estate data collection platform for Valencia, Spain, using AWS Lambda and infrastructure managed through Terraform.
+An automated real estate data collection and processing platform for Valencia, Spain, using a medallion architecture on AWS Lambda and Terraform.
 
 ## Project Overview
 
-This project collects and stores real estate listing data from the Idealista API for market analysis and trend tracking in the Valencia (VLC) region. Data is collected weekly via scheduled Lambda functions and stored in S3 for downstream analytics.
+This project collects, cleans, and stores real estate listing data from the Idealista API for market analysis and trend tracking in the Valencia (VLC) region. Data is collected weekly via scheduled Lambda functions, stored as raw JSON in S3 (bronze layer), and automatically cleaned into Parquet (silver layer) for downstream analytics.
 
 ### Key Features
 
-- **Automated Data Collection** - Weekly Lambda execution via EventBridge scheduler
-- **Real Estate Listings** - Sale and rental property data from Idealista API
-- **Historical Data** - Time-series data storage for market trend analysis
-- **Scalable Infrastructure** - AWS serverless architecture with Lambda and S3
-- **Multi-Environment** - Separate dev and production environments
-- **Secure Secrets** - API credentials managed via AWS Secrets Manager
+- **Automated Data Collection** — Weekly Bronze Collector Lambda, Sundays 12:00 UTC
+- **Automated Data Cleaning** — Weekly Silver Cleaner Lambda, Sundays 12:30 UTC (30 min after collector)
+- **Medallion Architecture** — Bronze (raw JSON) → Silver (cleaned Parquet) → Gold (aggregations, future)
+- **Real Estate Listings** — Sale and rental property data from Idealista API v3.5
+- **Historical Time-Series** — Append-only S3 storage for long-term market trend analysis
+- **Multi-Environment** — Separate `dev` and `prod` environments; dev runs in `test_mode` (1 page/op)
+- **Secure Secrets** — API credentials managed via AWS Secrets Manager
+- **Serverless & Cost-Efficient** — Estimated < $5/month across both environments
 
 ## Technology Stack
 
 ### Application
 - **Runtime**: Python 3.12
-- **AWS Services**: Lambda, S3, Secrets Manager, EventBridge, CloudWatch
-- **API Integration**: Idealista Property Search API v3.5
+- **AWS Services**: Lambda, S3, Secrets Manager, EventBridge, CloudWatch, SNS
+- **API Integration**: Idealista Property Search API v3.5 (OAuth2)
+- **Data Processing**: pandas + pyarrow via AWS-managed Lambda layer
 - **Data Analysis**: Jupyter Notebooks
 
 ### Infrastructure
 - **IaC Tool**: Terraform v1.14.3
 - **Cloud Provider**: AWS (eu-central-1)
 - **Compute**: Lambda Functions (serverless)
-- **Storage**: S3 (encrypted at rest)
+- **Storage**: S3 (AES-256 encrypted at rest)
 - **Secrets**: AWS Secrets Manager
 - **Scheduling**: EventBridge (cron)
-- **Monitoring**: CloudWatch Logs
-- **State Management**: S3 with locking
+- **Alerting**: SNS topics (error notifications)
+- **Monitoring**: CloudWatch Logs + Metric Alarms
+- **State Management**: S3 with native S3 locking
 
-## Project Structure
+## Architecture
+
+### Data Flow
 
 ```
-vlc-real-estate-analytics/
-├── src/                               # Source code
-│   ├── lambda/                        # Lambda functions
-│   │   ├── idealista_listings_collector.py  # Main Lambda handler
-│   │   ├── requirements.txt           # Lambda dependencies
-│   │   ├── lambda_layers/             # Lambda layers
-│   │   │   └── requests/              # Requests library layer
-│   │   └── README.md                  # Lambda documentation
-│   └── notebooks/                     # Jupyter notebooks for analysis
-│       ├── valenciaRealEstatePriceAnalysis.ipynb
-│       ├── idealista_listings_collector.ipynb
-│       └── copy_s3_listings.ipynb
-│
-├── infrastructure/                     # Terraform configuration
-│   ├── bootstrap/                     # Remote state setup
-│   ├── modules/                       # Reusable Terraform modules
-│   │   ├── lambda/                    # Lambda function module
-│   │   ├── s3/                        # S3 bucket module
-│   │   └── secrets/                   # Secrets Manager module
-│   └── environments/                  # Environment-specific configs
-│       ├── dev/                       # Development environment
-│       └── prod/                      # Production environment
-│
-├── data/                              # Data directory
-│   ├── images/                        # Documentation images
-│   └── s3/                            # Local S3 data (gitignored)
-│
-├── documentation/                     # Project documentation
-│   ├── DATA_COLLECTION_LAYER.md       # Data collection architecture
-│   ├── property-search-api-v3_5.pdf   # Idealista API docs
-│   └── oauth2-documentation.pdf       # OAuth2 reference
-│
-├── .gitignore                         # Git ignore rules
-├── LICENSE                            # License file
-└── README.md                          # This file
+┌──────────────────┐
+│   EventBridge    │  cron(0 12 ? * SUN *)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐     ┌─────────────────────────┐
+│  Bronze Collector│────▶│  AWS Secrets Manager     │
+│  Python 3.12     │     │  (LVW + PMV API creds)   │
+│  256 MB / 900 s  │     └─────────────────────────┘
+└────────┬─────────┘
+         │  PutObject  bronze/idealista/{op}_{date}_{time}_{page}.json
+         ▼
+┌──────────────────┐     ┌─────────────────────────┐
+│  S3 Bronze Layer │     │  SNS Topic               │
+│  bronze/idealista│     │  (error alerts)          │
+└────────┬─────────┘     └─────────────────────────┘
+         │
+         │  (30 min later)
+         ▼
+┌──────────────────┐
+│   EventBridge    │  cron(30 12 ? * SUN *)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Silver Cleaner  │  Reads all bronze pages for latest snapshot,
+│  Python 3.12     │  drops nulls / invalid prices / zero bathrooms,
+│  512 MB / 300 s  │  injects snapshot_date, writes partitioned Parquet
+└────────┬─────────┘
+         │  PutObject  silver/idealista/operation={op}/snapshot_date=YYYY-MM-DD/part.parquet
+         ▼
+┌──────────────────┐
+│  S3 Silver Layer │
+│  silver/idealista│
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Jupyter         │  valenciaRealEstatePriceAnalysis.ipynb
+│  Notebooks       │  pandas reads silver Parquet directly
+└──────────────────┘
+```
+
+### S3 Medallion Layout
+
+| Layer | S3 Prefix | Format | Written by |
+|---|---|---|---|
+| Bronze | `bronze/idealista/{op}_{YYYYMMDD}_{HHMMSS}_{page}.json` | Raw JSON (Idealista API response) | Bronze Collector |
+| Silver | `silver/idealista/operation={op}/snapshot_date=YYYY-MM-DD/part.parquet` | Parquet (Hive-partitioned) | Silver Cleaner |
+
+### Silver Cleaning Rules
+
+| Rule | Detail |
+|---|---|
+| Drop null `priceByArea` | Missing price per m² — unusable for analysis |
+| Drop blank/missing `neighborhood` | Cannot attribute to a district |
+| Drop `bathrooms <= 0` | Data quality issue |
+| Sale filter: `1000 ≤ priceByArea ≤ 10000` | Removes outliers outside Valencia market range |
+| Inject `snapshot_date` | Derived from bronze S3 key (no `dateDownload` in payload) |
+| Keep individual listings | Silver stores one row per listing, not aggregated |
+
+### Infrastructure Layout
+
+```
+infrastructure/
+├── bootstrap/              # Remote state S3 bucket + DynamoDB lock (one-time)
+├── modules/
+│   ├── lambda_bronze/      # Bronze Collector: Lambda, IAM, EventBridge, CloudWatch
+│   ├── lambda_silver/      # Silver Cleaner: Lambda, IAM, EventBridge, CW Alarm
+│   ├── s3/                 # S3 listings bucket (AES-256 encryption)
+│   ├── secrets/            # Secrets Manager secrets for API credentials
+│   └── sns/                # SNS topic for error alerting
+└── environments/
+    ├── dev/                # Dev environment (test_mode=true for collector)
+    └── prod/               # Production environment
+```
+
+### Source Code Layout
+
+```
+src/
+├── etl/
+│   ├── data_collection/
+│   │   ├── idealista_listings_collector.py  # Bronze Lambda handler
+│   │   ├── requirements.txt                 # Runtime: requests, boto3
+│   │   └── tests/                           # pytest unit + integration
+│   ├── data_processing/
+│   │   ├── silver_transform.py              # Pure Bronze→Silver transform (no AWS)
+│   │   ├── silver_cleaning_lambda.py        # Silver Lambda handler
+│   │   ├── requirements.txt                 # Runtime: boto3 (pandas via layer)
+│   │   └── tests/                           # pytest unit + integration
+│   ├── lambda_layers/                       # requests library as Lambda Layer
+│   └── requirements-dev.txt                 # Dev: pytest, moto, black, ruff, mypy
+└── notebooks/
+    ├── valenciaRealEstatePriceAnalysis.ipynb
+    ├── idealista_listings_collector.ipynb
+    └── copy_s3_listings.ipynb
 ```
 
 ## Getting Started
 
 ### Prerequisites
 
-1. **AWS Account** with appropriate IAM permissions:
-   - Lambda, S3, Secrets Manager, EventBridge, CloudWatch, IAM
-2. **Terraform 1.14.3+** for infrastructure
-3. **Python 3.12+** for local development and testing
-4. **Git** for version control
-5. **Idealista API Credentials** (API key and secret)
+1. **AWS Account** with IAM permissions for: Lambda, S3, Secrets Manager, EventBridge, CloudWatch, SNS, IAM
+2. **Terraform 1.14.3+**
+3. **Python 3.12+**
+4. **Idealista API Credentials** (two credential sets: LVW + PMV)
 
 ### Local Development Setup
 
@@ -93,98 +159,94 @@ cd vlc-real-estate-analytics
 
 # Create Python virtual environment
 python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate
 
-# Install Lambda dependencies for local testing
+# Install all dev dependencies (testing, linting, type-checking)
+pip install -r src/etl/requirements-dev.txt
+# Also install runtime deps for local testing
+pip install -r src/etl/data_collection/requirements.txt
+pip install -r src/etl/data_processing/requirements.txt
+
+# Run tests
 cd src/etl
-pip install -r data_collection/requirements.txt
+pytest data_collection/tests/ data_processing/tests/ -v --cov
 
-# Install development dependencies (if available)
-pip install -r requirements-dev.txt  # For testing, linting, etc.
+# Pre-commit hooks (black, ruff, mypy, terraform fmt/validate, pytest)
+pip install pre-commit
+pre-commit install
 ```
 
 ### Infrastructure Deployment
 
-Detailed deployment instructions in [DATA_COLLECTION_LAYER.md](documentation/DATA_COLLECTION_LAYER.md).
-
-Quick start:
 ```bash
-# 1. Setup remote state (one-time)
+# 1. Setup remote state (one-time only)
 cd infrastructure/bootstrap
-terraform init
-terraform apply
+terraform init && terraform apply
 
-# 2. Create secrets.tfvars with your API credentials
+# 2. Create secrets.tfvars (gitignored) with your API credentials
 cd ../environments/dev
-cat > secrets.tfvars << EOF
-lvw_api_key = "your-api-key"
-lvw_api_secret = "your-api-secret"
-pmv_api_key = "your-api-key"
-pmv_api_secret = "your-api-secret"
+cat > secrets.tfvars << 'EOF'
+idealista_api_key_lvw    = "your-lvw-api-key"
+idealista_api_secret_lvw = "your-lvw-api-secret"
+idealista_api_key_pmv    = "your-pmv-api-key"
+idealista_api_secret_pmv = "your-pmv-api-secret"
+notification_email       = "your@email.com"
 EOF
 
-# 3. Deploy dev environment
+# 3. Deploy dev environment (deploys all modules)
 terraform init
-terraform plan -var-file="secrets.tfvars"
+terraform plan  -var-file="secrets.tfvars"
 terraform apply -var-file="secrets.tfvars"
 ```
 
-## Configuration
-
-### Lambda Function Configuration
-
-The Lambda function retrieves configuration from:
-- **Environment Variables**: Set via Terraform
-  - `LISTINGS_BUCKET`: S3 bucket for storing listing data
-  - `LVW_SECRET_NAME`: Secrets Manager secret for LVW API credentials
-  - `PMV_SECRET_NAME`: Secrets Manager secret for PMV API credentials
-
-- **AWS Secrets Manager**: API credentials stored securely
-  ```json
-  {
-    "api_key": "your-idealista-api-key",
-    "api_secret": "your-idealista-api-secret"
-  }
-  ```
-
-### Terraform Variables
-
-Each environment has `terraform.tfvars` and `secrets.tfvars`:
-
-**terraform.tfvars** (committed):
-```hcl
-aws_region  = "eu-central-1"
-environment = "dev"
-```
-
-**secrets.tfvars** (gitignored):
-```hcl
-lvw_api_key    = "your-api-key"
-lvw_api_secret = "your-api-secret"
-pmv_api_key    = "your-api-key"
-pmv_api_secret = "your-api-secret"
-```
+> **Note**: The dev Collector runs with `test_mode = true` (1 page per operation per week = 2 API calls total) to stay within Idealista API limits. Prod runs full collection.
 
 ## Deployment
 
-### Manual Deployment
+### Dev vs. Prod Differences
+
+| Setting | Dev | Prod |
+|---|---|---|
+| Collector `test_mode` | `true` — 1 page/op, no SNS mail | `false` — full collection |
+| Silver Cleaner | deployed | prod wiring pending dev soak |
+| `pandas_layer_arn` | `AWSSDKPandas-Python312:16` (eu-central-1 default) | same, set via variable |
+
+### Manual Deploy
 
 ```bash
-# Deploy to dev environment
+# Dev
 cd infrastructure/environments/dev
-terraform plan -var-file="secrets.tfvars"
 terraform apply -var-file="secrets.tfvars"
 
-# Deploy to prod environment
+# Prod
 cd infrastructure/environments/prod
-terraform plan -var-file="secrets.tfvars"
 terraform apply -var-file="secrets.tfvars"
 ```
 
-### Testing Lambda Function
+### Resources Created (Dev)
+
+| Resource | Name |
+|---|---|
+| S3 Bucket | `dev-vlc-real-estate-analytics-listings` |
+| Bronze Lambda | `dev-idealista-collector` |
+| Silver Lambda | `dev-silver-cleaner` |
+| EventBridge (bronze) | `dev-idealista-collector-weekly` — `cron(0 12 ? * SUN *)` |
+| EventBridge (silver) | `dev-silver-cleaner-weekly` — `cron(30 12 ? * SUN *)` |
+| Log Groups | `/aws/lambda/dev-idealista-collector`, `/aws/lambda/dev-silver-cleaner` |
+| Secrets | `dev/idealista/lvw-api-credentials`, `dev/idealista/pmv-api-credentials` |
+| SNS Topic | `dev-idealista-notifications` |
+| CW Alarm | `dev-silver-cleaner-errors` |
+
+### Invoke Manually
 
 ```bash
-# Test with test_mode (limited API calls)
+# Bronze Collector — full run (prod)
+aws lambda invoke \
+  --function-name prod-idealista-collector \
+  --region eu-central-1 \
+  response.json && cat response.json | jq .
+
+# Bronze Collector — test run (1 page each)
 aws lambda invoke \
   --function-name dev-idealista-collector \
   --region eu-central-1 \
@@ -192,159 +254,105 @@ aws lambda invoke \
   --payload '{"test_mode": true}' \
   response.json
 
-# View response
-cat response.json | jq .
+# Silver Cleaner — trigger manually
+aws lambda invoke \
+  --function-name dev-silver-cleaner \
+  --region eu-central-1 \
+  response.json && cat response.json | jq .
 
 # Check CloudWatch logs
-aws logs tail /aws/lambda/dev-idealista-collector --follow
+aws logs tail /aws/lambda/dev-silver-cleaner --region eu-central-1 --follow
+
+# Verify silver Parquet files in S3
+aws s3 ls s3://dev-vlc-real-estate-analytics-listings/silver/idealista/ \
+  --recursive --region eu-central-1
 ```
-
-### Automated Scheduling
-
-Lambda functions run automatically via EventBridge:
-- **Schedule**: Weekly on Sundays at 12:00 UTC
-- **Cron Expression**: `cron(0 12 ? * SUN *)`
-- **Operations**: Both sale and rent listings collected
-
-## Architecture
-
-### High-Level Overview
-
-```
-┌─────────────────┐
-│  EventBridge    │  Weekly trigger (Sundays 12:00 UTC)
-│  Cron Rule      │
-└────────┬────────┘
-         │
-         v
-┌─────────────────┐
-│  Lambda         │  Python 3.12, 15 min timeout
-│  Function       │  Collects sale & rent listings
-└────────┬────────┘
-         │
-         ├──────> AWS Secrets Manager (API credentials)
-         │
-         └──────> S3 Bucket (JSON data storage)
-                  - Encrypted at rest
-                  - Organized by date/operation
-```
-
-See [DATA_COLLECTION_LAYER.md](documentation/DATA_COLLECTION_LAYER.md) for detailed architecture and design decisions.
 
 ## Testing
 
-### Lambda Function Testing
-```bash
-# Test with limited API calls (test mode)
-aws lambda invoke \
-  --function-name dev-idealista-collector \
-  --payload '{"test_mode": true}' \
-  --region eu-central-1 \
-  response.json
+### Python Tests
 
-# Check S3 for uploaded files
-aws s3 ls s3://dev-vlc-real-estate-analytics-listings/ --region eu-central-1
+```bash
+cd src/etl
+
+# All tests with coverage
+pytest data_collection/tests/ data_processing/tests/ \
+  --cov=data_collection --cov=data_processing \
+  --cov-report=term-missing -v
+
+# Individual suites
+pytest data_collection/tests/ -v       # Bronze Collector (26 tests)
+pytest data_processing/tests/ -v       # Silver transform + handler (26 tests)
 ```
 
-### Infrastructure Testing
+### Infrastructure Tests
+
 ```bash
-# Validate Terraform configuration
 cd infrastructure/environments/dev
 terraform fmt -check
 terraform validate
 terraform plan -var-file="secrets.tfvars"
 ```
 
-### Local Python Testing
+## Monitoring & Alerting
+
+| Signal | Where | Action |
+|---|---|---|
+| Bronze Lambda error | CloudWatch Logs | SNS email (prod only) |
+| Silver Lambda error | CW Alarm `dev-silver-cleaner-errors` | SNS topic → email |
+| No silver output | Check S3 prefix | Re-invoke manually |
+
 ```bash
-# Run tests (once test suite is created)
-cd src/etl
-pytest data_collection/tests/
-
-# Type checking
-mypy data_collection/idealista_listings_collector.py
-
-# Linting
-ruff check .
-black --check .
-```
-
-## Monitoring & Logging
-
-CloudWatch monitoring includes:
-- **Lambda Execution Logs**: `/aws/lambda/dev-idealista-collector`
-- **Function Metrics**: Invocations, errors, duration, throttles
-- **Custom Metrics**: API call counts, S3 upload success/failures
-
-Access logs:
-```bash
-# Tail live logs
+# Tail logs
 aws logs tail /aws/lambda/prod-idealista-collector --region eu-central-1 --follow
-
-# Query specific time range
-aws logs filter-log-events \
-  --log-group-name /aws/lambda/prod-idealista-collector \
-  --start-time $(date -u -d '1 hour ago' +%s)000 \
-  --region eu-central-1
+aws logs tail /aws/lambda/dev-silver-cleaner       --region eu-central-1 --follow
 ```
 
 ## Security
 
-- **API Credentials**: Stored in AWS Secrets Manager, never in code
-- **S3 Encryption**: AES-256 encryption at rest
-- **IAM Roles**: Least privilege access for Lambda execution
-- **Network**: Lambda runs in AWS managed VPC
-- **Secrets**: `secrets.tfvars` excluded from version control
-- **Logging**: CloudWatch logs retained for 30 days
+- **API Credentials**: Stored in AWS Secrets Manager, never in code or git
+- **S3 Encryption**: AES-256 at rest
+- **IAM Least Privilege**: Silver Cleaner reads only `bronze/idealista/*`, writes only `silver/*`
+- **`secrets.tfvars`**: Excluded from version control via `.gitignore`
+- **Log Retention**: 30 days on all CloudWatch log groups
 
-## Cost Optimization
+## Cost Estimate
 
-- **Lambda**: Pay-per-invocation (weekly = 4-5 invocations/month)
-- **S3**: Standard storage with minimal costs for JSON files
-- **Secrets Manager**: $0.40/secret/month
-- **EventBridge**: Free tier covers weekly scheduling
-- **CloudWatch Logs**: 30-day retention, minimal volume
-
-**Estimated Monthly Cost**: < $5 USD for dev + prod environments
+| Service | Dev | Prod |
+|---|---|---|
+| Lambda (2 functions × 4 invocations/month) | < $0.01 | < $0.01 |
+| S3 (JSON + Parquet storage) | < $0.50 | < $0.50 |
+| Secrets Manager (4 secrets) | ~$1.60 | ~$1.60 |
+| CloudWatch Logs | < $0.50 | < $0.50 |
+| SNS | < $0.01 | < $0.01 |
+| **Total** | **~$2–3/month** | **~$2–3/month** |
 
 ## Troubleshooting
 
-### Lambda Function Issues
-- **Check logs**: `aws logs tail /aws/lambda/prod-idealista-collector --follow`
-- **Test manually**: Invoke with test_mode to verify API connectivity
-- **Check permissions**: Verify IAM role has S3 and Secrets Manager access
-- **API errors**: Check Idealista API status and rate limits
+| Problem | Solution |
+|---|---|
+| Terraform state lock | `terraform force-unlock <LOCK_ID>` |
+| Lambda times out | Check CloudWatch logs; silver cleaner needs pandas layer ARN |
+| Silver Parquet missing | Run silver cleaner manually; check bronze prefix has data |
+| API rate limit | Dev uses `test_mode`; prod rotates LVW/PMV credentials |
+| `terraform plan` from wrong dir | Must run from `infrastructure/environments/dev` or `prod` |
 
-### Infrastructure Issues
-- **Terraform state lock**: `terraform force-unlock <LOCK_ID>`
-- **AWS credentials**: `aws sts get-caller-identity`
-- **Plan drift**: `terraform refresh && terraform plan -var-file="secrets.tfvars"`
-- **Secrets access**: Verify secrets exist in Secrets Manager
+## Documentation
 
-### Data Issues
-- **Missing S3 files**: Check Lambda logs for upload errors
-- **Empty responses**: API may be rate-limited or credentials invalid
-- **Old data**: Verify EventBridge rule is enabled and triggering
-
-See [DATA_COLLECTION_LAYER.md](documentation/DATA_COLLECTION_LAYER.md) for more details.
+- [DATA_COLLECTION_LAYER.md](documentation/DATA_COLLECTION_LAYER.md) — Bronze Collector architecture
+- [DATA_PROCESSING_LAYER.md](documentation/DATA_PROCESSING_LAYER.md) — Silver Cleaner architecture
 
 ## Contributing
 
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/my-feature`
-3. Make changes and test locally
-4. Commit: `git commit -am 'Add feature'`
-5. Push: `git push origin feature/my-feature`
-6. Create Pull Request
+1. Create a feature branch: `git checkout -b feature/my-feature`
+2. Write tests first (TDD: RED → GREEN → REFACTOR)
+3. Ensure all hooks pass: `pre-commit run --all-files`
+4. Open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE) file for details.
-
-## Contact
-
-For questions or support, please open an issue on GitHub.
+MIT License — see [LICENSE](LICENSE).
 
 ---
 
-**Last Updated**: December 29, 2025
+**Last Updated**: 2026-06-05
