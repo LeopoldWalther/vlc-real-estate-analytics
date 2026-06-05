@@ -1,11 +1,11 @@
-# REVIEW-TASK-002
+# REVIEW-FEATURE-002
 
 ## Executive Summary
 
-**Task reviewed:** TASK-002 — Idealista Web Scraper (Notebook MVP + Lambda Production)
+**Task reviewed:** FEATURE-002 — Idealista Web Scraper (Notebook MVP + Lambda Production)
 **Verdict:** ✅ **Approved with Structured Split Plan**
 
-Requested changes were applied: risks are now explicitly addressed and the implementation is split into smaller atomic subtasks with hard phase gates. The revised technical plan is ready for execution.
+Requested changes were applied: risks are now explicitly addressed and the implementation is split into smaller atomic tasks with hard phase gates. The revised technical plan is ready for execution.
 
 ---
 
@@ -17,7 +17,7 @@ Requested changes were applied: risks are now explicitly addressed and the imple
 - Added controlled rollout tasks (dev soak period before prod enablement).
 
 ### 2) Scope too broad (HIGH) — **Addressed**
-- Split into 12 atomic subtasks.
+- Split into 12 atomic tasks.
 - Enforced phase gate: no Terraform/prod rollout before notebook and parser acceptance tests pass.
 
 ### 3) Parser fragility (HIGH) — **Addressed**
@@ -94,4 +94,4 @@ Requested changes were applied: risks are now explicitly addressed and the imple
 
 ## Final Review Decision
 
-✅ **Approved** — proceed with the revised split technical plan in [dev/plans/technical/TASK-002-technical-plan.yaml](dev/plans/technical/TASK-002-technical-plan.yaml).
+✅ **Approved** — proceed with the revised split technical plan in [dev/plans/technical/FEATURE-002-technical-plan.yaml](dev/plans/technical/FEATURE-002-technical-plan.yaml).

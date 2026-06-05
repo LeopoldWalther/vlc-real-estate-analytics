@@ -1,4 +1,4 @@
-# TASK-005: Static Visualization Web App (S3 + CloudFront)
+# FEATURE-005: Static Visualization Web App (S3 + CloudFront)
 
 **Status:** 🔵 Planned
 **Branch:** `feature/static-visualization-webapp`
@@ -8,17 +8,17 @@
 **Estimated Effort:** M (1–1.5 days)
 **Priority:** Medium
 
-> **Renumbered 2026-06-05.** Was TASK-004; became TASK-005 after inserting the Gold Aggregation Lambda as the new TASK-004. Data source is now `gold/aggregations/latest.json` (produced by TASK-004), not a silver aggregation.
+> **Renumbered 2026-06-05.** Was FEATURE-004; became FEATURE-005 after inserting the Gold Aggregation Lambda as the new FEATURE-004. Data source is now `gold/aggregations/latest.json` (produced by FEATURE-004), not a silver aggregation.
 
 ## Objective
 Ship a tiny static web app (HTML + Plotly.js) hosted on S3 + CloudFront that visualizes the **gold-layer** Idealista aggregations, replacing the EC2/EKS Flask prototype.
 
 ## Context
-The former Flask prototype (`app.py` + `vlcrealestate/`, since removed from the repo) demonstrated the target visualization. For cost reasons we don't want to run servers (EC2/EKS/App Runner). With small data and weekly updates, a static frontend fetching one pre-aggregated JSON (produced by TASK-004 Gold) is the cheapest, most secure setup.
+The former Flask prototype (`app.py` + `vlcrealestate/`, since removed from the repo) demonstrated the target visualization. For cost reasons we don't want to run servers (EC2/EKS/App Runner). With small data and weekly updates, a static frontend fetching one pre-aggregated JSON (produced by FEATURE-004 Gold) is the cheapest, most secure setup.
 
 ## Dependencies
 **Requires:**
-- TASK-004 (Gold Aggregation Lambda) — produces `gold/aggregations/latest.json`
+- FEATURE-004 (Gold Aggregation Lambda) — produces `gold/aggregations/latest.json`
 
 **Blocks:** —
 
@@ -112,7 +112,7 @@ The former Flask prototype (`app.py` + `vlcrealestate/`, since removed from the 
 
 ### Architecture
 - Vollständig statisch, keine Server, keine API Gateway-Kosten
-- Datenquelle: vor-aggregiertes JSON aus TASK-004 Gold (via CloudFront)
+- Datenquelle: vor-aggregiertes JSON aus FEATURE-004 Gold (via CloudFront)
 - Erweiterbar: später API Gateway + Query-Lambda bei dynamischen Filtern
 
 ### Performance
@@ -139,7 +139,7 @@ The former Flask prototype (`app.py` + `vlcrealestate/`, since removed from the 
 - **Schema-Änderungen in latest.json:** *Mitigation:* Versionierung im JSON (`schema_version`)
 
 ### Assumptions
-- TASK-004 (Gold) stellt `gold/aggregations/latest.json` bereit
+- FEATURE-004 (Gold) stellt `gold/aggregations/latest.json` bereit
 - Daten klein genug für vollständige Auslieferung in einem JSON
 
 ## Planning Summary (For Quick Reference)
@@ -152,10 +152,10 @@ Ship a static S3+CloudFront frontend that visualizes pre-aggregated gold data, n
 - Daten: vor-aggregiertes JSON via CloudFront, keine API
 - Stack: plain HTML + Plotly.js (kein Framework nötig im MVP)
 
-**Subtasks at a glance:**
+**Tasks at a glance:**
 | Task | Priority | Est. Hours | Dependencies |
 |------|----------|------------|--------------|
-| 5.1 Static frontend (HTML/JS, 3 charts) | P0 | 4h | TASK-004 |
+| 5.1 Static frontend (HTML/JS, 3 charts) | P0 | 4h | FEATURE-004 |
 | 5.2 Terraform frontend module | P0 | 3h | None |
 | 5.3 Deploy workflow           | P0 | 2h | 5.1, 5.2 |
 | 5.4 Tests + docs              | P1 | 2h | 5.1–5.3 |

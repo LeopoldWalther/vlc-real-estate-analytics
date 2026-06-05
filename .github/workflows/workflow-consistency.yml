@@ -1,11 +1,10 @@
-name: Workflow Consistency
+name: workflow-consistency
 
 on:
   pull_request:
     paths:
       - '.github/**'
       - 'dev/**'
-      - '.github/workflows/workflow-consistency.yml'
   push:
     branches:
       - main
@@ -14,8 +13,8 @@ on:
       - 'dev/**'
 
 jobs:
-  validate:
-    name: Validate Agent Workflow
+  workflow-consistency:
+    name: workflow-consistency
     runs-on: ubuntu-latest
 
     steps:
@@ -27,5 +26,5 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run consistency validation
-        run: python dev/tools/validate_agent_workflow.py
+      - name: Validate planning artifacts
+        run: python dev/tools/validate_workflow.py

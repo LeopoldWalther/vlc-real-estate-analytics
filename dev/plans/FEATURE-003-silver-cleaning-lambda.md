@@ -1,4 +1,4 @@
-# TASK-003: Silver Cleaning Lambda (Bronze → Silver Parquet)
+# FEATURE-003: Silver Cleaning Lambda (Bronze → Silver Parquet)
 
 **Status:** 🟢 Complete
 **Branch:** `feature/silver-cleaning-lambda`
@@ -8,16 +8,16 @@
 **Estimated Effort:** M (1.5–2 days)
 **Priority:** High
 
-> **Revised after [REVIEW-TASK-003](../reviews/REVIEW-TASK-003.md) (2026-06-04).** Key changes: real bronze data is **JSON only** and has **no `dateDownload`** field (must be parsed from the object key); trigger is a **scheduled EventBridge** run (not per-object); silver is partitioned by **`snapshot_date`** (no monthly overwrite); testing with **real S3 data happens early in Phase 1**.
+> **Revised after [REVIEW-FEATURE-003](../reviews/REVIEW-FEATURE-003.md) (2026-06-04).** Key changes: real bronze data is **JSON only** and has **no `dateDownload`** field (must be parsed from the object key); trigger is a **scheduled EventBridge** run (not per-object); silver is partitioned by **`snapshot_date`** (no monthly overwrite); testing with **real S3 data happens early in Phase 1**.
 >
-> **Re-scoped 2026-06-05 (medallion split).** The real two-stage workflow is in [src/notebooks/valenciaRealEstatePriceAnalysis.ipynb](src/notebooks/valenciaRealEstatePriceAnalysis.ipynb): **§1.3 + §3** clean the many JSONs into **one cleaned table of individual listings** (NOT aggregated), and only **§6 / wrangle_data.py** aggregate for visualization. Therefore: **TASK-003 = Silver (cleaned individual listings)**, the new **TASK-004 = Gold (aggregations)**, and the web app becomes **TASK-005**. Aggregation logic and `latest.json` are removed from this task and moved to TASK-004.
+> **Re-scoped 2026-06-05 (medallion split).** The real two-stage workflow is in [src/notebooks/valenciaRealEstatePriceAnalysis.ipynb](src/notebooks/valenciaRealEstatePriceAnalysis.ipynb): **§1.3 + §3** clean the many JSONs into **one cleaned table of individual listings** (NOT aggregated), and only **§6 / wrangle_data.py** aggregate for visualization. Therefore: **FEATURE-003 = Silver (cleaned individual listings)**, the new **FEATURE-004 = Gold (aggregations)**, and the web app becomes **FEATURE-005**. Aggregation logic and `latest.json` are removed from this task and moved to FEATURE-004.
 
 ## Objective
-Add a second AWS Lambda that **cleans** raw Idealista **JSON** files from the bronze S3 layer and writes Parquet of **cleaned individual listings** partitioned by `operation`/`snapshot_date` to a new silver layer. No aggregation and no `latest.json` here — those belong to the Gold layer (TASK-004).
+Add a second AWS Lambda that **cleans** raw Idealista **JSON** files from the bronze S3 layer and writes Parquet of **cleaned individual listings** partitioned by `operation`/`snapshot_date` to a new silver layer. No aggregation and no `latest.json` here — those belong to the Gold layer (FEATURE-004).
 
 ## Context
 Today only the bronze layer exists (raw **JSON** written weekly by [src/etl/data_collection/idealista_listings_collector.py](src/etl/data_collection/idealista_listings_collector.py)). Each weekly snapshot is split across **multiple paginated files** (rent ~6, sale ~14–17), named `{operation}_{YYYYMMDD}_{HHMMSS}_{page}.json`.
-The real cleaning logic lives in the notebook [src/notebooks/valenciaRealEstatePriceAnalysis.ipynb](src/notebooks/valenciaRealEstatePriceAnalysis.ipynb) §1.3 (read all pages → `df_all_pages`) and §3 "Clean Data" (Issues 1–4). Silver replicates the **data-validity** parts of that cleaning and keeps **one row per listing**; the **analytical scope** filter (only 3 districts) and all aggregation move to Gold (TASK-004). Data volume is small, so a single Lambda per stage is the most cost-efficient option (no Glue/Athena/Step Functions needed).
+The real cleaning logic lives in the notebook [src/notebooks/valenciaRealEstatePriceAnalysis.ipynb](src/notebooks/valenciaRealEstatePriceAnalysis.ipynb) §1.3 (read all pages → `df_all_pages`) and §3 "Clean Data" (Issues 1–4). Silver replicates the **data-validity** parts of that cleaning and keeps **one row per listing**; the **analytical scope** filter (only 3 districts) and all aggregation move to Gold (FEATURE-004). Data volume is small, so a single Lambda per stage is the most cost-efficient option (no Glue/Athena/Step Functions needed).
 
 ### Verified bronze schema (from real files in `data/s3/`)
 Each element in `elementList` has: `priceByArea` ✅, `neighborhood` ✅, `operation` ✅, `price`/`size` ✅ (fallback). **`dateDownload` does NOT exist** — the snapshot date/time is only in the object key. Some elements may have `priceByArea: null` or a missing `neighborhood`.
@@ -27,8 +27,8 @@ Each element in `elementList` has: `priceByArea` ✅, `neighborhood` ✅, `opera
 - Bronze layer collector (existing) producing files under `bronze/idealista/...`
 
 **Blocks:**
-- TASK-004 (Gold Aggregation Lambda) — consumes silver cleaned listings
-- TASK-005 (Frontend) — transitively, via Gold aggregations
+- FEATURE-004 (Gold Aggregation Lambda) — consumes silver cleaned listings
+- FEATURE-005 (Frontend) — transitively, via Gold aggregations
 
 **Related:**
 - Existing infra modules in [infrastructure/modules/lambda/](infrastructure/modules/lambda) and [infrastructure/modules/s3/](infrastructure/modules/s3)
@@ -49,7 +49,7 @@ Each element in `elementList` has: `priceByArea` ✅, `neighborhood` ✅, `opera
   - **Issue 2 (validity):** drop listings with `bathrooms <= 0`
   - **Issue 4 (validity):** for `sale`, keep only `1000 < priceByArea < 10000`; keep all `rent`
   - **Null handling:** drop rows with null `priceByArea` or missing/empty `neighborhood`
-  - **NOT in Silver:** the district scope filter (`Extramurs`/`Ciutat Vella`/`L'Eixample`) and any aggregation — those live in Gold (TASK-004). Silver stays a broad, reusable cleaned-listings layer.
+  - **NOT in Silver:** the district scope filter (`Extramurs`/`Ciutat Vella`/`L'Eixample`) and any aggregation — those live in Gold (FEATURE-004). Silver stays a broad, reusable cleaned-listings layer.
 
 ### Phase 3: Lambda handler (AWS edges only)
 - [ ] Create `src/etl/data_processing/silver_cleaning_lambda.py` with `lambda_handler(event, context)`
@@ -57,7 +57,7 @@ Each element in `elementList` has: `priceByArea` ✅, `neighborhood` ✅, `opera
   - Read objects via boto3 (**JSON only**), combine all pages of the snapshot
   - Call `silver_transform.clean(...)` with key-derived `snapshot_date` → cleaned individual listings
   - Write Parquet of cleaned listings to `s3://<bucket>/silver/idealista/operation={op}/snapshot_date=YYYY-MM-DD/part.parquet`
-  - **No aggregation / no `latest.json` here** — Gold (TASK-004) reads this silver Parquet history
+  - **No aggregation / no `latest.json` here** — Gold (FEATURE-004) reads this silver Parquet history
 - [ ] Use AWS-managed layer `AWSSDKPandas-Python312` (avoids large custom pyarrow layer)
 - [ ] Idempotent: deterministic output keys derived from `snapshot_date` (full date, no monthly overwrite)
 
@@ -143,8 +143,8 @@ Each element in `elementList` has: `priceByArea` ✅, `neighborhood` ✅, `opera
 ### Architecture
 - Scheduled (EventBridge → Lambda) — no Step Functions, no Glue, no Athena (kostenoptimiert)
 - **Snapshot-level processing:** one weekly snapshot = many paginated JSON files, combined into one silver write
-- Silver Parquet (cleaned individual listings) als Datenquelle für Ad-hoc-Analysen (Notebooks) **und** als Input für die Gold-Aggregation (TASK-004)
-- Aggregation + pre-aggregiertes JSON sind **nicht** Teil von Silver — sie liegen in Gold (TASK-004)
+- Silver Parquet (cleaned individual listings) als Datenquelle für Ad-hoc-Analysen (Notebooks) **und** als Input für die Gold-Aggregation (FEATURE-004)
+- Aggregation + pre-aggregiertes JSON sind **nicht** Teil von Silver — sie liegen in Gold (FEATURE-004)
 
 ### Layers
 - Verwende AWS-managed Layer `AWSSDKPandas-Python312` statt eigener pyarrow-Build → kleineres Deployment, weniger Wartung
@@ -168,7 +168,7 @@ Each element in `elementList` has: `priceByArea` ✅, `neighborhood` ✅, `opera
 ### Risks
 - **Schema-Drift Idealista:** Cleaning bricht still → *Mitigation:* Schema-Contract-Test auf echten Fixtures + SNS-Alarm bei Parse-Fehlern
 - **Lambda Cold Start mit pandas/pyarrow:** *Mitigation:* AWS-managed Layer + 512 MB Memory
-- **Silver Parquet wächst mit Historie:** *Mitigation:* partitioniert nach `operation`/`snapshot_date`; Gold (TASK-004) liest nur, aggregiert klein
+- **Silver Parquet wächst mit Historie:** *Mitigation:* partitioniert nach `operation`/`snapshot_date`; Gold (FEATURE-004) liest nur, aggregiert klein
 
 ### Assumptions
 - Bronze Layout: `bronze/idealista/{operation}_{YYYYMMDD}_{HHMMSS}_{page}.json`
@@ -182,10 +182,10 @@ Add a silver-layer Lambda that cleans bronze Idealista JSON into partitioned Par
 **Critical decisions:**
 - Architektur: Lambda + **scheduled EventBridge** (kein Step Functions/Glue/Athena) — kostenoptimal bei kleinen Daten
 - `dateDownload` aus Object-Key; Partition nach `operation`/`snapshot_date`
-- Silver = bereinigte Einzel-Listings (Notebook §3 Issues 1/2/4 + null-Drop); **kein** district-Scope, **keine** Aggregation (→ Gold/TASK-004)
+- Silver = bereinigte Einzel-Listings (Notebook §3 Issues 1/2/4 + null-Drop); **kein** district-Scope, **keine** Aggregation (→ Gold/FEATURE-004)
 - Nur JSON (kein CSV); Layer: AWS-managed `AWSSDKPandas`
 
-**Subtasks at a glance:**
+**Tasks at a glance:**
 | Task | Priority | Est. Hours | Dependencies |
 |------|----------|------------|--------------|
 | 3.1 Schema contract + real fixtures + explore | P0 | 3h | None |
@@ -205,11 +205,11 @@ Add a silver-layer Lambda that cleans bronze Idealista JSON into partitioned Par
 - IAM scoped to prefixes, nicht bucket-weit
 - Scheduled trigger (kein per-Object), Snapshot gebündelt verarbeiten
 - Partition mit vollem `snapshot_date` (idempotent, kein Overwrite)
-- Silver bleibt **cleaned listings** — keine Aggregation, kein district-Filter (gehört zu Gold/TASK-004)
+- Silver bleibt **cleaned listings** — keine Aggregation, kein district-Filter (gehört zu Gold/FEATURE-004)
 
 **Blockers or open questions:**
 - Keine offen — per Review geklärt (ein Bucket, JSON-only, key-derived date)
 
 ## Progress Log
 - 2026-06-03: Plan erstellt
-- 2026-06-04: Überarbeitet nach REVIEW-TASK-003 (JSON-only, key-derived `snapshot_date`, scheduled trigger, snapshot_date-Partition, echtes S3-Testing in Phase 1)
+- 2026-06-04: Überarbeitet nach REVIEW-FEATURE-003 (JSON-only, key-derived `snapshot_date`, scheduled trigger, snapshot_date-Partition, echtes S3-Testing in Phase 1)

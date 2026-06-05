@@ -238,7 +238,7 @@ An S3 event notification per bronze JSON file would create 10+ Lambda invocation
 
 ### Why only the latest snapshot?
 
-Silver is a **current-state** layer. It reflects the most recently collected snapshot for each operation. Historical comparison is done in the gold layer (TASK-004) by reading all dated silver partitions.
+Silver is a **current-state** layer. It reflects the most recently collected snapshot for each operation. Historical comparison is done in the gold layer (FEATURE-004) by reading all dated silver partitions.
 
 ### Why individual listings (not aggregated)?
 

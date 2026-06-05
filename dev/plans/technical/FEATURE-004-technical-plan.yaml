@@ -1,11 +1,11 @@
 technical_plan:
   metadata:
     created_by: "reviewer_agent"
-    for_task: "TASK-004"
+    for_feature: "FEATURE-004"
     created_at: "2026-06-05T00:00:00Z"
     version: "1.0"
-    reviewed_plan: "dev/reviews/REVIEW-TASK-004.md"
-    considers_downstream: "TASK-005 (static visualization web app)"
+    reviewed_plan: "dev/reviews/REVIEW-FEATURE-004.md"
+    considers_downstream: "FEATURE-005 (static visualization web app)"
 
   validation:
     auto_validate_on_tag_change: true
@@ -16,7 +16,7 @@ technical_plan:
     min_coverage: 80
 
   # ---------------------------------------------------------------------------
-  # Frozen gold->frontend JSON contract (schema_version 1.0). TASK-005 depends
+  # Frozen gold->frontend JSON contract (schema_version 1.0). FEATURE-005 depends
   # on this exact shape. Records-oriented; aggregate-only; no raw rows. Two
   # symmetric populations: 'general' (all scoped listings) and 'relevant'
   # (the 'apartments like ours' filter). Covers every notebook chart
@@ -235,7 +235,7 @@ technical_plan:
         gated/manual smoke test that invokes the gold lambda after silver has run and
         asserts gold/aggregations/latest.json exists and validates against schema v1.0.
         Write documentation/DATA_GOLD_LAYER.md (architecture, aggregations, JSON
-        contract v1.0 for TASK-005, terraform module, design decisions). Update
+        contract v1.0 for FEATURE-005, terraform module, design decisions). Update
         README medallion diagram + S3 layout to include the gold layer and latest.json.
       status: "planned"
       complexity: "low"
@@ -248,7 +248,7 @@ technical_plan:
         - "✓ GREEN: module.gold_aggregator instantiated in dev/main.tf; terraform validate + plan green"
         - "✓ prod NOT wired (deferred, matches silver rollout)"
         - "✓ Gated smoke test (skipped by default) invokes gold lambda and asserts latest.json exists + schema v1.0 valid"
-        - "✓ documentation/DATA_GOLD_LAYER.md created with JSON contract v1.0 section for TASK-005"
+        - "✓ documentation/DATA_GOLD_LAYER.md created with JSON contract v1.0 section for FEATURE-005"
         - "✓ README medallion diagram + S3 layout updated to include gold/aggregations/latest.json"
         - "✓ pre-commit hooks pass (fmt, ruff, black, mypy, end-of-file-fixer)"
         - "✓ terraform validate green in dev"
@@ -271,7 +271,7 @@ technical_plan:
     critical_path: ["4.1", "4.2", "4.3", "4.4"]
     parallelizable_tasks: 0
     notes:
-      - "Fully sequential: each subtask depends on the previous (pure -> handler -> infra -> wire)."
-      - "Bulk of risk/effort is in 4.1 (two-population aggregation + boxplots + frozen JSON contract for TASK-005)."
+      - "Fully sequential: each task depends on the previous (pure -> handler -> infra -> wire)."
+      - "Bulk of risk/effort is in 4.1 (two-population aggregation + boxplots + frozen JSON contract for FEATURE-005)."
       - "4.1 may optionally be split into 4.1a (general) and 4.1b (relevant + boxplots) if one branch feels too large; the generic helper keeps the second population cheap."
-      - "prod wiring intentionally deferred to a later task after dev soak, mirroring TASK-003 silver."
+      - "prod wiring intentionally deferred to a later task after dev soak, mirroring FEATURE-003 silver."

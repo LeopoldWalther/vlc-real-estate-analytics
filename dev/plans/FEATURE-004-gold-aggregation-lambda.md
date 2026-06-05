@@ -1,4 +1,4 @@
-# TASK-004: Gold Aggregation Lambda (Silver → Gold Aggregations JSON)
+# FEATURE-004: Gold Aggregation Lambda (Silver → Gold Aggregations JSON)
 
 **Status:** 🔵 Planned
 **Branch:** `feature/gold-aggregation-lambda`
@@ -8,13 +8,13 @@
 **Estimated Effort:** M (1–1.5 days)
 **Priority:** High
 
-> **Created 2026-06-05 (medallion split).** Inserted between Silver (TASK-003) and the web app (now TASK-005). The real workflow in [src/notebooks/valenciaRealEstatePriceAnalysis.ipynb](src/notebooks/valenciaRealEstatePriceAnalysis.ipynb) §6 and the former CSV prototype `wrangle_data.py` (since removed from the repo) aggregate cleaned listings into a small dashboard-ready dataset. That aggregation (and the dashboard `latest.json`) was removed from TASK-003 and lives here.
+> **Created 2026-06-05 (medallion split).** Inserted between Silver (FEATURE-003) and the web app (now FEATURE-005). The real workflow in [src/notebooks/valenciaRealEstatePriceAnalysis.ipynb](src/notebooks/valenciaRealEstatePriceAnalysis.ipynb) §6 and the former CSV prototype `wrangle_data.py` (since removed from the repo) aggregate cleaned listings into a small dashboard-ready dataset. That aggregation (and the dashboard `latest.json`) was removed from FEATURE-003 and lives here.
 
 ## Objective
 Add a Gold-layer AWS Lambda that reads the **silver cleaned-listings Parquet history**, applies the analytical scope filter (city-center districts), computes the dashboard aggregations, and writes a small pre-aggregated `gold/aggregations/latest.json` (full time-series, with `schema_version`) for the frontend.
 
 ## Context
-TASK-003 produces silver Parquet of **cleaned individual listings** partitioned by `operation`/`snapshot_date` (validity filters only, no scope filter, no aggregation). For visualization we need a compact, query-friendly aggregate. The notebook does this in two analytical steps:
+FEATURE-003 produces silver Parquet of **cleaned individual listings** partitioned by `operation`/`snapshot_date` (validity filters only, no scope filter, no aggregation). For visualization we need a compact, query-friendly aggregate. The notebook does this in two analytical steps:
 
 - **Scope filter** (notebook §3 Issue 3): keep only districts `Extramurs`, `Ciutat Vella`, `L'Eixample`.
 - **Aggregations** (notebook §4 / §6, wrangle_data.py):
@@ -29,10 +29,10 @@ Each silver row has: `operation`, `district`, `neighborhood`, `priceByArea`, `si
 
 ## Dependencies
 **Requires:**
-- TASK-003 (Silver Cleaning Lambda) — produces `silver/idealista/operation=.../snapshot_date=.../part.parquet`
+- FEATURE-003 (Silver Cleaning Lambda) — produces `silver/idealista/operation=.../snapshot_date=.../part.parquet`
 
 **Blocks:**
-- TASK-005 (Frontend) — consumes `gold/aggregations/latest.json`
+- FEATURE-005 (Frontend) — consumes `gold/aggregations/latest.json`
 
 **Related:**
 - Prototype aggregation logic (former `wrangle_data.py`, since removed) and notebook §4/§6
@@ -172,10 +172,10 @@ Add a gold-layer Lambda that aggregates silver cleaned listings into a small das
 - Output: `gold/aggregations/latest.json` (full time-series, `schema_version`) als Frontend-Quelle
 - Layer: AWS-managed `AWSSDKPandas`
 
-**Subtasks at a glance:**
+**Tasks at a glance:**
 | Task | Priority | Est. Hours | Dependencies |
 |------|----------|------------|--------------|
-| 4.1 Aggregation core (pure)        | P0 | 4h | TASK-003 |
+| 4.1 Aggregation core (pure)        | P0 | 4h | FEATURE-003 |
 | 4.2 Gold Lambda handler (moto)     | P0 | 3h | 4.1 |
 | 4.3 Terraform (scheduled gold)     | P0 | 3h | 4.2 |
 | 4.4 Dev wire + docs + gated smoke  | P1 | 2h | 4.1–4.3 |
