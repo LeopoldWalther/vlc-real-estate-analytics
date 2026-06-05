@@ -54,26 +54,30 @@ technical_plan:
       reversible: true
 
     - id: "3.2"
-      title: "Pure transform: clean and aggregate to silver shape"
+      title: "Pure cleaning: clean to silver individual listings"
       description: >-
-        Implement the pure, AWS-free transformation. Inject snapshot_date from
-        parse_key_metadata, drop rows with null priceByArea or missing
-        neighborhood, group by neighborhood + snapshot_date, aggregate
-        priceByArea (mean, count), and build the dashboard JSON (with
-        schema_version) from the full history.
-      status: "planned"
+        Implement the pure, AWS-free cleaning that mirrors notebook section 3.
+        Inject snapshot_date from parse_key_metadata, reduce to the relevant
+        columns, drop bathrooms<=0, drop sale rows outside 1000<priceByArea<10000,
+        and drop rows with null priceByArea or missing neighborhood. Returns one
+        cleaned row per listing (NO aggregation, NO district scope filter, NO
+        dashboard JSON — those move to the Gold lambda, TASK-004).
+      status: "done"
       complexity: "medium"
       estimated_hours: 3
       depends_on: ["3.1"]
-      branch: "feature/silver-cleaning-lambda/3.2-pure-transform"
-      commit_message: "feat(silver): add pure clean/aggregate transform with snapshot_date"
+      branch: "feature/silver-cleaning-lambda/3.2-cleaned-listings"
+      commit_message: "feat(silver): add pure cleaning to individual listings with snapshot_date"
       acceptance_criteria:
-        - "✓ RED: test_clean_injects_snapshot_date_and_aggregates_price_by_area fails first"
+        - "✓ RED: test_clean_injects_snapshot_date_and_keeps_individual_listings fails first"
+        - "✓ RED: test_clean_drops_zero_bathrooms_and_invalid_sale_price fails first"
         - "✓ RED: test_clean_drops_null_pricebyarea_and_missing_neighborhood fails first"
-        - "✓ GREEN: clean() returns one row per (neighborhood, snapshot_date) with mean and count"
-        - "✓ GREEN: build_aggregation_json(history_df) returns dict with schema_version and time-series"
+        - "✓ GREEN: clean() returns one cleaned row per listing with snapshot_date column injected"
+        - "✓ GREEN: column reduction keeps only the relevant notebook §3 columns"
+        - "✓ GREEN: bathrooms<=0 dropped; sale priceByArea outside 1000..10000 dropped; rent kept"
         - "✓ Empty elementList yields empty output without raising"
-        - "✓ Multiple pages of the same snapshot collapse to one row per (neighborhood, snapshot_date)"
+        - "✓ Multiple pages of one snapshot keep one row per listing (no aggregation)"
+        - "✓ No district scope filter and no aggregation/dashboard JSON in this module"
         - "✓ REFACTOR: helpers split, full type hints + docstrings, suite green"
         - "✓ Unit coverage for transform module >= 80%"
       allowed_files:
@@ -86,13 +90,13 @@ technical_plan:
       reversible: true
 
     - id: "3.3"
-      title: "Lambda handler: combine snapshot pages, write Parquet + latest.json"
+      title: "Lambda handler: combine snapshot pages, write cleaned-listings Parquet"
       description: >-
         Implement the AWS-edge handler triggered by schedule. List the latest
         snapshot's paginated JSON objects under bronze/idealista, combine pages,
-        call the pure transform, write Parquet partitioned by
-        operation/snapshot_date, and rebuild latest.json from the entire silver
-        history. JSON only, idempotent on full snapshot_date.
+        call the pure clean(), and write Parquet of cleaned individual listings
+        partitioned by operation/snapshot_date. JSON only, idempotent on full
+        snapshot_date. No aggregation and no latest.json here (Gold/TASK-004).
       status: "planned"
       complexity: "medium"
       estimated_hours: 3
@@ -100,11 +104,12 @@ technical_plan:
       branch: "feature/silver-cleaning-lambda/3.3-lambda-handler"
       commit_message: "feat(silver): add scheduled lambda handler writing partitioned parquet"
       acceptance_criteria:
-        - "✓ RED: test_lambda_combines_pages_writes_partitioned_parquet_and_rebuilds_latest_json fails first (moto)"
+        - "✓ RED: test_lambda_combines_pages_writes_partitioned_parquet fails first (moto)"
         - "✓ GREEN: handler combines all snapshot pages and writes one Parquet under operation=.../snapshot_date=YYYY-MM-DD/part.parquet"
-        - "✓ GREEN: latest.json is rebuilt from full silver history, not the single input"
-        - "✓ Re-running the same snapshot is idempotent (same key, no duplicate rows)"
+        - "✓ GREEN: Parquet contains cleaned individual listings (not aggregated)"
+        - "✓ Re-running the same snapshot is idempotent (same key, deterministic output)"
         - "✓ Only JSON is read (no CSV path)"
+        - "✓ No aggregation and no latest.json written by this handler"
         - "✓ REFACTOR: AWS edges isolated from pure logic, type hints + docstrings, suite green"
         - "✓ Handler uses AWS-managed pandas layer assumption (no custom pyarrow build)"
         - "✓ Unit/integration coverage for handler >= 80%"

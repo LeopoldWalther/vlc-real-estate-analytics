@@ -51,7 +51,7 @@ repos:
     hooks:
       - id: pytest
         name: pytest
-        entry: bash -c 'cd src/etl && pytest data_collection/tests/ --cov=data_collection --cov-report=term-missing --cov-fail-under=80'
+        entry: bash -c '.venv/bin/pytest src/etl/data_collection/tests/ src/etl/data_processing/tests/ --cov=src/etl/data_collection --cov-report=term-missing --cov-fail-under=80'
         language: system
         pass_filenames: false
         always_run: false
