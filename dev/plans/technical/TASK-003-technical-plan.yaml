@@ -132,7 +132,7 @@ technical_plan:
         bronze/idealista and write silver only, add a CloudWatch log group and
         SNS error alarm, and expose the managed-layer ARN as a region-aware
         variable.
-      status: "planned"
+      status: "done"
       complexity: "medium"
       estimated_hours: 3
       depends_on: ["3.3"]
