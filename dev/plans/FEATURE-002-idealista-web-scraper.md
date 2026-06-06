@@ -1,18 +1,18 @@
-# FEATURE-002: Idealista Web Scraper — Notebook MVP + Lambda Production
+# FEATURE-002: Idealista Web Scraper — OOP Service on AWS Fargate
 
-**Status:** 🟡 In Progress
+**Status:** 🔵 Planned
 **Branch:** `feature/idealista-web-scraper`
 **Assignee:** @implementer
 **Created:** 2026-03-29
-**Updated:** 2026-06-03
-**Estimated Effort:** L (4–5 days total across both phases)
+**Updated:** 2026-06-06
+**Estimated Effort:** L (6–8 days)
 **Priority:** High
 
 ---
 
 ## Objective
 
-Supplement the Idealista API collector (which is capped at 100 listings/month) with a web scraper that can retrieve unlimited search-result listings. Deliver two artefacts: (1) a Jupyter notebook for local, interactive development and testing, and (2) a production Lambda function that runs weekly on AWS.
+Supplement the Idealista API collector (which is capped at 100 listings/month) with a web scraper that can retrieve unlimited search-result listings. Deliver two artefacts: (1) a Jupyter notebook for local, interactive development and testing, and (2) a containerized production service (Docker image on **AWS ECS Fargate**) that runs weekly and scrapes **all** Valencia sale and rent listings.
 
 ---
 
@@ -20,77 +20,98 @@ Supplement the Idealista API collector (which is capped at 100 listings/month) w
 
 The existing `idealista_listings_collector.py` Lambda uses the Idealista API (OAuth2). The API imposes monthly request quotas that limit how many listings can be collected. The public Idealista website serves the same data without programmatic limits. A scraper targeting the public search-results pages closes this gap and provides a second, parallel data source in the same S3 bronze layer.
 
+**Why a container on Fargate instead of a Lambda?** Scraping *all* Valencia listings (thousands of cards across hundreds of pages) behind rotating proxies is a long-running, network-heavy job. Lambda's 15-minute ceiling and packaging limits (large native deps such as `lxml`, headless browser tooling) make it a poor fit. A Docker container on **ECS Fargate**, triggered weekly by EventBridge Scheduler, has no hard runtime cap, ships its own dependencies, and scales memory/CPU independently.
+
 **Existing project patterns to follow:**
-- `src/etl/data_collection/idealista_listings_collector.py` → Lambda module pattern
-- `src/notebooks/idealista_listings_collector.ipynb` → mirrored notebook for local testing
-- Medallion architecture: raw output → `bronze/idealista-scraper/{date}/` in S3
-- Strategy Pattern (`SearchConfig`), DI for AWS clients, custom exceptions, full type hints + docstrings
+- `src/etl/data_collection/idealista_listings_collector.py` → class structure, custom exceptions, dependency injection of AWS clients, full type hints + docstrings
+- Medallion architecture: raw output → `bronze/idealista-scraper/{YYYY-MM-DD}/` in the existing S3 listings bucket
+- Reuse existing Terraform `s3/` and `sns/` modules; no Secrets Manager for the API (the scraper needs none) — but a new secret holds the **proxy provider** credentials
+
+**Engineering standard for this feature:** the entire codebase is **object-oriented**, applying the four pillars of OOP (abstraction, encapsulation, inheritance, polymorphism), the **SOLID** principles, and explicit **design patterns** (Strategy, Repository, Adapter, Factory, Template Method, Builder). Each listing is modelled as a rich domain object rather than a bare dict.
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  PHASE 1 — Jupyter Notebook (local dev & validation)            │
-│                                                                 │
-│  idealista_web_scraper.ipynb                                    │
-│  ┌─────────────┐   ┌────────────────┐   ┌──────────────────┐   │
-│  │ ScraperConfig│→ │ ScraperSession │→ │ SearchResults    │   │
-│  │ (URLs, params)│  │ (cloudscraper  │  │ Parser (BS4+lxml)│   │
-│  │              │  │  + retries)    │  │                  │   │
-│  └─────────────┘   └────────────────┘  └────────┬─────────┘   │
-│                                                  │             │
-│                         ┌────────────────────────▼──────────┐  │
-│                         │  ParsedListing dataclass          │  │
-│                         │  (mirrors API elementList fields) │  │
-│                         └────────────────────────┬──────────┘  │
-│                                                  │             │
-│                    ┌─────────────────────────────▼──────────┐  │
-│                    │  Local output: data/s3/scraper_*.json  │  │
-│                    │  Optional: S3 upload if creds available│  │
-│                    └────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────┐
-│  PHASE 2 — AWS Lambda (weekly production)                       │
-│                                                                 │
-│  EventBridge cron(0 13 ? * SUN *)    ← 1 hour after API run    │
-│         │                                                       │
-│         ▼                                                       │
-│  Lambda: idealista_web_scraper.lambda_handler()                 │
-│  (extracted from notebook; same ScraperConfig, Parser classes)  │
-│         │                                                       │
-│         ▼                                                       │
-│  S3: bronze/idealista-scraper/{YYYYMMDD}/                       │
-│       {operation}_{date}_{time}_page{N}.json                    │
-│         │                                                       │
-│         ▼                                                       │
-│  SNS: error alerts (shared topic with API collector)            │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│  EventBridge Scheduler   rate: weekly  cron(0 13 ? * SUN *)           │
+│  (1 h after the API collector at 12:00)                              │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                │ RunTask
+                                ▼
+┌──────────────────────────────────────────────────────────────────────┐
+│  AWS ECS Fargate task  (Docker image pulled from ECR)                │
+│                                                                      │
+│   ScrapeOrchestrator                                                 │
+│     ├─ OperationStrategy[sale|rent]   (Strategy)                     │
+│     ├─ SearchUrlBuilder               (Builder)                      │
+│     ├─ ProxyProvider  ◄── RayobyteProxyProvider | ProxyRackProvider  │
+│     │                     (Adapter + Factory, rotating IPs)          │
+│     ├─ PageFetcher     (cloudscraper + retry/backoff via proxy)      │
+│     ├─ ListingParser   (BeautifulSoup + lxml → Listing objects)      │
+│     └─ ListingRepository ◄── S3ListingRepository | LocalRepository   │
+│                              (Repository pattern)                    │
+└───────────────┬──────────────────────────────┬───────────────────────┘
+                │ PutObject                     │ Publish on failure
+                ▼                               ▼
+┌───────────────────────────────┐   ┌───────────────────────────────┐
+│  S3 listings bucket           │   │  SNS topic (shared with API)  │
+│  bronze/idealista-scraper/    │   │  error alerts                 │
+│    {YYYY-MM-DD}/              │   └───────────────────────────────┘
+│      {operation}_page{N}.json │
+└───────────────────────────────┘
+        ▲                                   ▲
+        │ proxy creds                       │ logs
+┌───────────────────────────────┐   ┌───────────────────────────────┐
+│  Secrets Manager              │   │  CloudWatch Logs              │
+│  proxy provider credentials   │   │  /ecs/{env}-idealista-scraper │
+└───────────────────────────────┘   └───────────────────────────────┘
 ```
 
----
+Two delivery layers share **the same OOP core package** (`src/etl/data_collection/scraper/`):
 
-## Key Design Decisions
-
-| Decision | Choice | Rationale |
-|---|---|---|
-| HTTP library | `cloudscraper` | Handles Cloudflare/bot-detection without paid proxies |
-| HTML parser | `beautifulsoup4` + `lxml` | Fast, reliable; lxml is more lenient than html.parser |
-| Data model | `dataclass` `ParsedListing` | Type-safe; `.to_dict()` emits camelCase keys matching API output |
-| Rate limiting | `time.sleep(random.uniform(2, 4))` | Stays under bot thresholds; polite scraping |
-| Pagination | URL query param `?pagina=N` | Matches observed Idealista URL pattern |
-| Local output | `data/s3/` directory | Consistent with existing local S3 mirror; no AWS credentials required |
-| S3 prefix | `bronze/idealista-scraper/` | Separate from API data; avoids naming collisions |
-| Lambda schedule | `cron(0 13 ? * SUN *)` | 1 h after API collector (12:00); staggered to avoid rate-limiting |
-| Infra scope | New Terraform module `scraper_lambda` | Reuses existing `s3/` and `sns/` modules; no Secrets Manager needed |
+1. **Local / notebook** — a Jupyter notebook and a `python -m scraper` CLI drive the core classes against `LocalListingRepository`, writing to `data/s3/` with no AWS credentials. Used for interactive selector development and validation.
+2. **Production** — the identical core runs inside a Docker container on ECS Fargate, wired to `S3ListingRepository`, a real `ProxyProvider`, CloudWatch, and SNS.
 
 ---
 
-## Scraped Fields
+## OOP Design
 
-The scraper targets the following fields from each search-result card, matching the existing API `elementList` schema as closely as possible:
+The whole feature is object-oriented. The core package exposes small, single-responsibility abstractions (Protocols / ABCs) and concrete implementations injected at the composition root.
+
+### Domain model (encapsulation)
+
+```python
+class Listing:
+    """One real-estate listing. Validates and normalises its own fields."""
+    # private, validated attributes; read-only properties; to_dict() → camelCase
+class ListingCollection:
+    """Aggregate of Listing objects for one (operation, snapshot, page)."""
+```
+
+`Listing` is a rich domain object (not a bare dict): it validates types in `__init__`, normalises price/size strings to numbers, exposes read-only properties, and serialises via `to_dict()` to the camelCase envelope that matches the API `elementList` schema.
+
+### Abstractions (DIP + ISP) and the patterns behind them
+
+| Abstraction (interface) | Concrete impls | Pattern | SOLID driver |
+|---|---|---|---|
+| `OperationStrategy` | `SaleStrategy`, `RentStrategy` | **Strategy** | OCP — add operations without touching the orchestrator |
+| `SearchUrlBuilder` | `IdealistaUrlBuilder` | **Builder** | SRP — URL assembly isolated from fetching |
+| `ProxyProvider` | `RayobyteProxyProvider`, `ProxyRackProvider`, `NullProxyProvider` | **Adapter + Factory** | DIP/LSP — providers are interchangeable; chosen by `ProxyProviderFactory` from config |
+| `PageFetcher` | `CloudscraperFetcher` | **Template Method** (fetch→retry→backoff) | SRP — transport concerns isolated |
+| `ListingParser` | `IdealistaListingParser` | — (uses `DOM_SELECTORS` map) | OCP — selector changes are data, not code |
+| `ListingRepository` | `S3ListingRepository`, `LocalListingRepository` | **Repository** | DIP — storage target swappable (S3 vs disk) |
+
+`ScrapeOrchestrator` is the high-level policy object. It depends only on the abstractions above (constructor injection), so it is fully unit-testable with fakes and satisfies the **four pillars**: abstraction (interfaces), encapsulation (`Listing`), inheritance (base fetcher/provider), polymorphism (strategy/provider/repository swap).
+
+---
+
+## Scope & Scraped Fields
+
+**Scope:** scrape **all** Valencia listings for **both** operations — sale (`venta-viviendas`) and rent (`alquiler-viviendas`) — with **no size/elevator filter** (broader than the API collector by design). The English site is the entry point, e.g. `https://www.idealista.com/en/venta-viviendas/valencia-valencia/`.
+
+The parser extracts the following from each search-result card, matching the API `elementList` schema as closely as possible:
 
 | Field | API key | Source on page |
 |---|---|---|
@@ -98,215 +119,134 @@ The scraper targets the following fields from each search-result card, matching 
 | Thumbnail | `thumbnail` | `img.item-multimedia` src |
 | Price | `price` | `.item-price` text |
 | Size (m²) | `size` | `.item-detail` containing "m²" |
-| Rooms | `rooms` | `.item-detail` containing "hab." |
-| Floor | `floor` | `.item-detail` containing "planta" |
+| Rooms | `rooms` | `.item-detail` containing "hab." / "bed" |
+| Floor | `floor` | `.item-detail` containing "planta" / "floor" |
 | Address | `address` | `.item-address` text |
 | Neighborhood | `neighborhood` | `.item-address` span |
-| Price/m² | `priceByArea` | `.item-price-down` calculated |
+| Price/m² | `priceByArea` | `.item-price-down` or computed `price / size` |
 | Listing URL | `url` | `article.item a.item-link` href |
-| Operation | `operation` | Passed in from `ScraperConfig` |
-| Has elevator | `hasLift` | Search filter embedded in URL |
+| Operation | `operation` | Injected by the active `OperationStrategy` |
 
-*Note: `latitude`, `longitude`, `district`, `description`, `rooms`, `bathrooms` may not be available on search-result cards (detail pages not scraped in MVP). Fields unavailable from search results will be set to `null`.*
+*Note: `latitude`, `longitude`, `district`, `bathrooms`, `description` are generally not present on search-result cards (detail pages are out of MVP scope) and are set to `null`. Detail-page enrichment is a documented follow-up.*
 
 ---
 
 ## Target URLs
 
 ```
-# Rent (alquiler)
-https://www.idealista.com/alquiler-viviendas/valencia-valencia/
-  con-de-100-metros-cuadrados,hasta-160-metros-cuadrados,con-ascensor,buen-estado/
-  ?pagina=N
+# Sale (venta) — English site, all Valencia
+https://www.idealista.com/en/venta-viviendas/valencia-valencia/?pagina=N
 
-# Sale (venta)
-https://www.idealista.com/venta-viviendas/valencia-valencia/
-  con-de-100-metros-cuadrados,hasta-160-metros-cuadrados,con-ascensor,buen-estado/
-  ?pagina=N
+# Rent (alquiler) — English site, all Valencia
+https://www.idealista.com/en/alquiler-viviendas/valencia-valencia/?pagina=N
 ```
+
+`IdealistaUrlBuilder` owns this template; the page number `N` and operation segment come from the active `OperationStrategy`. No size/elevator filter segments are applied (full inventory).
 
 ---
 
-## Phase 1 — Jupyter Notebook MVP
+## Phase 1 — OOP core package + local validation
 
 ### Objective
-Validate the scraping approach interactively: confirm `cloudscraper` bypasses bot detection, identify the correct CSS selectors, extract all target fields, and save to the local `data/s3/` directory.
+Build the object-oriented scraper core and validate it interactively: confirm `cloudscraper` (behind a proxy) bypasses bot detection, identify the correct CSS selectors, extract all target fields into `Listing` objects, and write to local `data/s3/` with `LocalListingRepository` — no AWS credentials required.
 
-### Step 1.1: Dependencies
-- Add to `src/etl/requirements-dev.txt`: `cloudscraper>=1.2.71`, `beautifulsoup4>=4.12.0`, `lxml>=5.1.0`
-- Create `src/etl/data_collection/scraper_requirements.txt` for Lambda packaging (separate from `requirements.txt` to keep Lambda layers clean)
+### Step 1.1: Dependencies & package skeleton
+- Create the package `src/etl/data_collection/scraper/` with `__init__.py` and submodules: `domain.py`, `urls.py`, `proxies.py`, `fetcher.py`, `parser.py`, `repository.py`, `orchestrator.py`, `config.py`, `errors.py`, `factory.py`, `__main__.py` (CLI).
+- Add to `src/etl/requirements-dev.txt`: `cloudscraper>=1.2.71`, `beautifulsoup4>=4.12.0`, `lxml>=5.1.0`.
+- Create `src/etl/data_collection/scraper/requirements.txt` (runtime deps for the Docker image).
 
-### Step 1.2: Notebook Structure (`src/notebooks/idealista_web_scraper.ipynb`)
+### Step 1.2: Domain model (`domain.py`) — encapsulation
+- `Listing`: validated, encapsulated entity; normalises price/size; read-only properties; `to_dict()` → camelCase API envelope keys; `__eq__`/`__hash__` on `propertyCode` for dedup.
+- `ListingCollection`: aggregate with `add()`, `to_envelope(operation, page, total_pages)` producing `{"operation", "source": "web_scraper", "collected_at", "page", "totalPages", "elementList": [...]}`.
 
-**Cell 1 — Markdown header:** Purpose, usage instructions, Idealista URL format
+### Step 1.3: Abstractions & strategies
+- `errors.py`: `ScraperError` base + `FetchError`, `ParseError`, `ProxyError`.
+- `OperationStrategy` (ABC) with `SaleStrategy`/`RentStrategy` (URL segment + `operation` label).
+- `IdealistaUrlBuilder` (Builder) consuming an `OperationStrategy` + page number.
+- `ProxyProvider` (ABC): `get_proxy() -> dict | None`, `rotate()`. Impls: `RayobyteProxyProvider`, `ProxyRackProvider`, `NullProxyProvider` (local/no-proxy). `ProxyProviderFactory` selects by config.
+- `PageFetcher` (Template Method): `fetch(url)` orchestrates proxy selection → request → retry/backoff; `CloudscraperFetcher` implements the transport step.
+- `ListingParser` (ABC) + `IdealistaListingParser` using a module-level `DOM_SELECTORS` map; helpers `_parse_price`, `_parse_size`, `_parse_rooms`, `_extract_property_code`.
+- `ListingRepository` (ABC): `save(collection, operation, page)`. Impls: `LocalListingRepository` (writes `data/s3/...`), `S3ListingRepository` (boto3 `put_object`).
 
-**Cell 2 — Imports:**
-```python
-import cloudscraper
-from bs4 import BeautifulSoup
-import json, time, random, re
-from datetime import datetime
-from pathlib import Path
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
-import boto3  # optional S3 upload
-```
+### Step 1.4: Orchestrator (`orchestrator.py`) — high-level policy (DIP)
+- `ScrapeOrchestrator(fetcher, parser, repository, proxy_provider, url_builder)` injected via constructor.
+- `scrape(operation_strategy) -> int`: paginates until an empty/last page, parses each page into a `ListingCollection`, persists via the repository, rotates the proxy and sleeps `random.uniform(2.0, 4.5)` between pages.
+- No I/O concretions referenced directly — only the injected abstractions (fully unit-testable with fakes).
 
-**Cell 3 — `ScraperConfig` class:**
-Mirrors `SearchConfig` pattern. Holds base URLs for rent and sale, pagination template, output directory, optional S3 bucket/prefix. Exposes `build_url(operation, page)`.
+### Step 1.5: Local testing notebook + CLI for validation
+The notebook is the primary **learning and testing surface** for Phase 1 — it walks through the scrape *step by step* so a contributor can see exactly what each component does and inspect intermediate results before anything is containerised. `src/notebooks/idealista_web_scraper.ipynb` is structured as a guided sequence of cells:
 
-**Cell 4 — `IdealistaScraperError` exception:**
-Custom exception for domain-specific errors (HTTP errors, parse failures, rate limiting).
+1. **Setup** — import the core package; instantiate `NullProxyProvider` + `LocalListingRepository` (no AWS, no proxy creds).
+2. **Fetch one page** — build a URL via `IdealistaUrlBuilder` for `sale`, fetch the raw HTML with `CloudscraperFetcher`, and print status + a snippet to confirm bot-detection is bypassed.
+3. **Parse & inspect** — run `IdealistaListingParser` on that HTML, render the resulting `Listing` objects as a `pd.DataFrame`, and eyeball the extracted fields (price, size, rooms, address…).
+4. **Full run** — drive `ScrapeOrchestrator` across all pages for `sale` then `rent`, writing JSON to `data/s3/` via `LocalListingRepository`.
+5. **Validate** — load the written JSON back, preview as a `DataFrame`, and compare field coverage against an existing API `data/s3/*.json` so schema drift is obvious.
 
-**Cell 5 — `ParsedListing` dataclass:**
-All target fields with type annotations. `.to_dict()` method emitting camelCase keys. Explicit `null` defaults for fields unavailable on search-result cards.
+Each cell has a short markdown explanation of *what* and *why*, so the notebook doubles as living documentation of the scraping flow.
+- `python -m etl.data_collection.scraper --operation sale --output-dir data/s3/` mirrors the notebook headlessly for quick re-runs and CI smoke tests.
 
-**Cell 6 — `ScraperSession` class:**
-Wraps `cloudscraper.create_scraper()`. Configures browser fingerprint. `.get_page(url)` with retry logic (3 attempts, exponential backoff). Rate-limiting delay between pages.
-
-**Cell 7 — `SearchResultsParser` class:**
-Takes raw HTML string, returns `List[ParsedListing]`. Uses a `DOM_SELECTORS` dict constant (makes selector updates easy when Idealista changes their markup). Includes `_parse_price()`, `_parse_size()`, `_parse_floors()`, `_extract_property_code()` helpers.
-
-**Cell 8 — Pagination loop:**
-`scrape_operation(config, operation)` → iterates pages until `next page` link is absent or max pages reached. Appends results, respects rate limit.
-
-**Cell 9 — Local save:**
-`save_locally(listings, operation, output_dir)` → writes `data/s3/scraper_{operation}_{date}_page{N}.json` matching existing file naming convention. JSON envelope: `{"operation": ..., "source": "web_scraper", "collected_at": ..., "page": N, "totalPages": N, "elementList": [...]}`.
-
-**Cell 10 — Optional S3 upload:**
-`upload_to_s3(bucket, key, data, s3_client)` → guarded by `if USE_S3:` flag. Uses same upload logic as existing collector.
-
-**Cell 11 — Run for rent:**
-Execute scrape for `operation="rent"`. Display `pd.DataFrame(listings)` preview.
-
-**Cell 12 — Run for sale:**
-Execute scrape for `operation="sale"`. Display preview.
-
-**Cell 13 — Compare with API data:**
-Load an existing `data/s3/rent_*.json` API file. Show field coverage comparison table.
-
-### Step 1.3: Validate locally
-- Run notebook end-to-end
-- Confirm ~200+ listings retrieved across 4–5 pages
-- Spot-check 3 listings against live Idealista search to verify accuracy
-- Capture real HTML snippet as test fixture (save to `tests/fixtures/search_results_rent.html`)
+### Step 1.6: Validate locally & capture fixtures
+- Run end-to-end; confirm listings retrieved across multiple pages for both operations.
+- Spot-check 3 listings against live Idealista.
+- Save a **real** HTML snapshot to `src/etl/data_collection/tests/fixtures/search_results_sale.html` (≥ 3 cards) for deterministic parser tests.
 
 ---
 
-## Phase 2 — Lambda Production Module
+## Phase 2 — Containerization (Docker + ECR)
 
 ### Objective
-Extract the validated notebook logic into a production-ready Python module, write tests, build the Terraform infrastructure, and deploy.
+Package the validated core into a reproducible Docker image that runs the scraper as a one-shot task, ready for Fargate.
 
-### Step 2.1: Python Module (`src/etl/data_collection/idealista_web_scraper.py`)
+### Step 2.1: Entry point
+- `src/etl/data_collection/scraper/run_task.py`: the container entry point (`main()`). Reads env config, builds the production object graph via `ProxyProviderFactory` + `S3ListingRepository`, scrapes both operations, publishes an SNS alert on any unhandled `ScraperError`, exits non-zero on failure (so ECS marks the task failed).
+- Config (`config.py`) reads env: `S3_BUCKET`, `S3_PREFIX=bronze/idealista-scraper/`, `SNS_TOPIC_ARN`, `PROXY_PROVIDER` (`rayobyte`|`proxyrack`|`none`), `PROXY_SECRET_NAME`, `AWS_REGION`.
 
-Follow exact same structure as `idealista_listings_collector.py`:
+### Step 2.2: Dockerfile
+- `src/etl/data_collection/scraper/Dockerfile` based on `python:3.12-slim`; installs `requirements.txt` (incl. `lxml` system libs), copies the package, sets `CMD ["python", "-m", "etl.data_collection.scraper.run_task"]`. Non-root user; pinned deps.
+- `.dockerignore` to keep the image small.
 
-```
-Module-level constants
-IdealistaScraperError
-ParsedListing dataclass
-ScraperConfig class
-ScraperSession class
-SearchResultsParser class
-scrape_operation(config, operation, s3_client) → List[ParsedListing]
-upload_to_s3(s3_client, bucket, key, data) → None
-send_notification(sns_client, topic_arn, message) → None  (reuse error pattern)
-lambda_handler(event, context) → Dict[str, Any]
-main() → None   (CLI entry point for local execution)
-```
+### Step 2.3: Tests
+- `src/etl/data_collection/tests/test_scraper/` package mirroring the core modules:
 
-**Key differences from notebook:**
-- Module-level `s3_client`, `sns_client` (injectable for tests, no `secrets_client` needed)
-- `lambda_handler` validates env vars (`S3_BUCKET`, `S3_PREFIX`, `SNS_TOPIC_ARN`)
-- `main()` allows `python idealista_web_scraper.py --output-dir data/s3/` local execution
-- All functions < 50 lines; full docstrings + type hints
-- `DOM_SELECTORS` dict defined at module top (easy maintenance when selectors change)
-
-### Step 2.2: Scraper Requirements (`src/etl/data_collection/scraper_requirements.txt`)
-
-```
-cloudscraper>=1.2.71
-beautifulsoup4>=4.12.0
-lxml>=5.1.0
-requests>=2.31.0
-boto3>=1.34.0
-```
-
-*Packaged separately from `requirements.txt` to allow independent Lambda Layer management.*
-
-### Step 2.3: Tests (`src/etl/data_collection/tests/test_web_scraper.py`)
-
-Test classes following existing `test_idealista_collector.py` patterns:
-
-| Class | Tests |
+| Test module | Covers |
 |---|---|
-| `TestScraperConfig` | `build_url` for rent/sale/pagination |
-| `TestParsedListing` | `to_dict()` field names, null defaults |
-| `TestScraperSession` | Retry logic (mock HTTP 429/503), rate limit delay |
-| `TestSearchResultsParser` | Parse realistic HTML fixture → correct listing fields |
-| `TestScrapeOperation` | Full mock scrape: 2 pages, correct pagination stop |
-| `TestUploadToS3` | S3 put_object called with correct key/body |
-| `TestLambdaHandler` | Missing env vars, successful run, SNS on error |
+| `test_domain.py` | `Listing` validation/normalisation, `to_dict()` keys, dedup equality |
+| `test_urls.py` | `IdealistaUrlBuilder` for sale/rent + pagination |
+| `test_proxies.py` | Factory selection; `Rayobyte`/`ProxyRack` adapters build correct proxy dict; rotation |
+| `test_fetcher.py` | Retry/backoff on 429/503 (mocked), proxy passed through |
+| `test_parser.py` | Parse the **real** HTML fixture → correct `Listing` fields |
+| `test_repository.py` | `S3ListingRepository.save` calls `put_object` with correct key/body (moto); `Local` writes file |
+| `test_orchestrator.py` | Full scrape with fakes: pagination stop, proxy rotation, repository calls |
+| `test_run_task.py` | Env validation, SNS publish on error, non-zero exit |
 
-**HTML fixture file:** `src/etl/data_collection/tests/fixtures/search_results_rent.html`
-Captured from a real Idealista search result page (static snapshot). At minimum 3 listing cards. Required so parser tests don't rely on live HTTP requests.
+- Coverage ≥ 80% for the `scraper` package.
 
-### Step 2.4: Terraform Infrastructure (`infrastructure/modules/scraper_lambda/`)
+---
 
-New reusable module. Accepts the same variables as the existing `lambda` module but with scraper-specific defaults:
+## Phase 3 — Fargate infrastructure, scheduling & proxies
 
-```hcl
-# infrastructure/modules/scraper_lambda/main.tf
-resource "aws_lambda_function" "scraper" {
-  function_name = "${var.environment}-idealista-scraper"
-  handler       = "idealista_web_scraper.lambda_handler"
-  runtime       = "python3.12"
-  timeout       = 900
-  memory_size   = 256  # same as collector; scraper is memory-light
-  ...
-}
+### Objective
+Provision the ECS Fargate task, weekly schedule, ECR repository, proxy secret, IAM, logging, and alerting; wire it into `dev` (prod deferred until after a dev soak, mirroring FEATURE-003).
 
-resource "aws_cloudwatch_event_rule" "scraper_schedule" {
-  schedule_expression = "cron(0 13 ? * SUN *)"  # 1h after collector
-}
-```
+### Step 3.1: Terraform module `infrastructure/modules/fargate_scraper/`
+- **ECR** repository for the image (lifecycle policy to expire untagged images).
+- **ECS cluster** (or reuse a shared one) + **Fargate task definition**: `cpu=512`, `memory=1024`, `python3.12` image, log driver `awslogs`.
+- **EventBridge Scheduler** rule `cron(0 13 ? * SUN *)` with an **ECS RunTask** target (1 h after the API collector).
+- **Networking:** task runs in a subnet with outbound internet (public subnet + assign public IP, or private subnet + NAT) so it can reach Idealista and the proxy endpoints.
+- **IAM:** task execution role (ECR pull, CloudWatch Logs) + task role scoped to `s3:PutObject` on `bronze/idealista-scraper/*`, `sns:Publish` on the topic, and `secretsmanager:GetSecretValue` on the proxy secret only.
+- **CloudWatch** log group `/ecs/{env}-idealista-scraper` (30-day retention) + SNS error alarm.
+- `variables.tf` / `outputs.tf`; region-aware; no hardcoded ARNs.
 
-IAM permissions needed (subset of existing `lambda` module):
-- `s3:PutObject` on the listings bucket
-- `sns:Publish` on the notifications topic
-- `logs:CreateLogGroup`, `logs:CreateLogStream`, `logs:PutLogEvents`
+### Step 3.2: Proxy provider secret
+- New Terraform `secrets` usage (or extend the module) holding the proxy provider credentials (Rayobyte/ProxyRack endpoint + username/password/API key). Never committed; injected via `secrets.tfvars`.
 
-*No Secrets Manager permissions needed — scraper requires no API credentials.*
+### Step 3.3: Wire dev + image build/push docs
+- Instantiate `module "idealista_scraper"` in `infrastructure/environments/dev/main.tf` (passing bucket, SNS topic, proxy secret name).
+- Add a documented build/push flow (`docker build` → `aws ecr get-login-password` → `docker push`) — manual for now; a `deploy-scraper.yml` CI workflow is a deferred follow-up.
+- `terraform fmt -check` + `terraform validate` pass in `dev`.
 
-### Step 2.5: Environment Wiring
-
-```hcl
-# infrastructure/environments/dev/main.tf  (add module block)
-module "idealista_scraper" {
-  source       = "../../modules/scraper_lambda"
-  environment  = "dev"
-  s3_bucket    = module.listings_bucket.bucket_name
-  sns_topic_arn = module.idealista_notifications.topic_arn
-}
-```
-
-Mirror for `infrastructure/environments/prod/main.tf`.
-
-### Step 2.6: Lambda Layer
-
-`cloudscraper` + `beautifulsoup4` + `lxml` are too large for inline packaging. Package as a Lambda Layer:
-
-```
-src/etl/lambda_layers/scraper/
-  python/
-    cloudscraper/
-    bs4/
-    lxml/
-    ...
-```
-
-Build script: `pip install -r scraper_requirements.txt -t python/ --platform manylinux2014_x86_64 --only-binary=:all:`
+### Step 3.4: Docs
+- Extend `documentation/DATA_COLLECTION_LAYER.md` with the scraper architecture, the proxy abstraction, the `bronze/idealista-scraper/` layout, and operational runbook (rotate proxy creds, re-run task).
 
 ---
 
@@ -314,60 +254,102 @@ Build script: `pip install -r scraper_requirements.txt -t python/ --platform man
 
 | File | Action | Purpose |
 |---|---|---|
-| `src/notebooks/idealista_web_scraper.ipynb` | **CREATE** | Phase 1 interactive notebook |
-| `src/etl/data_collection/idealista_web_scraper.py` | **CREATE** | Phase 2 Lambda module |
-| `src/etl/data_collection/scraper_requirements.txt` | **CREATE** | Runtime deps for Lambda packaging |
-| `src/etl/data_collection/tests/test_web_scraper.py` | **CREATE** | Unit + integration tests |
-| `src/etl/data_collection/tests/fixtures/search_results_rent.html` | **CREATE** | Real HTML fixture for parser tests |
+| `src/etl/data_collection/scraper/__init__.py` | **CREATE** | Package marker + public exports |
+| `src/etl/data_collection/scraper/domain.py` | **CREATE** | `Listing`, `ListingCollection` domain objects |
+| `src/etl/data_collection/scraper/errors.py` | **CREATE** | `ScraperError` hierarchy |
+| `src/etl/data_collection/scraper/urls.py` | **CREATE** | `OperationStrategy`, `IdealistaUrlBuilder` |
+| `src/etl/data_collection/scraper/proxies.py` | **CREATE** | `ProxyProvider` + Rayobyte/ProxyRack/Null + factory |
+| `src/etl/data_collection/scraper/fetcher.py` | **CREATE** | `PageFetcher` / `CloudscraperFetcher` |
+| `src/etl/data_collection/scraper/parser.py` | **CREATE** | `ListingParser`, `DOM_SELECTORS` |
+| `src/etl/data_collection/scraper/repository.py` | **CREATE** | `ListingRepository` + S3/Local impls |
+| `src/etl/data_collection/scraper/orchestrator.py` | **CREATE** | `ScrapeOrchestrator` high-level policy |
+| `src/etl/data_collection/scraper/config.py` | **CREATE** | Env-driven config object |
+| `src/etl/data_collection/scraper/factory.py` | **CREATE** | Composition root (build object graph) |
+| `src/etl/data_collection/scraper/__main__.py` | **CREATE** | Local CLI entry point |
+| `src/etl/data_collection/scraper/run_task.py` | **CREATE** | Fargate container entry point |
+| `src/etl/data_collection/scraper/requirements.txt` | **CREATE** | Runtime deps for the Docker image |
+| `src/etl/data_collection/scraper/Dockerfile` | **CREATE** | Container image definition |
+| `src/etl/data_collection/scraper/.dockerignore` | **CREATE** | Keep image small |
+| `src/etl/data_collection/tests/test_scraper/*.py` | **CREATE** | Unit/integration tests per module |
+| `src/etl/data_collection/tests/fixtures/search_results_sale.html` | **CREATE** | Real HTML fixture for parser tests |
+| `src/notebooks/idealista_web_scraper.ipynb` | **CREATE** | Phase 1 interactive validation notebook |
 | `src/etl/requirements-dev.txt` | **MODIFY** | Add cloudscraper, bs4, lxml for local dev |
-| `infrastructure/modules/scraper_lambda/main.tf` | **CREATE** | Lambda + IAM + EventBridge Terraform |
-| `infrastructure/modules/scraper_lambda/variables.tf` | **CREATE** | Module input variables |
-| `infrastructure/modules/scraper_lambda/outputs.tf` | **CREATE** | Module outputs |
-| `infrastructure/environments/dev/main.tf` | **MODIFY** | Instantiate scraper_lambda module |
-| `infrastructure/environments/prod/main.tf` | **MODIFY** | Instantiate scraper_lambda module |
-| `documentation/DATA_COLLECTION_LAYER.md` | **MODIFY** | Add scraper section |
+| `infrastructure/modules/fargate_scraper/main.tf` | **CREATE** | ECR + ECS Fargate + Scheduler + IAM + logs |
+| `infrastructure/modules/fargate_scraper/variables.tf` | **CREATE** | Module input variables |
+| `infrastructure/modules/fargate_scraper/outputs.tf` | **CREATE** | Module outputs |
+| `infrastructure/environments/dev/main.tf` | **MODIFY** | Instantiate `fargate_scraper` + proxy secret |
+| `documentation/DATA_COLLECTION_LAYER.md` | **MODIFY** | Add scraper architecture + runbook |
 
 **Forbidden / out of scope:**
 - Do NOT modify `idealista_listings_collector.py` or its tests
-- Do NOT modify existing Lambda Terraform module (`infrastructure/modules/lambda/`)
-- Do NOT modify CI/CD workflows (deploy pipeline is a separate future task)
+- Do NOT modify the existing `lambda_bronze` / `lambda_silver` Terraform modules
+- Do NOT wire the scraper into `prod` yet (deferred until after a dev soak, mirroring FEATURE-003)
+- Do NOT add CI/CD deploy workflows (a `deploy-scraper.yml` pipeline is a separate future task)
+- Detail-page enrichment (lat/long, bathrooms, description) is out of MVP scope
 
 ---
 
 ## Testing Requirements
 
-- [ ] `TestSearchResultsParser` passes with real HTML fixture (not mock HTML)
-- [ ] `TestScrapeOperation` confirms pagination stops correctly at last page
-- [ ] `TestLambdaHandler` confirms SNS notification sent on exception
-- [ ] Notebook runs end-to-end locally without errors (manual smoke test)
-- [ ] Scraped listing count ≥ 50 for both `rent` and `sale` (validates pagination)
-- [ ] JSON output schema matches existing API JSON (validated with `jsonschema` or manual comparison)
-- [ ] `pytest --cov=src/etl/data_collection/idealista_web_scraper tests/` coverage ≥ 80%
+- [ ] `test_parser.py` passes against the **real** HTML fixture (not hand-crafted HTML)
+- [ ] `test_orchestrator.py` confirms pagination stops at the last/empty page and the proxy rotates between pages
+- [ ] `test_proxies.py` confirms the factory returns the right provider and adapters build a correct proxy dict
+- [ ] `test_repository.py` confirms `S3ListingRepository` writes the correct `bronze/idealista-scraper/{date}/{operation}_page{N}.json` key (moto)
+- [ ] `test_run_task.py` confirms SNS publish + non-zero exit on `ScraperError`
+- [ ] Notebook runs end-to-end locally with `NullProxyProvider` (manual smoke test)
+- [ ] Output JSON envelope `elementList` matches the field names used by `valenciaRealEstatePriceAnalysis.ipynb`
+- [ ] `pytest --cov=src/etl/data_collection/scraper` coverage ≥ 80%
 
 ---
 
 ## Success Criteria
 
-- [ ] Notebook can be run locally with `pip install cloudscraper beautifulsoup4 lxml` and produces valid JSON output
-- [ ] Module can be executed with `python idealista_web_scraper.py --output-dir data/s3/`
-- [ ] Lambda handler passes all unit tests with mocked AWS/HTTP
-- [ ] Terraform `validate` passes for both `dev` and `prod` environments
-- [ ] Output JSON files contain `elementList` array matching field names used by `valenciaRealEstatePriceAnalysis.ipynb`
-- [ ] All code: full type hints, docstrings, ruff + black + mypy pass
+- [ ] Core package runs locally via `python -m etl.data_collection.scraper --operation sale --output-dir data/s3/` with no AWS credentials
+- [ ] Notebook produces valid JSON for both sale and rent
+- [ ] Docker image builds and runs the one-shot task locally (`docker run` with env vars against a test bucket / local repo)
+- [ ] All unit/integration tests pass with mocked AWS/HTTP/proxy; coverage ≥ 80%
+- [ ] `terraform fmt -check` + `terraform validate` pass in `dev`
+- [ ] Proxy provider is swappable via config (`PROXY_PROVIDER=rayobyte|proxyrack|none`) without code changes (OCP verified by test)
+- [ ] All code: OOP with SOLID + documented patterns, full type hints, docstrings, ruff + black + mypy pass
+
+---
+
+## Estimated Monthly AWS Cost
+
+The scraper runs as a **weekly one-shot Fargate task** (~4.33 runs/month). Assuming each run takes ~2 h to scrape both operations across the full Valencia inventory (with the randomized 2–4.5 s inter-page delays), the new AWS components cost roughly **~$1/month** in `dev` (region `eu-central-1`). The dominant fixed cost is the proxy secret; compute is negligible because the task is short-lived.
+
+| Component | Pricing basis | Assumption | Est. / month |
+|---|---|---|---|
+| **ECS Fargate task** | $0.04656 / vCPU-h + $0.00511 / GB-h | 0.5 vCPU + 1 GB × 2 h × 4.33 runs | ~$0.25 |
+| **Secrets Manager** | $0.40 / secret + $0.05 / 10k calls | 1 proxy secret, few reads | ~$0.40 |
+| **ECR storage** | $0.10 / GB-month | ~300 MB image (lifecycle expires old tags) | ~$0.03 |
+| **EventBridge Scheduler** | $1.00 / million invocations | ~4.33 invocations | <$0.01 |
+| **CloudWatch Logs** | ~$0.57 / GB ingest + $0.03 / GB stored | few MB/run, 30-day retention | ~$0.05 |
+| **S3 (bronze)** | $0.023 / GB-month + PUT requests | incremental JSON (~hundreds of MB/yr) | ~$0.05 |
+| **Public IPv4 (while task runs)** | $0.005 / IP-h | only billed during the ~2 h run | ~$0.04 |
+| **Data transfer in** | free (inbound) | downloading search pages | $0.00 |
+| **Total (new AWS components, dev)** | | | **~$0.85/month** |
+
+**Cost drivers & decisions:**
+- **Networking — public subnet + public IP (recommended for dev).** A **NAT Gateway** would add **~$32–33/month** (≈$0.045/h × 730 h + per-GB processing) *regardless of how little the task runs*, because it is billed continuously. Assigning a public IP to the Fargate task in a public subnet avoids this entirely and keeps the public-IP charge to ~$0.04/month (only while running). This preserves the project's "< $5/month" target.
+- **Non-AWS — proxy provider (external SaaS).** Rotating residential proxies (Rayobyte / ProxyRack) are billed *outside* AWS, typically **~$5–15/month** depending on plan/bandwidth. This is the largest real cost of the feature but is not an AWS line item.
+- Running the scraper in **`prod`** as well would roughly **double** the AWS figure (~$1.70/month total across both envs) — still well within budget.
+
+> **Bottom line:** new AWS cost ≈ **$1/month** in `dev` (or ~$2/month dev + prod) as long as the Fargate task uses a public IP rather than a NAT Gateway. The external proxy subscription (~$5–15/month) is the dominant overall cost.
 
 ---
 
 ## Technical Notes
 
-### Idealista Bot Detection
-Idealista uses Cloudflare and aggressive fingerprinting. `cloudscraper` handles the Cloudflare JS challenge. Additional mitigations:
-- Use `cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})` for realistic UA
-- Add `Referer` and `Accept-Language` headers
-- Random delay between page requests: `time.sleep(random.uniform(2.0, 4.5))`
-- Never run scraper in a tight loop without delays; Lambda timeout is 900 s so there is headroom
+### Bot detection & rotating proxies (Rayobyte / ProxyRack)
+Idealista uses Cloudflare and aggressive fingerprinting; a single IP scraping the full inventory will be blocked. Mitigations layered in the `PageFetcher` + `ProxyProvider`:
+- **Rotating residential proxies** via `RayobyteProxyProvider` or `ProxyRackProvider` (selected by `PROXY_PROVIDER`); credentials read from Secrets Manager. `ProxyProvider.rotate()` is called between pages so each request can use a fresh exit IP.
+- `cloudscraper.create_scraper(browser={'browser': 'chrome', 'platform': 'windows', 'mobile': False})` for a realistic UA; add `Referer` and `Accept-Language` headers.
+- Random delay `random.uniform(2.0, 4.5)` between pages; exponential backoff with proxy rotation on HTTP 429/403/503.
+- `NullProxyProvider` is used locally (notebook/dev) so contributors can run without proxy credentials.
 
-### DOM Selectors Strategy
-Wrap all CSS selectors in a `DOM_SELECTORS` dict at the top of the module. When Idealista updates their markup (happens 2–3 times/year), only this dict needs updating:
+### DOM selectors strategy
+All CSS selectors live in a module-level `DOM_SELECTORS` map in `parser.py`. When Idealista changes markup (2–3×/year), only this map changes — code stays closed for modification (OCP):
 
 ```python
 DOM_SELECTORS: Dict[str, str] = {
@@ -381,31 +363,29 @@ DOM_SELECTORS: Dict[str, str] = {
 }
 ```
 
-### JSON Output Envelope
-Match the existing S3 file structure from the API collector:
+### JSON output envelope
+`ListingCollection.to_envelope()` matches the API collector's S3 structure so downstream silver/gold code is source-agnostic:
 
 ```json
 {
-  "operation": "rent",
+  "operation": "sale",
   "source": "web_scraper",
-  "collected_at": "2026-03-29T13:00:00Z",
+  "collected_at": "2026-06-07T13:00:00Z",
   "page": 1,
-  "totalPages": 5,
-  "itemsPerPage": 30,
+  "totalPages": 42,
   "elementList": [
     {
       "propertyCode": "12345678",
-      "price": 1200.0,
-      "size": 115.0,
+      "price": 250000.0,
+      "size": 95.0,
       "rooms": 3,
       "floor": "2",
       "address": "Calle de Colón",
       "neighborhood": "El Mercat",
       "url": "https://www.idealista.com/inmueble/12345678/",
       "thumbnail": "https://img3.idealista.com/...",
-      "operation": "rent",
-      "priceByArea": 10.0,
-      "hasLift": true,
+      "operation": "sale",
+      "priceByArea": 2631.0,
       "latitude": null,
       "longitude": null,
       "district": null,
@@ -416,26 +396,25 @@ Match the existing S3 file structure from the API collector:
 }
 ```
 
-### Lambda Layer Build
-`lxml` contains compiled C extensions and must be built for Amazon Linux 2. Build command:
+### Docker image build & push
+The container ships its own dependencies (no Lambda layer needed). `lxml` wheels install cleanly on `python:3.12-slim` (add `libxml2`/`libxslt` only if building from source):
+
 ```bash
-pip install -r scraper_requirements.txt \
-  -t src/etl/lambda_layers/scraper/python/ \
-  --platform manylinux2014_x86_64 \
-  --python-version 3.12 \
-  --only-binary=:all:
+docker build -t idealista-scraper src/etl/data_collection/scraper/
+aws ecr get-login-password --region eu-central-1 | docker login --username AWS --password-stdin <acct>.dkr.ecr.eu-central-1.amazonaws.com
+docker tag idealista-scraper:latest <acct>.dkr.ecr.eu-central-1.amazonaws.com/dev-idealista-scraper:latest
+docker push <acct>.dkr.ecr.eu-central-1.amazonaws.com/dev-idealista-scraper:latest
 ```
 
-### Phase Sequencing (Critical Path)
+### Phase sequencing (critical path)
 ```
-1.1 Install deps + verify cloudscraper works (30 min)
-  └─▶ 1.2 Build notebook iteratively — validate selectors live (1–2 days)
-        └─▶ 1.3 Capture HTML fixtures (1 h)
-              └─▶ 2.1 Extract notebook → Python module (half day)
-                    ├─▶ 2.2 Write tests using fixtures (half day)
-                    └─▶ 2.3 Terraform + Lambda Layer (half day)
-                              └─▶ 2.4 Deploy to dev + smoke test (1 h)
-                                    └─▶ 2.5 Deploy to prod (30 min)
+1.1 Package skeleton + deps
+  └─▶ 1.2–1.4 Domain, abstractions, orchestrator (OOP core)
+        └─▶ 1.5–1.6 Notebook/CLI validation + capture HTML fixture
+              └─▶ 2.1–2.2 Container entry point + Dockerfile
+                    └─▶ 2.3 Tests (≥80%)
+                          └─▶ 3.1–3.2 Fargate + ECR + proxy secret (Terraform)
+                                └─▶ 3.3–3.4 Wire dev + build/push + docs
 ```
 
 ---
@@ -444,63 +423,69 @@ pip install -r scraper_requirements.txt \
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
-| Idealista blocks `cloudscraper` | Medium | High | Add proxy rotation (future FEATURE-003) |
-| DOM selectors change between plan and implementation | High | Medium | Capture fixture HTML immediately; use `DOM_SELECTORS` dict |
-| `lxml` Lambda Layer build fails on macOS | Medium | Low | Use Docker / `--platform manylinux2014_x86_64` flag |
-| Scraper runs while Idealista is under maintenance | Low | Low | SNS alert on HTTP 5xx; retry next week |
-| Scraped data drifts from API schema | Medium | Medium | Automated schema comparison test in notebook Cell 13 |
+| Idealista blocks scraping despite proxies | Medium | High | Rotating residential proxies (Rayobyte/ProxyRack), randomized delays, backoff; `ProxyProvider` is swappable to add more pools |
+| DOM selectors change between plan and implementation | High | Medium | Capture real HTML fixture immediately; selectors isolated in `DOM_SELECTORS` |
+| Proxy credentials leak / misconfig | Medium | High | Credentials only in Secrets Manager; task role scoped to one secret; never committed (`secrets.tfvars`) |
+| Fargate networking can't reach internet | Medium | High | Validate subnet has NAT or public IP + IGW in `dev` before first run |
+| `lxml` build issues in container | Low | Low | Use slim image with prebuilt wheels; add system libs only if needed |
+| Scraping the full inventory is slow / costly | Medium | Low | Fargate has no 15-min cap; `cpu=512/mem=1024` is cheap for a weekly one-shot |
+| Scraped data drifts from API schema | Medium | Medium | `to_dict()` keys asserted in `test_domain.py`; envelope matches API |
 
 ---
 
 ## Questions / Open Items
 
-- Should the scraper Lambda share the existing SNS topic (`idealista_notifications`) or get its own? **Recommendation: share** — reduces infra cost and alert consolidation is easier.
-- Should Phase 2 deploy to `dev` only first, or both environments simultaneously? **Recommendation: `dev` first**, promote to `prod` after two successful weekly runs.
-- Is a separate `deploy-scraper-lambda.yml` CI workflow needed, or can it be folded into the existing `deploy-lambda.yml`? *Defer to implementation phase.*
+- **Proxy provider default:** start with one provider (recommend **Rayobyte** residential) and keep `ProxyRack` as a drop-in via the factory? *Recommendation: yes — both implemented, default chosen by config.*
+- **Networking:** use the default VPC public subnet (assign public IP) or a dedicated private subnet + NAT for the Fargate task? *Recommendation: public subnet + public IP in `dev` for cost; revisit for `prod`.*
+- **Both operations in one task vs two:** run sale + rent sequentially in a single weekly task (simpler, one image) — *recommended* — or split into two scheduled tasks? *Recommendation: single task, sequential.*
+- **Detail-page enrichment:** defer lat/long/bathrooms to a follow-up feature? *Recommendation: yes, out of MVP scope.*
 
 ---
 
 ## Planning Summary (For Quick Reference)
 
 **One-line objective:**
-Build a web scraper for Idealista search-result pages: Jupyter notebook for local dev, Lambda for weekly AWS production.
+Build an OOP web scraper (SOLID + design patterns) that runs weekly as a Docker container on AWS Fargate behind rotating proxies, collecting **all** Valencia sale and rent listings into `bronze/idealista-scraper/`.
 
 **Critical decisions:**
-- HTTP library: `cloudscraper` (Cloudflare bypass, no paid proxies)
-- Parser: BeautifulSoup4 + lxml (fast, lenient)
-- Output: JSON envelope matching existing API schema (`elementList` array)
-- Lambda schedule: `cron(0 13 ? * SUN *)` — 1 h after API collector
-- Local execution: `--output-dir` CLI flag (no AWS credentials required for Phase 1)
+- Compute: **Docker on ECS Fargate** (not Lambda) — no runtime cap, ships own deps, fits long proxied scrape
+- Architecture: object-oriented core (Strategy, Repository, Adapter, Factory, Template Method, Builder); `Listing` domain objects; DI composition root
+- Anti-blocking: rotating residential proxies via `ProxyProvider` (Rayobyte/ProxyRack), creds in Secrets Manager
+- Output: API-compatible JSON envelope under `bronze/idealista-scraper/{date}/{operation}_page{N}.json`
+- Schedule: EventBridge `cron(0 13 ? * SUN *)` — 1 h after the API collector
+- Local dev: `NullProxyProvider` + `LocalListingRepository`, no AWS creds needed
 
 **Tasks at a glance:**
 
 | Task | Priority | Est. | Dependencies |
-|---------|----------|------|--------------|
-| 1.1 Install deps, validate cloudscraper | P0 | 0.5 h | None |
-| 1.2 Build notebook (ScraperConfig, Session, Parser, pagination, local save) | P0 | 1–2 d | 1.1 |
-| 1.3 Capture HTML fixtures, smoke test | P0 | 1 h | 1.2 |
-| 2.1 Extract notebook → Python module | P0 | 4 h | 1.3 |
-| 2.2 Write unit + integration tests | P0 | 4 h | 2.1 |
-| 2.3 Terraform scraper_lambda module | P1 | 3 h | None |
-| 2.4 Lambda Layer build + dev deploy | P1 | 2 h | 2.1, 2.3 |
-| 2.5 Prod deploy + monitoring | P1 | 1 h | 2.4 |
+|---|---|---|---|
+| 1.1 Package skeleton + deps | P0 | 1 h | None |
+| 1.2 Domain model (`Listing`/`ListingCollection`) | P0 | 2 h | 1.1 |
+| 1.3 Abstractions + strategies + proxies | P0 | 4 h | 1.2 |
+| 1.4 Orchestrator (DI) | P0 | 3 h | 1.3 |
+| 1.5 Notebook + CLI validation | P0 | 3 h | 1.4 |
+| 1.6 Capture HTML fixture | P0 | 1 h | 1.5 |
+| 2.1 Container entry point | P0 | 2 h | 1.4 |
+| 2.2 Dockerfile | P0 | 2 h | 2.1 |
+| 2.3 Tests (≥80%) | P0 | 5 h | 2.1, 1.6 |
+| 3.1 Fargate/ECR Terraform module | P1 | 5 h | None |
+| 3.2 Proxy secret | P1 | 1 h | 3.1 |
+| 3.3 Wire dev + build/push | P1 | 2 h | 2.2, 3.1 |
+| 3.4 Docs | P1 | 1 h | 3.3 |
 
 **Key files to create:**
-- [src/notebooks/idealista_web_scraper.ipynb](src/notebooks/idealista_web_scraper.ipynb) — Phase 1 notebook
-- [src/etl/data_collection/idealista_web_scraper.py](src/etl/data_collection/idealista_web_scraper.py) — Phase 2 Lambda module
-- [src/etl/data_collection/tests/test_web_scraper.py](src/etl/data_collection/tests/test_web_scraper.py) — unit tests
-- [src/etl/data_collection/tests/fixtures/search_results_rent.html](src/etl/data_collection/tests/fixtures/search_results_rent.html) — HTML fixture
-
-**Key files to modify:**
-- [src/etl/requirements-dev.txt](src/etl/requirements-dev.txt) — add cloudscraper, bs4, lxml
-- [infrastructure/environments/dev/main.tf](infrastructure/environments/dev/main.tf) — add scraper module
-- [infrastructure/environments/prod/main.tf](infrastructure/environments/prod/main.tf) — add scraper module
+- [src/etl/data_collection/scraper/](src/etl/data_collection/scraper/) — OOP core package
+- [src/etl/data_collection/scraper/Dockerfile](src/etl/data_collection/scraper/Dockerfile) — container image
+- [infrastructure/modules/fargate_scraper/main.tf](infrastructure/modules/fargate_scraper/main.tf) — ECS Fargate + ECR + Scheduler
+- [src/notebooks/idealista_web_scraper.ipynb](src/notebooks/idealista_web_scraper.ipynb) — local validation
 
 **Watch-outs for reviewer:**
-- `lxml` must be built for Amazon Linux 2 (not native macOS) for the Lambda Layer
-- Test HTML fixtures must come from a real Idealista page, not hand-crafted HTML
-- `ParsedListing.to_dict()` key names must match the camelCase used in `valenciaRealEstatePriceAnalysis.ipynb`
-- Phase 2 infrastructure should NOT be deployed until Phase 1 notebook runs cleanly for at least one full week
+- Proxy credentials must come from Secrets Manager only, never committed; task role scoped to one secret
+- Fargate subnet must have outbound internet (public IP or NAT) before the first run
+- `Listing.to_dict()` keys must match the camelCase used by `valenciaRealEstatePriceAnalysis.ipynb`
+- Test HTML fixture must be a real Idealista page snapshot, not hand-crafted
+- Keep the OOP core free of AWS/HTTP concretions — only the composition root wires concrete impls
 
 **Blockers / open questions:**
-- None — enough context to start Phase 1 immediately
+- Confirm proxy vendor account (Rayobyte vs ProxyRack) and obtain credentials before Phase 3 dev run
+- Confirm the `dev` VPC/subnet networking allows Fargate outbound internet

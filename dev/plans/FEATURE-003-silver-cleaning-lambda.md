@@ -1,6 +1,6 @@
 # FEATURE-003: Silver Cleaning Lambda (Bronze → Silver Parquet)
 
-**Status:** 🟢 Complete
+**Status:** 🟡 In Progress
 **Branch:** `feature/silver-cleaning-lambda`
 **Assignee:** Unassigned
 **Created:** 2026-06-03
@@ -75,6 +75,14 @@ Each element in `elementList` has: `priceByArea` ✅, `neighborhood` ✅, `opera
 - [ ] Optional gated real-bucket smoke test (`RUN_S3_IT=1` + dev creds) reading 1–2 real objects from the **dev** bucket
 - [ ] Add `documentation/DATA_PROCESSING_LAYER.md` (silver layer architecture)
 
+### Phase 6: Incremental execution + Backfill
+- [ ] Extend `_list_snapshot_keys` with an optional `target_date: date | None` parameter: when set, return all keys for that specific date instead of filtering to the latest — this is the prerequisite for the `event["snapshot_date"]` override to work on historical snapshots
+- [ ] Make the Lambda incremental: before writing Parquet, check with `s3.head_object` whether the output key already exists; if so, log and skip (no re-processing on weekly re-runs)
+- [ ] Support explicit snapshot targeting via `event.get("snapshot_date")` (ISO string `"YYYY-MM-DD"`): if present, process only that date; if absent, fall back to latest-snapshot behaviour
+- [ ] Update `lambda_handler` docstring: `event` is no longer unused — document `snapshot_date` override key
+- [ ] Replace `test_handler_is_idempotent` with two focused tests: `test_second_run_skips_parquet_write` (asserts `put_object` not called on second run via spy) and optionally `test_handler_force_overwrites` for a `force: true` escape hatch
+- [ ] Create `src/etl/data_processing/backfill_silver.py`: discovers all distinct `snapshot_date`s from `bronze/idealista/` via `ListObjectsV2`, invokes Lambda once per date asynchronously (`InvocationType="Event"`) with `{"snapshot_date": "YYYY-MM-DD"}`; Lambda function name via `--function-name` CLI arg or `SILVER_LAMBDA_FUNCTION_NAME` env var; optional `--delay-ms` (default 100) to avoid Lambda throttling on ~110 concurrent invocations
+
 ## TDD Strategy (Mandatory)
 
 ### RED
@@ -84,6 +92,9 @@ Each element in `elementList` has: `priceByArea` ✅, `neighborhood` ✅, `opera
 - [ ] Failing test: `test_clean_drops_zero_bathrooms_and_invalid_sale_price`
 - [ ] Failing test: `test_clean_drops_null_pricebyarea_and_missing_neighborhood`
 - [ ] Failing test: `test_lambda_combines_pages_writes_partitioned_parquet` (moto)
+- [ ] Failing test: `test_lambda_skips_existing_parquet` — handler must not overwrite if key already exists
+- [ ] Failing test: `test_lambda_processes_specific_snapshot_date` — handler respects `event["snapshot_date"]` override
+- [ ] Failing test: `test_backfill_discovers_all_snapshot_dates_and_invokes_lambda` (moto Lambda client)
 
 ### GREEN
 - [ ] Implement minimal `parse_key_metadata`, `clean`, and handler to pass
@@ -101,6 +112,8 @@ Each element in `elementList` has: `priceByArea` ✅, `neighborhood` ✅, `opera
 - `src/etl/data_processing/tests/fixtures/bronze/*.json` (small, real, curated samples)
 - `src/etl/data_processing/tests/test_silver_transform.py`
 - `src/etl/data_processing/tests/test_silver_cleaning_lambda.py`
+- `src/etl/data_processing/backfill_silver.py` (backfill fan-out script)
+- `src/etl/data_processing/tests/test_backfill_silver.py`
 - `infrastructure/modules/lambda_silver/*.tf` (or extension of existing lambda module)
 - `documentation/DATA_PROCESSING_LAYER.md`
 
@@ -118,6 +131,9 @@ Each element in `elementList` has: `priceByArea` ✅, `neighborhood` ✅, `opera
 - [ ] `bathrooms <= 0` rows are dropped; `sale` rows outside `1000<priceByArea<10000` are dropped
 - [ ] Multiple pages of the same snapshot → cleaned listings keep one row per listing (no aggregation)
 - [ ] `snapshot_date` column is injected from the object key
+- [ ] Handler skips write when Parquet already exists (incremental guard)
+- [ ] Handler respects `event["snapshot_date"]` override; falls back to latest-snapshot without it
+- [ ] Backfill script discovers all unique `snapshot_date`s and invokes Lambda once per date asynchronously
 
 ### Integration (moto)
 - [ ] Scheduled run combines all snapshot pages; cleaned-listings Parquet appears under `operation/snapshot_date`
@@ -136,6 +152,9 @@ Each element in `elementList` has: `priceByArea` ✅, `neighborhood` ✅, `opera
 - [ ] Validity filters applied (column reduction, `bathrooms>0`, sale `priceByArea` 1000–10000, null drop); **no** district-scope filter, **no** aggregation
 - [ ] Lambda <30s typical runtime, 512 MB memory
 - [ ] Coverage ≥ 80% for new modules
+- [ ] Lambda is incremental: skips snapshots already present in silver (no re-processing on weekly re-runs)
+- [ ] Lambda accepts `event["snapshot_date"]` override for targeted single-snapshot invocation
+- [ ] `backfill_silver.py` fans out one async Lambda invocation per historical `snapshot_date` in bronze
 - [ ] All CI checks (`python-lint-and-test`, `terraform-validate`, `workflow-consistency`) green
 
 ## Technical Notes
@@ -169,10 +188,13 @@ Each element in `elementList` has: `priceByArea` ✅, `neighborhood` ✅, `opera
 - **Schema-Drift Idealista:** Cleaning bricht still → *Mitigation:* Schema-Contract-Test auf echten Fixtures + SNS-Alarm bei Parse-Fehlern
 - **Lambda Cold Start mit pandas/pyarrow:** *Mitigation:* AWS-managed Layer + 512 MB Memory
 - **Silver Parquet wächst mit Historie:** *Mitigation:* partitioniert nach `operation`/`snapshot_date`; Gold (FEATURE-004) liest nur, aggregiert klein
+- **`_list_snapshot_keys` gibt nur neuesten Snapshot zurück:** historischer `event["snapshot_date"]`-Override würde ohne `target_date`-Erweiterung still leer bleiben → *Mitigation:* `target_date`-Parameter ist explizites Acceptance Criterion in 3.6; muss vor dem Override-Wiring implementiert sein
+- **Backfill-Concurrency:** ~110 asynchrone Lambda-Invocations gleichzeitig können Reserved-Concurrency-Limit treffen → *Mitigation:* `--delay-ms`-Argument (Default 100 ms) zwischen Invocations in `backfill_silver.py`
 
 ### Assumptions
 - Bronze Layout: `bronze/idealista/{operation}_{YYYYMMDD}_{HHMMSS}_{page}.json`
 - Datenmenge bleibt klein (Lambda statt Glue ausreichend)
+- Lambda-Funktionsname beim Backfill-Aufruf bekannt; wird via `--function-name` CLI-Arg oder `SILVER_LAMBDA_FUNCTION_NAME`-Env-Var übergeben — nicht hartcodiert
 
 ## Planning Summary (For Quick Reference)
 
@@ -193,6 +215,8 @@ Add a silver-layer Lambda that cleans bronze Idealista JSON into partitioned Par
 | 3.3 Lambda handler (combine pages)            | P0 | 3h | 3.2 |
 | 3.4 Terraform (scheduled)                     | P0 | 3h | 3.3 |
 | 3.5 Tests + docs                              | P0 | 2h | 3.1–3.4 |
+| 3.6 Incremental guard + snapshot_date override | P0 | 2h | 3.3 |
+| 3.7 Backfill fan-out script                   | P0 | 2h | 3.6 |
 
 **Key files to modify:**
 - `src/etl/data_processing/silver_transform.py` (+ `parse_key_metadata`, `clean`)

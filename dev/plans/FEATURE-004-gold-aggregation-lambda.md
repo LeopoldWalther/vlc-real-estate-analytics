@@ -1,6 +1,6 @@
 # FEATURE-004: Gold Aggregation Lambda (Silver → Gold Aggregations JSON)
 
-**Status:** 🔵 Planned
+**Status:** 🟡 In Progress
 **Branch:** `feature/gold-aggregation-lambda`
 **Assignee:** Unassigned
 **Created:** 2026-06-05

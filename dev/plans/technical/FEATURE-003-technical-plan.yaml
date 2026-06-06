@@ -186,8 +186,89 @@ technical_plan:
       can_run_parallel_with: []
       reversible: true
 
+    - id: "3.6"
+      title: "Incremental guard: skip already-processed snapshots"
+      description: >
+        Make the Lambda incremental by default. Before writing Parquet, check
+        with s3.head_object whether the output key already exists; if so, log
+        and skip (no re-processing on weekly re-runs).
+        Also add support for event["snapshot_date"] override (ISO string
+        YYYY-MM-DD): if present, process only that specific date; if absent,
+        fall back to latest-snapshot behaviour.
+        IMPORTANT: _list_snapshot_keys currently hard-filters to the latest
+        snapshot_date per operation. It must be extended with an optional
+        target_date parameter: when set, return all keys for that date instead
+        of filtering to the latest. This is the prerequisite for the override
+        to work correctly on historical snapshots.
+        The existing test_handler_is_idempotent asserts len(df)==1 after two
+        runs and will still pass with skip semantics, but its intent changes.
+        Replace it with two focused tests: test_second_run_skips_parquet_write
+        (assert put_object not called on second run via mock) and
+        test_handler_overwrites_when_forced (event={'force': true} bypasses guard).
+      status: "planned"
+      complexity: "low"
+      estimated_hours: 2
+      depends_on: ["3.3"]
+      branch: "feature/silver-cleaning-lambda/3.6-incremental-guard"
+      commit_message: "feat(silver): add incremental guard and snapshot_date event override"
+      acceptance_criteria:
+        - "RED: test_lambda_skips_existing_parquet fails first"
+        - "RED: test_lambda_processes_specific_snapshot_date fails first (handler ignores event['snapshot_date'] before this task)"
+        - "GREEN: _list_snapshot_keys accepts optional target_date; when set returns keys for that date, otherwise returns latest"
+        - "GREEN: handler skips write when s3.head_object returns the key (no ClientError)"
+        - "GREEN: handler processes event['snapshot_date'] if present; falls back to latest-snapshot otherwise"
+        - "GREEN: test_second_run_skips_parquet_write — assert put_object NOT called on second invocation (mock/spy)"
+        - "REFACTOR: lambda_handler docstring updated: event parameter documents snapshot_date override"
+        - "REFACTOR: type hints + docstrings, suite green"
+        - "Coverage >= 80% for modified handler"
+      allowed_files:
+        - "src/etl/data_processing/silver_cleaning_lambda.py"
+        - "src/etl/data_processing/tests/test_silver_cleaning_lambda.py"
+      forbidden_files:
+        - "infrastructure/**"
+      can_run_parallel_with: []
+      reversible: true
+
+    - id: "3.7"
+      title: "Backfill script: fan-out one Lambda invocation per snapshot_date"
+      description: >
+        Create backfill_silver.py that lists all distinct snapshot_dates in
+        bronze/idealista/ via S3 ListObjectsV2, then invokes the silver Lambda
+        once per date asynchronously (InvocationType='Event') with payload
+        {"snapshot_date": "YYYY-MM-DD"}. Already-processed dates are silently
+        skipped by the Lambda's own incremental guard (task 3.6). Run once
+        manually from local CLI with AWS credentials to backfill all historical
+        snapshots.
+        The Lambda function name must be configurable: accept it via
+        --function-name CLI argument (argparse) or SILVER_LAMBDA_FUNCTION_NAME
+        env variable; fail clearly if neither is provided.
+        Concurrency note: with ~110 historical snapshots, 110 async invocations
+        are fired. Lambda default account concurrency is 1000 but reserved
+        concurrency per function may be lower. Add an optional --delay-ms
+        argument (default 100 ms) between invocations to avoid throttling.
+      status: "planned"
+      complexity: "low"
+      estimated_hours: 2
+      depends_on: ["3.6"]
+      branch: "feature/silver-cleaning-lambda/3.7-backfill-script"
+      commit_message: "feat(silver): add backfill script fanning out lambda per snapshot_date"
+      acceptance_criteria:
+        - "RED: test_backfill_discovers_all_snapshot_dates_and_invokes_lambda fails first (moto)"
+        - "GREEN: script discovers all unique snapshot_dates from bronze and invokes Lambda once per date"
+        - "GREEN: Lambda function name read from --function-name arg or SILVER_LAMBDA_FUNCTION_NAME env; raises SystemExit if neither set"
+        - "GREEN: --delay-ms argument controls sleep between invocations (default 100); settable to 0 in tests"
+        - "GREEN: already-processed dates are skipped by the Lambda, not the script"
+        - "REFACTOR: type hints + docstrings, suite green"
+      allowed_files:
+        - "src/etl/data_processing/backfill_silver.py"
+        - "src/etl/data_processing/tests/test_backfill_silver.py"
+      forbidden_files:
+        - "infrastructure/**"
+      can_run_parallel_with: []
+      reversible: true
+
   summary:
-    total_tasks: 5
-    estimated_total_hours: 14
-    critical_path: ["3.1", "3.2", "3.3", "3.4", "3.5"]
+    total_tasks: 7
+    estimated_total_hours: 18
+    critical_path: ["3.1", "3.2", "3.3", "3.4", "3.5", "3.6", "3.7"]
     parallelizable_tasks: 0

@@ -99,7 +99,7 @@ technical_plan:
         the frozen schema v1.0. CRITICAL: never drop_duplicates(propertyCode)
         globally - dedup only within (operation, snapshot_date, propertyCode).
         Standardize on 'mean_price' (no 'mean_prize'). floor is a string.
-      status: "planned"
+      status: "done"
       complexity: "high"
       estimated_hours: 7
       depends_on: []
