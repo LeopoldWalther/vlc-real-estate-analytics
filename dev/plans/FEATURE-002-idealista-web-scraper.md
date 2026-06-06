@@ -1,6 +1,6 @@
 # FEATURE-002: Idealista Web Scraper — OOP Service on AWS Fargate
 
-**Status:** 🟡 In Progress
+**Status:** 🔵 Planned
 **Branch:** `feature/idealista-web-scraper`
 **Assignee:** @implementer
 **Created:** 2026-03-29
