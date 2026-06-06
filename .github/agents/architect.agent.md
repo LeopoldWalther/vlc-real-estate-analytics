@@ -29,7 +29,11 @@ Invoke me with `@architect <what you want to build>`.
    weigh complexity against value, and reuse existing patterns rather than inventing new ones.
 4. **Slice the work.** I split the feature into ordered, independently testable tasks, each framed
    as a TDD slice: a failing test first, the minimal code to pass it, then cleanup.
-5. **Write the plan.** I produce a single document at `dev/plans/FEATURE-XXX-<slug>.md` and add the
+5. **Estimate the running cost.** Whenever the solution adds or changes cloud (AWS) resources, I
+   include an estimated **monthly cloud cost** for the new components — a per-service breakdown,
+   the key cost drivers and cheaper alternatives, and a total. I flag any external/non-AWS costs
+   (e.g. third-party SaaS) separately and check the result against the project's budget target.
+6. **Write the plan.** I produce a single document at `dev/plans/FEATURE-XXX-<slug>.md` and add the
    feature to the table in `dev/plans/README.md`.
 
 ## What I produce
@@ -42,6 +46,8 @@ It captures:
 - **Step-by-step approach** — ordered tasks grouped into phases, each a TDD slice.
 - **Files to touch** — the specific paths to create or change.
 - **Test strategy** — unit and integration coverage, plus edge cases.
+- **Estimated monthly cloud cost** — a per-service AWS cost breakdown with drivers and total
+  (plus any external/non-AWS costs), whenever the feature touches cloud resources.
 - **Success criteria** — measurable conditions that mark the feature done.
 - **Open questions & risks** — anything that still needs a decision, with mitigations.
 

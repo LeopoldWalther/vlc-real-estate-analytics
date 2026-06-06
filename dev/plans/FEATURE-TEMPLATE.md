@@ -45,6 +45,20 @@ its own, framed as a TDD slice (failing test → minimal code → cleanup).
 - **Integration:** <cross-component flow to verify>
 - **Manual (if any):** <what to check by hand>
 
+## Estimated monthly cloud cost
+
+> Required whenever the feature adds or changes cloud (AWS) resources. Omit only for pure
+> code/docs changes with no infrastructure impact.
+
+| Component | Pricing basis | Assumption | Est. / month |
+|---|---|---|---|
+| <service> | <unit price> | <usage assumption> | ~$<x> |
+| **Total (new AWS components)** | | | **~$<x>/month** |
+
+- **Cost drivers & cheaper alternatives:** <what dominates the bill and how to reduce it>
+- **External / non-AWS costs:** <e.g. third-party SaaS, billed separately>
+- **Budget check:** <within the project's monthly target? yes/no>
+
 ## Success criteria
 
 - [ ] <measurable outcome 1>
