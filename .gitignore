@@ -245,3 +245,7 @@ infrastructure/modules/lambda/lambda_function.zip
 # Lambda test responses
 response.json
 infrastructure/environments/*/response.json
+
+# Frontend
+frontend/node_modules/
+frontend/coverage/
