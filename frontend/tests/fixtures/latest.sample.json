@@ -1,0 +1,142 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-06-01T12:00:00Z",
+  "scope_districts": ["Extramurs", "Ciutat Vella", "L'Eixample"],
+  "min_count": 5,
+  "relevant_filter": {
+    "hasLift": true,
+    "floor_not": "1",
+    "size_gt": 120,
+    "rooms_gte": 2,
+    "bathrooms_gte": 2
+  },
+  "general": {
+    "price_time_series_neighborhood": [
+      {
+        "operation": "sale",
+        "district": "Extramurs",
+        "neighborhood": "Arrancapins",
+        "snapshot_date": "2026-01-05",
+        "count_listings": 10,
+        "mean_priceByArea": 2500.0,
+        "mean_size": 130.0,
+        "mean_price": 325000.0
+      },
+      {
+        "operation": "sale",
+        "district": "Extramurs",
+        "neighborhood": "Arrancapins",
+        "snapshot_date": "2026-01-12",
+        "count_listings": 12,
+        "mean_priceByArea": 2550.0,
+        "mean_size": 131.0,
+        "mean_price": 334050.0
+      },
+      {
+        "operation": "rent",
+        "district": "Extramurs",
+        "neighborhood": "Arrancapins",
+        "snapshot_date": "2026-01-05",
+        "count_listings": 8,
+        "mean_priceByArea": 12.5,
+        "mean_size": 128.0,
+        "mean_price": 1600.0
+      },
+      {
+        "operation": "sale",
+        "district": "L'Eixample",
+        "neighborhood": "Gran Via",
+        "snapshot_date": "2026-01-05",
+        "count_listings": 15,
+        "mean_priceByArea": 2800.0,
+        "mean_size": 140.0,
+        "mean_price": 392000.0
+      }
+    ],
+    "price_time_series_district": [
+      {
+        "operation": "sale",
+        "district": "Extramurs",
+        "snapshot_date": "2026-01-05",
+        "count_listings": 10,
+        "mean_priceByArea": 2500.0,
+        "mean_size": 130.0,
+        "mean_price": 325000.0
+      }
+    ],
+    "rent_vs_sale_ratio": [
+      {
+        "district": "Extramurs",
+        "neighborhood": "Arrancapins",
+        "mean_priceByArea_sale": 2500.0,
+        "mean_priceByArea_rent": 12.5,
+        "mean_sales_price_by_rent_ratio": 200.0,
+        "count_listings_sale": 10,
+        "count_listings_rent": 8
+      }
+    ],
+    "rent_vs_sale_ratio_time_series": [
+      {
+        "district": "Extramurs",
+        "neighborhood": "Arrancapins",
+        "snapshot_date": "2026-01-05",
+        "mean_priceByArea_sale": 2500.0,
+        "mean_priceByArea_rent": 12.5,
+        "mean_sales_price_by_rent_ratio": 200.0,
+        "count_listings_sale": 10,
+        "count_listings_rent": 8
+      }
+    ],
+    "boxplot_by_neighborhood": [
+      {
+        "operation": "sale",
+        "district": "Extramurs",
+        "neighborhood": "Arrancapins",
+        "count": 10,
+        "min": 2000.0,
+        "q1": 2300.0,
+        "median": 2500.0,
+        "q3": 2700.0,
+        "max": 3000.0
+      }
+    ]
+  },
+  "relevant": {
+    "rent_vs_sale_ratio": [
+      {
+        "district": "Extramurs",
+        "neighborhood": "Arrancapins",
+        "mean_priceByArea_sale": 2600.0,
+        "mean_priceByArea_rent": 13.0,
+        "mean_sales_price_by_rent_ratio": 200.0,
+        "count_listings_sale": 6,
+        "count_listings_rent": 5
+      }
+    ],
+    "rent_vs_sale_ratio_time_series": [
+      {
+        "district": "Extramurs",
+        "neighborhood": "Arrancapins",
+        "snapshot_date": "2026-01-05",
+        "mean_priceByArea_sale": 2600.0,
+        "mean_priceByArea_rent": 13.0,
+        "mean_sales_price_by_rent_ratio": 200.0,
+        "count_listings_sale": 6,
+        "count_listings_rent": 5
+      }
+    ],
+    "boxplot_by_neighborhood": [
+      {
+        "operation": "sale",
+        "district": "Extramurs",
+        "neighborhood": "Arrancapins",
+        "count": 6,
+        "min": 2100.0,
+        "q1": 2350.0,
+        "median": 2550.0,
+        "q3": 2750.0,
+        "max": 2950.0
+      }
+    ]
+  }
+}
