@@ -88,16 +88,22 @@ pass, then cleanup.
 
 > **Decided.** Target domain: **`vlc-report.leopoldwalther.com`**. The root `leopoldwalther.com`
 > was registered via **Route 53**, so its public hosted zone already exists in the account — the
-> implementer references the existing zone (data source / variable), it is **not** created here.
-> The root zone is a shared, account-level resource; this feature only adds one subdomain record set
-> and is designed so future portfolio projects reuse the same zone + a wildcard certificate.
+> implementer references the existing zone (data source), it is **not** created here.
+>
+> **Option A (reviewer-confirmed).** DNS + the wildcard certificate live in a **separate Terraform
+> stack** `infrastructure/shared/dns/` with its **own state key** (`vlc-state/shared/dns/…`), not in
+> the frontend module — the zone + cert are account-level shared resources, so a frontend
+> `destroy` must never touch them. The stack stays in **this repo** for now (a second repo for four
+> files is premature); the separate state key makes a later repo extraction a no-rebuild copy. The
+> frontend consumes its outputs via `terraform_remote_state`.
 
-- [ ] ACM certificate in **us-east-1** (CloudFront requirement) via a `aws.us_east_1` provider
-  alias. Issue a **wildcard** `*.leopoldwalther.com` cert so future subdomains reuse it (one cert,
-  DNS-validated against the existing hosted zone).
-- [ ] Route 53 alias A/AAAA records for `vlc-report.leopoldwalther.com` pointing at the CloudFront
-  distribution, created in the **existing** `leopoldwalther.com` hosted zone (looked up by name).
-- [ ] ACM DNS-validation records created in the same hosted zone.
+- [ ] **`infrastructure/shared/dns/` stack** (applied once): references the existing
+  `leopoldwalther.com` zone, issues a **wildcard** `*.leopoldwalther.com` ACM cert in **us-east-1**
+  (via an `aws.us_east_1` provider alias), DNS-validates it against that zone, and exports
+  `zone_id` + `certificate_arn`.
+- [ ] **Frontend stack** consumes those outputs via `terraform_remote_state` and creates Route 53
+  alias A/AAAA records for `vlc-report.leopoldwalther.com` pointing at the CloudFront distribution
+  in the existing zone.
 
 ### Phase 4 — Deployment
 - [ ] `.github/workflows/deploy-frontend.yml` (`workflow_dispatch`, dev/prod input, mirrors
@@ -126,8 +132,11 @@ pass, then cleanup.
   `frontend/src/charts/price_time_series.js` (+ later renderer modules).
 - **Create:** `frontend/tests/transforms.test.js` (+ later per-renderer tests),
   `frontend/package.json` (Vitest dev dependency only — no runtime bundler).
+- **Create:** `infrastructure/shared/dns/{backend.tf,providers.tf,main.tf,variables.tf,outputs.tf}`
+  (standalone stack, own state key — Option A).
 - **Create:** `infrastructure/modules/frontend/{main.tf,variables.tf,outputs.tf}`.
-- **Create:** `.github/workflows/deploy-frontend.yml`, `documentation/FRONTEND_LAYER.md`.
+- **Create:** `.github/workflows/deploy-frontend.yml`, `.github/workflows/node-test.yml`,
+  `documentation/FRONTEND_LAYER.md`.
 - **Change:** `infrastructure/environments/dev/main.tf` — instantiate the frontend module (dev
   first; prod deferred to FEATURE-006).
 - **Change:** `README.md` — Source Code Layout + medallion diagram.
@@ -196,3 +205,9 @@ pass, then cleanup.
 - **2026-06-07** — Domain decided: `vlc-report.leopoldwalther.com`. Root `leopoldwalther.com`
   registered via Route 53 (hosted zone exists). Phase 3 updated to reference the existing zone and
   issue a reusable `*.leopoldwalther.com` wildcard cert. Open question resolved.
+- **2026-06-07** — Reviewed by `@reviewer` (see [REVIEW-FEATURE-005](../reviews/REVIEW-FEATURE-005.md),
+  verdict ⚠️ Changes Recommended). Decisions folded into
+  [the technical plan](technical/FEATURE-005-technical-plan.yaml): **H1** — DNS + ACM moved to a
+  standalone `infrastructure/shared/dns/` stack with its own state (Option A); **M1** — ACM pinned
+  to an `aws.us_east_1` alias; **M2** — Vitest enforced via its own `node-test` workflow + pre-commit,
+  not a validator-tracked gate; **M3** — Plotly.js vendored same-origin (no CDN). 8 atomic tasks.

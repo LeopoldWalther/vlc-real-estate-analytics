@@ -1,0 +1,455 @@
+technical_plan:
+  metadata:
+    created_by: "reviewer_agent"
+    for_feature: "FEATURE-005"
+    created_at: "2026-06-07T00:00:00Z"
+    version: "1.0"
+    reviewed_plan: "dev/reviews/REVIEW-FEATURE-005.md"
+    total_tasks: 8
+    estimated_hours: 14
+    risk_level: "medium"
+    critical_path: ["5.1", "5.2", "5.4", "5.5", "5.6", "5.8"]
+    depends_on_feature: "FEATURE-004 (gold/aggregations/latest.json, schema v1.0)"
+    coordinates_with: "FEATURE-006 (prod promotion of the frontend)"
+
+  validation:
+    auto_validate_on_tag_change: true
+    # The workflow validator only tracks this gate set. JS/Vitest runs in its own
+    # node-test workflow + pre-commit (see task 5.8), NOT as a tracked gate (review M2).
+    required_checks:
+      - "terraform-validate"
+      - "workflow-consistency"
+    min_coverage: 80
+
+  # ---------------------------------------------------------------------------
+  # Architecture decisions folded in from REVIEW-FEATURE-005.md:
+  #  - H1: DNS + ACM live in a standalone infrastructure/shared/dns stack with its
+  #        OWN state key (vlc-state/shared/dns/terraform.tfstate). The frontend
+  #        consumes zone_id + certificate_arn via terraform_remote_state. The stack
+  #        stays in THIS repo for now (Option A); the separate state key makes a
+  #        later repo extraction a no-rebuild copy.
+  #  - M1: ACM cert + validation pinned to an aws.us_east_1 provider alias.
+  #  - M2: Vitest enforced via a separate node-test workflow + pre-commit, not as a
+  #        validator-tracked required_check.
+  #  - M3: Plotly.js vendored (version-pinned) into the asset bucket, loaded
+  #        same-origin; no CDN.
+  # Data source: gold/aggregations/latest.json, frozen schema v1.0 (FEATURE-004).
+  # ---------------------------------------------------------------------------
+  design_constraints:
+    data_source: "gold/aggregations/latest.json (schema_version '1.0', frozen by FEATURE-004)"
+    domain: "vlc-report.leopoldwalther.com"
+    hosted_zone: "leopoldwalther.com (EXISTING, referenced via data source - never created here)"
+    acm_region: "us-east-1 (CloudFront requirement, via aws.us_east_1 alias)"
+    shared_dns_state_key: "vlc-state/shared/dns/terraform.tfstate"
+    frontend_stack: "plain HTML + vendored Plotly.js + ESM modules; no framework, no bundler"
+    s3_security: "private bucket + Block Public Access; CloudFront via OAC only (no public, no OAI)"
+    same_origin_data: "second CloudFront origin for gold/aggregations/*.json (no CORS)"
+
+  tasks:
+    - id: "5.1"
+      title: "Frontend data layer: DataSource adapter + pure transforms (Vitest)"
+      description: >-
+        Build the AWS-free, network-free core of the frontend. frontend/src/data_source.js
+        implements a DataSource adapter over fetch() that returns the parsed schema-v1.0
+        object and FAILS LOUDLY on a schema_version mismatch (Adapter + Dependency
+        Inversion); ship an in-memory fake that returns a fixture so unit tests touch no
+        network. frontend/src/transforms.js implements the pure formatSeries(block)
+        producing one Plotly trace per (operation, neighbourhood) from
+        general.price_time_series_neighborhood. Fixtures mirror the FEATURE-004 frozen
+        contract exactly (records-oriented, 'mean_price' not 'mean_prize', floor as
+        string, scope districts incl. L'Eixample). Vitest RED before GREEN.
+      status: "not_started"
+      complexity: "medium"
+      estimated_hours: 1.5
+      depends_on: []
+      branch: "feature/static-visualization-webapp/5.1-data-layer"
+      commit_message: "feat(frontend): add DataSource adapter with schema guard and pure transforms"
+      acceptance_criteria:
+        - "RED: test_formatSeries_one_trace_per_neighbourhood fails before implementation (fixture from schema v1.0)"
+        - "RED: test_datasource_rejects_wrong_schema_version fails first"
+        - "RED: test_datasource_fake_returns_fixture_without_network fails first"
+        - "GREEN: formatSeries returns one Plotly trace per (operation, neighbourhood) from general.price_time_series_neighborhood"
+        - "GREEN: formatSeries on an empty/missing block returns [] (no throw)"
+        - "GREEN: DataSource.load() rejects schema_version != '1.0' with a clear error"
+        - "GREEN: in-memory DataSource fake satisfies the same interface (polymorphism), no fetch called"
+        - "REFACTOR: ESM exports, JSDoc on public functions, transforms stay pure (no DOM, no fetch)"
+        - "Vitest coverage >= 80% on data_source.js + transforms.js"
+      allowed_files:
+        - "frontend/src/data_source.js"
+        - "frontend/src/transforms.js"
+        - "frontend/tests/data_source.test.js"
+        - "frontend/tests/transforms.test.js"
+        - "frontend/tests/fixtures/latest.sample.json"
+        - "frontend/package.json"
+      forbidden_files:
+        - "infrastructure/**"
+        - "src/etl/**"
+        - "frontend/src/charts/**"
+      can_run_parallel_with: ["5.3", "5.4"]
+      reversible: true
+      files_to_create:
+        - "frontend/src/data_source.js"
+        - "frontend/src/transforms.js"
+        - "frontend/tests/data_source.test.js"
+        - "frontend/tests/transforms.test.js"
+        - "frontend/tests/fixtures/latest.sample.json"
+        - "frontend/package.json"
+      files_to_modify: []
+
+    - id: "5.2"
+      title: "First ChartRenderer + Dashboard + page scaffold (vendored Plotly)"
+      description: >-
+        frontend/src/charts/price_time_series.js is the first ChartRenderer exposing the
+        common shape (id, title, render(populationBlock) -> PlotlyFigure) over
+        formatSeries (Strategy + Open/Closed). frontend/src/dashboard.js is the Dashboard
+        orchestrator that wires a DataSource + a list of renderers and mounts each into its
+        container, owning no transform or fetch logic (SRP). Add index.html (title, one
+        chart container, window.CONFIG.DATA_URL), styles.css, ESM entry app.js, and a
+        version-pinned vendored frontend/vendor/plotly.min.js loaded same-origin (review
+        M3 - no CDN). Renderer tested against the in-memory DataSource fake.
+      status: "not_started"
+      complexity: "medium"
+      estimated_hours: 2
+      depends_on: ["5.1"]
+      branch: "feature/static-visualization-webapp/5.2-first-chart-dashboard"
+      commit_message: "feat(frontend): add price-time-series renderer and dashboard with vendored plotly"
+      acceptance_criteria:
+        - "RED: test_price_time_series_renderer_returns_plotly_figure fails first (fixture block)"
+        - "RED: test_dashboard_mounts_each_renderer_into_container fails first (fake DataSource)"
+        - "GREEN: priceTimeSeriesRenderer exposes id, title, render(block) and returns a valid Plotly figure"
+        - "GREEN: Dashboard wires DataSource + [priceTimeSeriesRenderer], mounts the figure, holds no transform/fetch logic"
+        - "GREEN: window.CONFIG.DATA_URL drives where DataSource fetches (no hard-coded URL)"
+        - "GREEN: Plotly loaded from same-origin frontend/vendor/plotly.min.js (pinned version recorded), no CDN reference"
+        - "GREEN: local 'python -m http.server' + fixture latest.json renders the chart (manual smoke noted)"
+        - "REFACTOR: renderer contract documented so a new chart is a new module only; suite green"
+        - "Vitest coverage >= 80% on the renderer + dashboard"
+      allowed_files:
+        - "frontend/index.html"
+        - "frontend/styles.css"
+        - "frontend/app.js"
+        - "frontend/src/dashboard.js"
+        - "frontend/src/charts/price_time_series.js"
+        - "frontend/vendor/plotly.min.js"
+        - "frontend/tests/price_time_series.test.js"
+        - "frontend/tests/dashboard.test.js"
+        - "frontend/package.json"
+      forbidden_files:
+        - "infrastructure/**"
+        - "src/etl/**"
+        - "frontend/src/data_source.js"
+        - "frontend/src/transforms.js"
+      can_run_parallel_with: ["5.3", "5.4"]
+      reversible: true
+      files_to_create:
+        - "frontend/index.html"
+        - "frontend/styles.css"
+        - "frontend/app.js"
+        - "frontend/src/dashboard.js"
+        - "frontend/src/charts/price_time_series.js"
+        - "frontend/vendor/plotly.min.js"
+        - "frontend/tests/price_time_series.test.js"
+        - "frontend/tests/dashboard.test.js"
+      files_to_modify:
+        - "frontend/package.json"
+
+    - id: "5.3"
+      title: "Shared DNS stack: existing zone + wildcard ACM cert (us-east-1)"
+      description: >-
+        Create a standalone Terraform stack infrastructure/shared/dns with its OWN state
+        key vlc-state/shared/dns/terraform.tfstate in the existing state bucket (review
+        H1). providers.tf declares the default eu-central-1 provider PLUS an aws.us_east_1
+        alias (CloudFront requirement, review M1). main.tf references the EXISTING hosted
+        zone via data "aws_route53_zone" (name = leopoldwalther.com - never created here),
+        issues a *.leopoldwalther.com wildcard aws_acm_certificate on aws.us_east_1 with
+        SANs incl. the apex, writes the DNS validation records into that zone, and waits
+        via aws_acm_certificate_validation on aws.us_east_1. outputs.tf exports zone_id and
+        certificate_arn for downstream stacks. Apply ONCE before the frontend stack.
+      status: "not_started"
+      complexity: "medium"
+      estimated_hours: 1.5
+      depends_on: []
+      branch: "feature/static-visualization-webapp/5.3-shared-dns-stack"
+      commit_message: "feat(terraform): add shared dns stack with wildcard acm cert in us-east-1"
+      acceptance_criteria:
+        - "RED: terraform validate fails while the shared/dns stack is incomplete"
+        - "GREEN: terraform validate passes for infrastructure/shared/dns"
+        - "GREEN: backend.tf uses key vlc-state/shared/dns/terraform.tfstate in vlc-real-estate-analytics-tf-state (eu-central-1, encrypt, use_lockfile)"
+        - "GREEN: providers.tf declares aws (eu-central-1) + aws.us_east_1 (us-east-1) alias"
+        - "GREEN: hosted zone referenced via data aws_route53_zone name=leopoldwalther.com (no aws_route53_zone resource created)"
+        - "GREEN: aws_acm_certificate is *.leopoldwalther.com (DNS validation, SAN leopoldwalther.com) on provider aws.us_east_1"
+        - "GREEN: aws_acm_certificate_validation on aws.us_east_1 waits on the validation records"
+        - "GREEN: outputs expose zone_id and certificate_arn"
+        - "terraform fmt clean; required_version and aws provider constraints match the repo (>=1.2,<2.0 / >=5.0,<6.0)"
+      allowed_files:
+        - "infrastructure/shared/dns/backend.tf"
+        - "infrastructure/shared/dns/providers.tf"
+        - "infrastructure/shared/dns/main.tf"
+        - "infrastructure/shared/dns/variables.tf"
+        - "infrastructure/shared/dns/outputs.tf"
+      forbidden_files:
+        - "infrastructure/environments/**"
+        - "infrastructure/modules/**"
+        - "frontend/**"
+        - "src/etl/**"
+      can_run_parallel_with: ["5.1", "5.2"]
+      reversible: true
+      files_to_create:
+        - "infrastructure/shared/dns/backend.tf"
+        - "infrastructure/shared/dns/providers.tf"
+        - "infrastructure/shared/dns/main.tf"
+        - "infrastructure/shared/dns/variables.tf"
+        - "infrastructure/shared/dns/outputs.tf"
+      files_to_modify: []
+
+    - id: "5.4"
+      title: "Frontend Terraform module: private S3 + CloudFront + OAC + data origin"
+      description: >-
+        Create the reusable module infrastructure/modules/frontend. A private S3 asset
+        bucket with Block Public Access fully on. A CloudFront distribution with Origin
+        Access Control (OAC, not legacy OAI) to the asset bucket as the default origin, and
+        a SECOND origin/behaviour for gold/aggregations/*.json from the existing listings
+        bucket so the app and its data are same-origin (no CORS). Cache policies: long TTL
+        for static assets, short TTL (~1h) for latest.json. Accept the ACM certificate_arn
+        and the aliases ([vlc-report.leopoldwalther.com]) as variables (wired in 5.5).
+        CloudFront custom error responses map 403/404 to index.html (review L1). Outputs:
+        asset_bucket_name, distribution_id, distribution_domain_name. terraform validate
+        only - no apply here.
+      status: "not_started"
+      complexity: "medium"
+      estimated_hours: 2
+      depends_on: []
+      branch: "feature/static-visualization-webapp/5.4-frontend-module"
+      commit_message: "feat(terraform): add frontend module with private s3, cloudfront oac and data origin"
+      acceptance_criteria:
+        - "RED: terraform validate fails while the module is incomplete"
+        - "GREEN: terraform validate passes for infrastructure/modules/frontend"
+        - "GREEN: asset S3 bucket is private with all four Block Public Access flags true"
+        - "GREEN: CloudFront uses Origin Access Control (aws_cloudfront_origin_access_control), NOT OAI"
+        - "GREEN: bucket policy grants read to the distribution via OAC only (no public access)"
+        - "GREEN: second origin/behaviour serves gold/aggregations/*.json from the listings bucket (same-origin)"
+        - "GREEN: cache policy long-TTL for assets, short-TTL (~3600s) for latest.json path"
+        - "GREEN: acm certificate_arn + aliases accepted as variables; viewer cert uses TLSv1.2_2021 + sni-only"
+        - "GREEN: custom error responses map 403/404 -> /index.html (200)"
+        - "GREEN: outputs expose asset_bucket_name, distribution_id, distribution_domain_name"
+        - "terraform fmt clean"
+      allowed_files:
+        - "infrastructure/modules/frontend/main.tf"
+        - "infrastructure/modules/frontend/variables.tf"
+        - "infrastructure/modules/frontend/outputs.tf"
+      forbidden_files:
+        - "infrastructure/modules/lambda_bronze/**"
+        - "infrastructure/modules/lambda_silver/**"
+        - "infrastructure/modules/lambda_gold/**"
+        - "infrastructure/shared/**"
+        - "frontend/**"
+        - "src/etl/**"
+      can_run_parallel_with: ["5.1", "5.2"]
+      reversible: true
+      files_to_create:
+        - "infrastructure/modules/frontend/main.tf"
+        - "infrastructure/modules/frontend/variables.tf"
+        - "infrastructure/modules/frontend/outputs.tf"
+      files_to_modify: []
+
+    - id: "5.5"
+      title: "Wire frontend in dev: consume shared DNS, alias records, outputs"
+      description: >-
+        Instantiate module.frontend in infrastructure/environments/dev/main.tf. Read the
+        shared DNS outputs via data "terraform_remote_state" (backend s3, key
+        vlc-state/shared/dns/terraform.tfstate) and pass certificate_arn + the
+        vlc-report.leopoldwalther.com alias into the module. Create Route 53 alias A/AAAA
+        records for vlc-report.leopoldwalther.com pointing at the CloudFront distribution in
+        the existing zone (zone_id from remote state). Expose dev outputs: the CloudFront
+        distribution URL AND the custom-domain URL. Do NOT wire prod (deferred to
+        FEATURE-006, mirroring silver/gold). terraform validate + plan green.
+      status: "not_started"
+      complexity: "medium"
+      estimated_hours: 1.5
+      depends_on: ["5.3", "5.4"]
+      branch: "feature/static-visualization-webapp/5.5-wire-dev"
+      commit_message: "feat(terraform): wire frontend module in dev consuming shared dns remote state"
+      acceptance_criteria:
+        - "RED: terraform plan in dev shows the frontend resources missing before wiring"
+        - "GREEN: data terraform_remote_state.dns reads vlc-state/shared/dns/terraform.tfstate"
+        - "GREEN: module.frontend instantiated in dev/main.tf with certificate_arn + alias from remote state"
+        - "GREEN: aws_route53_record alias A (+AAAA) for vlc-report.leopoldwalther.com -> CloudFront, in the existing zone_id"
+        - "GREEN: dev outputs expose cloudfront_url and custom_domain_url"
+        - "GREEN: prod NOT wired (deferred to FEATURE-006)"
+        - "GREEN: terraform validate + plan green in dev"
+        - "terraform fmt clean; pre-commit hooks pass"
+      allowed_files:
+        - "infrastructure/environments/dev/main.tf"
+        - "infrastructure/environments/dev/variables.tf"
+        - "infrastructure/environments/dev/outputs.tf"
+      forbidden_files:
+        - "infrastructure/environments/prod/**"
+        - "infrastructure/modules/frontend/**"
+        - "infrastructure/shared/**"
+        - "frontend/**"
+        - "src/etl/**"
+      can_run_parallel_with: []
+      reversible: true
+      files_to_create: []
+      files_to_modify:
+        - "infrastructure/environments/dev/main.tf"
+        - "infrastructure/environments/dev/variables.tf"
+        - "infrastructure/environments/dev/outputs.tf"
+
+    - id: "5.6"
+      title: "Deploy workflow: s3 sync + CloudFront invalidation"
+      description: >-
+        Add .github/workflows/deploy-frontend.yml (workflow_dispatch with a dev/prod input,
+        mirroring deploy-lambda.yml). Steps: configure AWS credentials, aws s3 sync
+        frontend/ to the asset bucket (excluding tests/node_modules), then aws cloudfront
+        create-invalidation for the distribution. The asset bucket name and distribution id
+        come from the environment / Terraform outputs. Short Cache-Control on the synced
+        config so latest.json stays fresh.
+      status: "not_started"
+      complexity: "low"
+      estimated_hours: 1
+      depends_on: ["5.4", "5.5"]
+      branch: "feature/static-visualization-webapp/5.6-deploy-workflow"
+      commit_message: "ci(frontend): add deploy-frontend workflow with s3 sync and cloudfront invalidation"
+      acceptance_criteria:
+        - "GREEN: deploy-frontend.yml triggers on workflow_dispatch with a dev/prod environment input"
+        - "GREEN: workflow syncs frontend/ to the asset bucket, excluding tests/node_modules"
+        - "GREEN: workflow runs aws cloudfront create-invalidation for the distribution after sync"
+        - "GREEN: structure/credentials mirror deploy-lambda.yml (no hard-coded secrets)"
+        - "GREEN: actionlint / yaml check passes; pre-commit check-yaml passes"
+      allowed_files:
+        - ".github/workflows/deploy-frontend.yml"
+      forbidden_files:
+        - "infrastructure/**"
+        - "frontend/src/**"
+        - "src/etl/**"
+      can_run_parallel_with: ["5.7"]
+      reversible: true
+      files_to_create:
+        - ".github/workflows/deploy-frontend.yml"
+      files_to_modify: []
+
+    - id: "5.7"
+      title: "Remaining charts: one new ChartRenderer per chart (+ population toggle)"
+      description: >-
+        Add the remaining charts, each as a NEW renderer module honouring the same
+        ChartRenderer contract - the dashboard and data layer stay untouched (Open/Closed,
+        proving success criterion 3). Renderers: rent_vs_sale_ratio scatter
+        (mean_priceByArea_sale vs _rent per neighbourhood; general + relevant),
+        rent_vs_sale_ratio_time_series line (general + relevant), boxplot_by_neighborhood
+        (5-number summary -> Plotly box; general + relevant), price_time_series_district
+        (count-weighted district line). Add a population toggle (general <-> relevant) where
+        both blocks exist. Each renderer + its transform is Vitest RED->GREEN against the
+        in-memory fake and schema-v1.0 fixtures.
+      status: "not_started"
+      complexity: "high"
+      estimated_hours: 3
+      depends_on: ["5.2"]
+      branch: "feature/static-visualization-webapp/5.7-remaining-charts"
+      commit_message: "feat(frontend): add ratio, ratio-timeseries, boxplot and district renderers with toggle"
+      acceptance_criteria:
+        - "RED: a failing Vitest test precedes each new renderer/transform"
+        - "GREEN: rent_vs_sale_ratio scatter renders from general + relevant blocks"
+        - "GREEN: rent_vs_sale_ratio_time_series line renders per snapshot_date (general + relevant)"
+        - "GREEN: boxplot_by_neighborhood builds a Plotly box from the 5-number summary (general + relevant)"
+        - "GREEN: price_time_series_district line uses the count-weighted district series"
+        - "GREEN: population toggle switches general <-> relevant only where both blocks exist; absent block hides the toggle, no throw"
+        - "GREEN: each renderer is added to the Dashboard list WITHOUT editing dashboard.js or existing renderers (Open/Closed verified)"
+        - "REFACTOR: shared trace-building helpers stay pure; suite green"
+        - "Vitest coverage >= 80% across all renderers/transforms"
+      allowed_files:
+        - "frontend/src/charts/rent_vs_sale_ratio.js"
+        - "frontend/src/charts/rent_vs_sale_ratio_time_series.js"
+        - "frontend/src/charts/boxplot_by_neighborhood.js"
+        - "frontend/src/charts/price_time_series_district.js"
+        - "frontend/src/transforms.js"
+        - "frontend/app.js"
+        - "frontend/index.html"
+        - "frontend/tests/rent_vs_sale_ratio.test.js"
+        - "frontend/tests/rent_vs_sale_ratio_time_series.test.js"
+        - "frontend/tests/boxplot_by_neighborhood.test.js"
+        - "frontend/tests/price_time_series_district.test.js"
+      forbidden_files:
+        - "frontend/src/dashboard.js"
+        - "frontend/src/charts/price_time_series.js"
+        - "infrastructure/**"
+        - "src/etl/**"
+      can_run_parallel_with: ["5.6"]
+      reversible: true
+      files_to_create:
+        - "frontend/src/charts/rent_vs_sale_ratio.js"
+        - "frontend/src/charts/rent_vs_sale_ratio_time_series.js"
+        - "frontend/src/charts/boxplot_by_neighborhood.js"
+        - "frontend/src/charts/price_time_series_district.js"
+        - "frontend/tests/rent_vs_sale_ratio.test.js"
+        - "frontend/tests/rent_vs_sale_ratio_time_series.test.js"
+        - "frontend/tests/boxplot_by_neighborhood.test.js"
+        - "frontend/tests/price_time_series_district.test.js"
+      files_to_modify:
+        - "frontend/src/transforms.js"
+        - "frontend/app.js"
+        - "frontend/index.html"
+
+    - id: "5.8"
+      title: "JS test workflow, docs, README, final coverage check"
+      description: >-
+        Add .github/workflows/node-test.yml (push/PR) running Vitest with coverage, and a
+        pre-commit hook for the frontend (review M2) - JS testing lives here, NOT in the
+        workflow validator's tracked gate set. Write documentation/FRONTEND_LAYER.md
+        (architecture, the ChartRenderer/DataSource design, the shared/dns stack + apply
+        order, deploy steps). Update README Source Code Layout + the medallion diagram to
+        include the frontend. Confirm Vitest coverage >= 80% across new JS.
+      status: "not_started"
+      complexity: "low"
+      estimated_hours: 1.5
+      depends_on: ["5.5", "5.6", "5.7"]
+      branch: "feature/static-visualization-webapp/5.8-tests-docs"
+      commit_message: "docs(frontend): add node-test workflow, FRONTEND_LAYER docs and readme updates"
+      acceptance_criteria:
+        - "GREEN: node-test.yml runs Vitest with coverage on push/PR"
+        - "GREEN: pre-commit hook runs the frontend tests/lint for frontend changes"
+        - "GREEN: Vitest coverage >= 80% across all new JS (reported in CI)"
+        - "GREEN: documentation/FRONTEND_LAYER.md covers architecture, ChartRenderer/DataSource, shared/dns apply order, deploy"
+        - "GREEN: README Source Code Layout + medallion diagram include the frontend layer"
+        - "GREEN: workflow-consistency validator passes; pre-commit check-yaml/check-json pass"
+      allowed_files:
+        - ".github/workflows/node-test.yml"
+        - ".pre-commit-config.yaml"
+        - "documentation/FRONTEND_LAYER.md"
+        - "README.md"
+        - "frontend/package.json"
+      forbidden_files:
+        - "infrastructure/**"
+        - "src/etl/**"
+        - "frontend/src/**"
+      can_run_parallel_with: []
+      reversible: true
+      files_to_create:
+        - ".github/workflows/node-test.yml"
+        - "documentation/FRONTEND_LAYER.md"
+      files_to_modify:
+        - ".pre-commit-config.yaml"
+        - "README.md"
+        - "frontend/package.json"
+
+  git_workflow:
+    branch_root: "feature/static-visualization-webapp"
+    branch_per_task: true
+    pr_per_task: true
+    merge_strategy: "user merges each PR on GitHub after CI is green"
+    apply_order:
+      - "Apply infrastructure/shared/dns ONCE (creates the wildcard cert) before the dev frontend stack"
+      - "Then terraform apply in infrastructure/environments/dev (consumes the shared DNS remote state)"
+      - "Then run the deploy-frontend workflow to sync assets + invalidate"
+
+  summary:
+    total_tasks: 8
+    estimated_total_hours: 14
+    critical_path: ["5.1", "5.2", "5.4", "5.5", "5.6", "5.8"]
+    parallelizable_tasks: 4
+    notes:
+      - "Frontend JS (5.1 -> 5.2) and infra (5.3, 5.4) run in parallel; 5.5 joins them."
+      - "H1 from the review is enforced: DNS + ACM live in infrastructure/shared/dns with its own state key; the frontend consumes it via terraform_remote_state."
+      - "M1 enforced: ACM cert + validation pinned to the aws.us_east_1 alias."
+      - "M2 enforced: Vitest runs in node-test.yml + pre-commit (task 5.8), NOT in the validator's required_checks (only terraform-validate + workflow-consistency are tracked)."
+      - "M3 enforced: Plotly.js vendored same-origin, no CDN."
+      - "prod wiring intentionally deferred to FEATURE-006, mirroring the silver/gold rollout."
