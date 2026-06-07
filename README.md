@@ -10,7 +10,8 @@ This project collects, cleans, and stores real estate listing data from the Idea
 
 - **Automated Data Collection** — Weekly Bronze Collector Lambda, Sundays 12:00 UTC
 - **Automated Data Cleaning** — Weekly Silver Cleaner Lambda, Sundays 12:30 UTC (30 min after collector)
-- **Medallion Architecture** — Bronze (raw JSON) → Silver (cleaned Parquet) → Gold (aggregations, future)
+- **Automated Aggregations** — Weekly Gold Aggregator Lambda, Sundays 12:45 UTC (writes dashboard-ready JSON)
+- **Medallion Architecture** — Bronze (raw JSON) → Silver (cleaned Parquet) → Gold (aggregations JSON)
 - **Real Estate Listings** — Sale and rental property data from Idealista API v3.5
 - **Historical Time-Series** — Append-only S3 storage for long-term market trend analysis
 - **Multi-Environment** — Separate `dev` and `prod` environments; dev runs in `test_mode` (1 page/op)
@@ -78,6 +79,25 @@ This project collects, cleans, and stores real estate listing data from the Idea
 │  silver/idealista│
 └────────┬─────────┘
          │
+         │  (15 min later)
+         ▼
+┌──────────────────┐
+│   EventBridge    │  cron(45 12 ? * SUN *)
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Gold Aggregator │  Reads full silver history, scopes to 3 districts,
+│  Python 3.12     │  computes two-population aggregations (general +
+│  512 MB / 300 s  │  relevant), writes frozen schema v1.0 JSON
+└────────┬─────────┘
+         │  PutObject  gold/aggregations/latest.json
+         ▼
+┌──────────────────┐
+│  S3 Gold Layer   │
+│  gold/aggregations│
+└────────┬─────────┘
+         │
          ▼
 ┌──────────────────┐
 │  Jupyter         │  valenciaRealEstatePriceAnalysis.ipynb
@@ -91,6 +111,7 @@ This project collects, cleans, and stores real estate listing data from the Idea
 |---|---|---|---|
 | Bronze | `bronze/idealista/{op}_{YYYYMMDD}_{HHMMSS}_{page}.json` | Raw JSON (Idealista API response) | Bronze Collector |
 | Silver | `silver/idealista/operation={op}/snapshot_date=YYYY-MM-DD/part.parquet` | Parquet (Hive-partitioned) | Silver Cleaner |
+| Gold | `gold/aggregations/latest.json` | JSON (schema v1.0, full time-series aggregations) | Gold Aggregator |
 
 ### Silver Cleaning Rules
 
@@ -111,6 +132,7 @@ infrastructure/
 ├── modules/
 │   ├── lambda_bronze/      # Bronze Collector: Lambda, IAM, EventBridge, CloudWatch
 │   ├── lambda_silver/      # Silver Cleaner: Lambda, IAM, EventBridge, CW Alarm
+│   ├── lambda_gold/        # Gold Aggregator: Lambda, IAM, EventBridge, CW Alarm
 │   ├── s3/                 # S3 listings bucket (AES-256 encryption)
 │   ├── secrets/            # Secrets Manager secrets for API credentials
 │   └── sns/                # SNS topic for error alerting
@@ -131,6 +153,9 @@ src/
 │   ├── data_processing/
 │   │   ├── silver_transform.py              # Pure Bronze→Silver transform (no AWS)
 │   │   ├── silver_cleaning_lambda.py        # Silver Lambda handler
+│   │   ├── gold_aggregate.py                # Pure Silver→Gold aggregations (no AWS)
+│   │   ├── gold_aggregation_lambda.py       # Gold Lambda handler
+│   │   ├── backfill_silver.py               # CLI: fan-out silver lambda per snapshot_date
 │   │   ├── requirements.txt                 # Runtime: boto3 (pandas via layer)
 │   │   └── tests/                           # pytest unit + integration
 │   ├── lambda_layers/                       # requests library as Lambda Layer

@@ -237,7 +237,7 @@ technical_plan:
         Write documentation/DATA_GOLD_LAYER.md (architecture, aggregations, JSON
         contract v1.0 for FEATURE-005, terraform module, design decisions). Update
         README medallion diagram + S3 layout to include the gold layer and latest.json.
-      status: "planned"
+      status: "done"
       complexity: "low"
       estimated_hours: 2
       depends_on: ["4.3"]
