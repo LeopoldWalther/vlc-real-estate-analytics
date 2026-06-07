@@ -1,0 +1,97 @@
+name: Deploy Frontend
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+
+jobs:
+  deploy:
+    name: Deploy frontend to ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-central-1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies and run tests
+        working-directory: frontend
+        run: |
+          npm ci
+          npm test
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.3
+          terraform_wrapper: false
+
+      - name: Create secrets.tfvars
+        run: |
+          cat > infrastructure/environments/${{ github.event.inputs.environment }}/secrets.tfvars << EOF
+          idealista_api_key_lvw    = "${{ secrets.LVW_API_KEY }}"
+          idealista_api_secret_lvw = "${{ secrets.LVW_API_SECRET }}"
+          idealista_api_key_pmv    = "${{ secrets.PMV_API_KEY }}"
+          idealista_api_secret_pmv = "${{ secrets.PMV_API_SECRET }}"
+          EOF
+
+      - name: Terraform Init
+        working-directory: infrastructure/environments/${{ github.event.inputs.environment }}
+        run: terraform init
+
+      - name: Read Terraform outputs
+        id: tf_outputs
+        working-directory: infrastructure/environments/${{ github.event.inputs.environment }}
+        run: |
+          ASSET_BUCKET=$(terraform output -raw frontend_asset_bucket_name)
+          DISTRIBUTION_ID=$(terraform output -raw frontend_distribution_id)
+          echo "asset_bucket=${ASSET_BUCKET}" >> "$GITHUB_OUTPUT"
+          echo "distribution_id=${DISTRIBUTION_ID}" >> "$GITHUB_OUTPUT"
+
+      # Sync all frontend assets, excluding test files and Node modules.
+      # --delete removes files that were removed from the repo.
+      # --cache-control sets a short max-age on latest.json so it refreshes
+      # quickly; all other assets carry the CloudFront long-TTL cache policy.
+      - name: Sync frontend assets to S3
+        run: |
+          aws s3 sync frontend/ s3://${{ steps.tf_outputs.outputs.asset_bucket }}/ \
+            --exclude "tests/*" \
+            --exclude "node_modules/*" \
+            --exclude "coverage/*" \
+            --exclude "*.test.js" \
+            --delete
+
+      # CRITICAL: invalidate after every deploy so CloudFront serves the new
+      # assets immediately rather than waiting for the long-TTL to expire.
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ steps.tf_outputs.outputs.distribution_id }} \
+            --paths "/*"
+
+      - name: Print deployed URLs
+        working-directory: infrastructure/environments/${{ github.event.inputs.environment }}
+        run: |
+          echo "CloudFront URL : $(terraform output -raw cloudfront_url)"
+          echo "Custom domain  : $(terraform output -raw custom_domain_url)"
