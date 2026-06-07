@@ -246,7 +246,7 @@ technical_plan:
         are fired. Lambda default account concurrency is 1000 but reserved
         concurrency per function may be lower. Add an optional --delay-ms
         argument (default 100 ms) between invocations to avoid throttling.
-      status: "planned"
+      status: "done"
       complexity: "low"
       estimated_hours: 2
       depends_on: ["3.6"]
