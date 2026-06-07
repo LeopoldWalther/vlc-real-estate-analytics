@@ -1,179 +1,183 @@
-# FEATURE-005: Static Visualization Web App (S3 + CloudFront)
+# FEATURE-005 — Static Visualization Web App (S3 + CloudFront)
 
-**Status:** 🔵 Planned
-**Branch:** `feature/static-visualization-webapp`
-**Assignee:** Unassigned
-**Created:** 2026-06-03
-**Updated:** 2026-06-05
-**Estimated Effort:** M (1–1.5 days)
-**Priority:** Medium
+**Status:** 🔵 Planned · **Effort:** M (~1.5–2 d) · **Priority:** Medium
+**Branch root:** `feature/static-visualization-webapp` · **Created:** 2026-06-03 · **Updated:** 2026-06-07
 
-> **Renumbered 2026-06-05.** Was FEATURE-004; became FEATURE-005 after inserting the Gold Aggregation Lambda as the new FEATURE-004. Data source is now `gold/aggregations/latest.json` (produced by FEATURE-004), not a silver aggregation.
+> Authored by `@architect`. Reviewed by `@reviewer` (see `dev/reviews/REVIEW-FEATURE-005.md`).
+> Implemented by `@implementer` from `dev/plans/technical/FEATURE-005-technical-plan.yaml`.
+>
+> **Renumbered 2026-06-05.** Was FEATURE-004; became FEATURE-005 after the Gold Aggregation Lambda
+> was inserted as FEATURE-004. The data source is `gold/aggregations/latest.json` (schema v1.0,
+> frozen by FEATURE-004), not a silver aggregation.
 
 ## Objective
-Ship a tiny static web app (HTML + Plotly.js) hosted on S3 + CloudFront that visualizes the **gold-layer** Idealista aggregations, replacing the EC2/EKS Flask prototype.
+
+Ship a tiny, server-less static web app (plain HTML + Plotly.js) on S3 + CloudFront that visualises
+the gold-layer Idealista aggregations. The MVP renders **one** chart end-to-end (price/m² time
+series per neighbourhood); the remaining charts are added iteratively, each as an interchangeable
+renderer behind a stable interface.
 
 ## Context
-The former Flask prototype (`app.py` + `vlcrealestate/`, since removed from the repo) demonstrated the target visualization. For cost reasons we don't want to run servers (EC2/EKS/App Runner). With small data and weekly updates, a static frontend fetching one pre-aggregated JSON (produced by FEATURE-004 Gold) is the cheapest, most secure setup.
+
+A former Flask prototype (`app.py` + `vlcrealestate/`, since removed) demonstrated the target
+charts on a server. Running servers (EC2/EKS/App Runner) is unjustified for a weekly-updated, tiny
+dataset. FEATURE-004 already produces a single pre-aggregated `gold/aggregations/latest.json`
+(schema v1.0). A static frontend that fetches that one JSON via CloudFront is the cheapest, most
+secure, and lowest-maintenance setup. This feature replaces the prototype with that static app and
+gives it a custom domain.
 
 ## Dependencies
-**Requires:**
-- FEATURE-004 (Gold Aggregation Lambda) — produces `gold/aggregations/latest.json`
 
-**Blocks:** —
+- **Needs:** FEATURE-004 (Gold Aggregation Lambda) — produces `gold/aggregations/latest.json`, the
+  sole data source. The schema v1.0 contract is frozen in
+  [FEATURE-004-technical-plan.yaml](technical/FEATURE-004-technical-plan.yaml) (`json_contract`).
+- **Unblocks:** —
+- **Coordinates with:** FEATURE-006 (prod promotion) — the frontend is wired in `dev` first, then
+  promoted to `prod` alongside silver/gold, mirroring the established rollout.
 
-**Related:**
-- Former prototype template `vlcrealestate/templates/index.html` (since removed)
+## Design & patterns
 
-## Implementation Plan
+The frontend is small but deliberately structured so charts plug in without touching the data layer
+or each other. Even in plain JS (ESM modules, no framework) the OOP/SOLID intent is explicit.
 
-### Phase 1: Static frontend
-- [ ] Create `frontend/` with:
-  - `index.html` — minimal layout, title, container divs (one per chart)
-  - `app.js` — fetch `gold/aggregations/latest.json` via CloudFront, render Plotly charts
-  - `styles.css`
-- [ ] Chart 1: mean priceByArea over time per neighborhood (Linien-Chart wie Prototyp; sale + rent)
-- [ ] Chart 2: rent-vs-sale ratio per neighborhood (Scatter/Bar mean_priceByArea_sale vs _rent)
-- [ ] Chart 3: listing counts over time per neighborhood (sale/rent)
-- [ ] Konfigurierbare Daten-URL über `window.CONFIG.DATA_URL`
+- **Strategy + Open/Closed — `ChartRenderer`.** Each chart is a renderer object exposing a common
+  shape (`id`, `title`, `render(populationBlock) -> PlotlyFigure`). Adding the rent-vs-sale scatter,
+  the ratio time series, or the boxplots later means **adding a renderer module**, never editing the
+  dashboard or existing charts. The MVP ships one renderer; the rest follow the same contract.
+- **Adapter + Dependency Inversion — `DataSource`.** A thin adapter wraps `fetch()` and returns the
+  parsed schema-v1.0 object. The `Dashboard` depends on the `DataSource` interface, not on `fetch`
+  directly, so tests inject an in-memory fake that returns a fixture — no network in unit tests.
+- **Single Responsibility — `Dashboard` orchestrator.** One object wires the `DataSource` and the
+  list of `ChartRenderer`s, mounts each into its container, and owns nothing else (no transform
+  logic, no fetch logic).
+- **Pure transforms stay pure.** `formatSeries(block)` and friends are small, stateless functions
+  the renderers call — unit-tested in isolation with Vitest. No class wrapping where a function does.
+- **Schema-version guard.** The `DataSource` checks `schema_version` and fails loudly on a mismatch,
+  so a future gold-schema bump cannot silently render a broken dashboard.
 
-### Phase 2: Hosting infrastructure (Terraform)
+> **No over-engineering.** No framework, no bundler, no state-management library. The interfaces
+> above are the minimum needed to add charts safely; anything heavier is rejected.
+
+## Approach
+
+MVP-first: deliver one chart through the whole stack (frontend → infra → custom domain → deploy),
+then iterate. Every task is a TDD slice: a failing Vitest/Terraform check first, minimal code to
+pass, then cleanup.
+
+### Phase 1 — Frontend skeleton + first chart (MVP)
+- [ ] `frontend/` scaffold: `index.html` (title + one chart container + `window.CONFIG.DATA_URL`),
+  `styles.css`, ESM entry `app.js`.
+- [ ] `src/data_source.js` — `DataSource` adapter over `fetch`, with `schema_version` guard and an
+  in-memory fake for tests. *(Adapter, DI.)*
+- [ ] `src/transforms.js` — pure `formatSeries(block)` → one Plotly trace per `(operation,
+  neighbourhood)` from `general.price_time_series_neighborhood`. *(Pure function, Vitest RED→GREEN.)*
+- [ ] `src/charts/price_time_series.js` — first `ChartRenderer` (price/m² over time per
+  neighbourhood, sale + rent). *(Strategy.)*
+- [ ] `src/dashboard.js` — `Dashboard` wires `DataSource` + `[priceTimeSeriesRenderer]` and mounts
+  it. *(SRP.)*
+
+### Phase 2 — Hosting infrastructure (Terraform)
 - [ ] New module `infrastructure/modules/frontend/`:
-  - Private S3 bucket for frontend assets
-  - CloudFront distribution with **Origin Access Control (OAC)**
-  - CloudFront origin/behavior für `gold/aggregations/*.json` aus dem Gold-Bucket/Prefix (zweiter Origin)
-- [ ] S3 Block Public Access für beide Buckets aktiv
-- [ ] Optional eigene Domain + ACM-Zertifikat (Phase 2 nice-to-have)
+  - Private S3 bucket for frontend assets; **S3 Block Public Access** on.
+  - CloudFront distribution with **Origin Access Control (OAC)** to the asset bucket.
+  - Second CloudFront origin/behaviour for `gold/aggregations/*.json` from the listings bucket, so
+    the frontend and its data are same-origin (no CORS).
+  - Cache policies: long TTL for static assets, short TTL (e.g. 1 h) for `latest.json`.
 
-### Phase 3: Deployment
-- [ ] GitHub Actions Workflow `.github/workflows/deploy-frontend.yml`
-  - Build (statisch, kein Bundler nötig)
-  - `aws s3 sync frontend/ s3://<frontend-bucket>/`
-  - `aws cloudfront create-invalidation`
-- [ ] Output der CloudFront Distribution URL als Terraform Output
+### Phase 3 — Custom domain (ACM + Route 53)
+- [ ] ACM certificate in **us-east-1** (CloudFront requirement) via a `aws.us_east_1` provider alias.
+- [ ] Route 53 alias A/AAAA records pointing the chosen domain at the CloudFront distribution.
+- [ ] DNS validation records for the ACM certificate.
 
-### Phase 4: Tests & docs
-- [ ] Lightweight JS Unit Test (z. B. Vitest) für Datentransformation im Frontend
-- [ ] Manuelles E2E: latest.json wird gerendert, Filter funktionieren
-- [ ] `documentation/FRONTEND_LAYER.md` mit Architektur + Deploy-Schritten
+### Phase 4 — Deployment
+- [ ] `.github/workflows/deploy-frontend.yml` (`workflow_dispatch`, dev/prod input, mirrors
+  `deploy-lambda.yml`): `aws s3 sync frontend/ s3://<asset-bucket>/` then
+  `aws cloudfront create-invalidation`.
+- [ ] Terraform output: CloudFront distribution URL **and** the custom-domain URL.
 
-## TDD Strategy (Mandatory)
+### Phase 5 — Iteratively add the remaining charts (each a new renderer)
+- [ ] `rent_vs_sale_ratio` scatter (mean_priceByArea_sale vs _rent per neighbourhood) — `general` +
+  `relevant`.
+- [ ] `rent_vs_sale_ratio_time_series` line — `general` + `relevant`.
+- [ ] `boxplot_by_neighborhood` (5-number summary → Plotly box) — `general` + `relevant`.
+- [ ] `price_time_series_district` line (count-weighted district series).
+- [ ] A population toggle (general ↔ relevant) where both blocks exist.
 
-### RED
-- [ ] JS Test: `formatSeries(json)` schlägt fehl, weil Funktion fehlt
-- [ ] Terraform Plan Test: erwartete Ressourcen (S3, CF, OAC) fehlen
+### Phase 6 — Tests & docs
+- [ ] Vitest unit tests per transform + renderer using the in-memory `DataSource` fake.
+- [ ] Manual E2E: `latest.json` renders via CloudFront on the custom domain; charts interactive.
+- [ ] `documentation/FRONTEND_LAYER.md` — architecture, the `ChartRenderer`/`DataSource` design,
+  deploy steps. Update README Source Code Layout + medallion diagram to include the frontend.
 
-### GREEN
-- [ ] Implementiere `formatSeries` minimal
-- [ ] Minimaler Terraform-Modulcode bis `terraform validate` + Plan grün
+## Files
 
-### REFACTOR
-- [ ] Modularisieren, Konstanten extrahieren, Lint sauber
+- **Create:** `frontend/index.html`, `frontend/styles.css`, `frontend/app.js`,
+  `frontend/src/data_source.js`, `frontend/src/transforms.js`, `frontend/src/dashboard.js`,
+  `frontend/src/charts/price_time_series.js` (+ later renderer modules).
+- **Create:** `frontend/tests/transforms.test.js` (+ later per-renderer tests),
+  `frontend/package.json` (Vitest dev dependency only — no runtime bundler).
+- **Create:** `infrastructure/modules/frontend/{main.tf,variables.tf,outputs.tf}`.
+- **Create:** `.github/workflows/deploy-frontend.yml`, `documentation/FRONTEND_LAYER.md`.
+- **Change:** `infrastructure/environments/dev/main.tf` — instantiate the frontend module (dev
+  first; prod deferred to FEATURE-006).
+- **Change:** `README.md` — Source Code Layout + medallion diagram.
 
-## Files to Modify/Create
+## Test strategy
 
-### New
-- `frontend/index.html`
-- `frontend/app.js`
-- `frontend/styles.css`
-- `frontend/tests/format_series.test.js`
-- `infrastructure/modules/frontend/main.tf`
-- `infrastructure/modules/frontend/variables.tf`
-- `infrastructure/modules/frontend/outputs.tf`
-- `.github/workflows/deploy-frontend.yml`
-- `documentation/FRONTEND_LAYER.md`
+- **Unit (Vitest, >80% on new JS):** `formatSeries` produces one trace per neighbourhood; empty/
+  missing population block → empty render, no throw; `DataSource` rejects a wrong `schema_version`;
+  each renderer returns a valid Plotly figure from a fixture block.
+- **Integration:** `terraform validate` + `plan` show the expected S3 + CloudFront + OAC + ACM +
+  Route 53 resources; local `python -m http.server` loads a fixture `latest.json` and renders.
+- **Manual:** custom-domain page loads < 1 s (cached); charts interactive; Lighthouse performance +
+  best-practices pass.
 
-### Modified
-- `infrastructure/environments/dev/main.tf` — instantiate frontend module
-- `infrastructure/environments/prod/main.tf` — same
+## Estimated monthly cloud cost
 
-## Testing Requirements
+| Component | Pricing basis | Assumption | Est. / month |
+|---|---|---|---|
+| S3 (frontend assets) | ~$0.023/GB + requests | A few MB of static assets, low traffic | < $0.05 |
+| CloudFront | 1 TB/mo egress free tier, then ~$0.085/GB | Personal/portfolio traffic, well under free tier | < $0.10 |
+| Route 53 hosted zone | $0.50 per hosted zone/mo + query charges | One hosted zone, low query volume | ~$0.50 |
+| ACM certificate | Free for use with CloudFront | One public cert | $0.00 |
+| **Total (new AWS components)** | | | **~$0.65/month** |
 
-### Unit
-- [ ] `formatSeries` produziert pro Neighborhood eine Plotly-Trace
-- [ ] Leeres JSON → leere Anzeige, kein JS-Error
+- **Cost drivers & cheaper alternatives:** the Route 53 hosted zone ($0.50) dominates. Dropping the
+  custom domain and using the CloudFront default domain removes it entirely (→ < $0.15/mo). Custom
+  domain is a deliberate choice for the consulting showcase.
+- **External / non-AWS costs:** domain registration (if not already owned) is billed by the
+  registrar, typically ~$10–15/year, separate from AWS.
+- **Budget check:** well within the project's < $5/month target (combined with bronze/silver/gold).
 
-### Integration
-- [ ] Lokales `python -m http.server` lädt `latest.json` aus dev (via CloudFront)
-- [ ] CloudFront invalidiert nach Deploy korrekt
+## Success criteria
 
-### Manuell
-- [ ] Visuelle Prüfung der Chart-Darstellung
-- [ ] Lighthouse-Check (Performance + Best Practices)
+- [ ] MVP chart renders the gold data end-to-end on the custom-domain CloudFront URL.
+- [ ] S3 buckets are private; CloudFront reaches them only via OAC (no public bucket, no OAI legacy).
+- [ ] Adding a new chart requires only a new `ChartRenderer` module — dashboard and data layer
+  unchanged (verified by the Phase 5 additions).
+- [ ] `DataSource` rejects a mismatched `schema_version`.
+- [ ] Page load < 1 s (cached); deploy workflow green.
+- [ ] Vitest coverage ≥ 80% on new JS; pre-commit + CI gates pass.
+- [ ] Docs updated (`FRONTEND_LAYER.md` + README).
 
-## Success Criteria
-- [ ] App erreichbar über CloudFront URL
-- [ ] Buckets sind privat, nur via OAC erreichbar
-- [ ] Page Load < 1s (klein und gecached)
-- [ ] Deploy-Workflow grün
-- [ ] Coverage ≥ 80% für neuen JS-Code
+## Open questions & risks
 
-## Technical Notes
+- **Question (input needed):** the exact custom domain / subdomain (e.g. `vlc.example.com`) and
+  whether its Route 53 hosted zone already exists or must be created. *Implementer needs this before
+  Phase 3.*
+- **Risk:** ACM cert must live in **us-east-1** for CloudFront — easy to get wrong from an
+  eu-central-1 default provider. *Mitigation:* dedicated `aws.us_east_1` provider alias, asserted in
+  the technical plan.
+- **Risk:** stale assets after deploy. *Mitigation:* CloudFront invalidation step in the workflow;
+  separate short Cache-Control for `latest.json`.
+- **Risk:** gold schema drift breaks the frontend silently. *Mitigation:* `schema_version` guard in
+  `DataSource` fails loudly.
+- **Assumption:** `latest.json` stays small enough to ship whole (no pagination/API needed).
 
-### Architecture
-- Vollständig statisch, keine Server, keine API Gateway-Kosten
-- Datenquelle: vor-aggregiertes JSON aus FEATURE-004 Gold (via CloudFront)
-- Erweiterbar: später API Gateway + Query-Lambda bei dynamischen Filtern
+## Progress log
 
-### Performance
-- Caching primär via CloudFront (TTL z. B. 1h für JSON, 1d für statische Assets)
-
-### Security
-- S3 Block Public Access an
-- CloudFront → S3 ausschließlich über OAC
-- Keine Credentials im Frontend
-- CORS nicht nötig (alles same-origin via CloudFront)
-
-### Gotchas
-- CloudFront-Invalidierung nach Deploy nicht vergessen, sonst stale Assets
-- `latest.json` braucht passenden Cache-Control Header
-
-## Questions/Risks
-
-### Open Questions
-- [ ] Custom Domain gewünscht? (sonst CloudFront-Default Domain)
-- [ ] Mehrere Charts in MVP (Phase 1) oder erst nur 1?
-
-### Risks
-- **CloudFront-Konfig-Drift:** *Mitigation:* alles in TF, kein Click-Ops
-- **Schema-Änderungen in latest.json:** *Mitigation:* Versionierung im JSON (`schema_version`)
-
-### Assumptions
-- FEATURE-004 (Gold) stellt `gold/aggregations/latest.json` bereit
-- Daten klein genug für vollständige Auslieferung in einem JSON
-
-## Planning Summary (For Quick Reference)
-
-**One-line objective:**
-Ship a static S3+CloudFront frontend that visualizes pre-aggregated gold data, no servers, near-zero cost.
-
-**Critical decisions:**
-- Hosting: S3 + CloudFront mit OAC (kein EC2/EKS/App Runner)
-- Daten: vor-aggregiertes JSON via CloudFront, keine API
-- Stack: plain HTML + Plotly.js (kein Framework nötig im MVP)
-
-**Tasks at a glance:**
-| Task | Priority | Est. Hours | Dependencies |
-|------|----------|------------|--------------|
-| 5.1 Static frontend (HTML/JS, 3 charts) | P0 | 4h | FEATURE-004 |
-| 5.2 Terraform frontend module | P0 | 3h | None |
-| 5.3 Deploy workflow           | P0 | 2h | 5.1, 5.2 |
-| 5.4 Tests + docs              | P1 | 2h | 5.1–5.3 |
-
-**Key files to modify:**
-- `frontend/index.html`, `frontend/app.js`, `frontend/styles.css`
-- `infrastructure/modules/frontend/*.tf`
-- `infrastructure/environments/{dev,prod}/main.tf`
-- `.github/workflows/deploy-frontend.yml`
-
-**Watch-outs for reviewer:**
-- S3 wirklich privat (Block Public Access)
-- OAC korrekt konfiguriert, kein OAI-Legacy
-- Cache-Control für `latest.json` separat vom statischen Asset-Cache
-
-**Blockers or open questions:**
-- Custom Domain Ja/Nein
-- MVP-Chart-Umfang
-
-## Progress Log
-- 2026-06-03: Plan erstellt
+- **2026-06-03** — Plan created.
+- **2026-06-07** — Reworked to the current FEATURE template: added Design & patterns
+  (`ChartRenderer` Strategy, `DataSource` Adapter, `Dashboard` SRP), cloud-cost estimate, and the
+  agreed decisions — custom domain now (ACM us-east-1 + Route 53), MVP = one chart then iterate,
+  plain HTML + Plotly.js + ESM + Vitest. Unified to English.
