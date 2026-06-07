@@ -32,6 +32,10 @@ required by both `lambda_silver` and `lambda_gold` (they use the
 
 - **Needs:** FEATURE-003 — `infrastructure/modules/lambda_silver` must exist ✅ done
 - **Needs:** FEATURE-004 — `infrastructure/modules/lambda_gold` must exist (tasks 4.2–4.4 pending)
+- **Coordinates with:** FEATURE-007 — Step Functions orchestration. If 007 lands first, this feature
+  should promote the **state machine** (`pipeline_orchestrator`) into prod instead of (or in addition
+  to) the two Lambda modules, and must **not** re-introduce the independent per-Lambda EventBridge
+  schedules that 007 removes. See "Open questions & risks".
 - **Unblocks:** FEATURE-005 — visualization app reads gold aggregations written by prod pipeline
 
 ## Approach
@@ -73,6 +77,11 @@ FEATURE-004 task 4.4. Run `terraform validate`.
 
 ## Open questions & risks
 
+- **Coordination with FEATURE-007 (Step Functions):** 007 replaces the three independent EventBridge
+  schedules with a single state machine in dev. If 007 lands before this feature is applied to prod,
+  6.1/6.2 should be revised to wire the `pipeline_orchestrator` state machine into prod (passing the
+  prod Lambda + SNS ARNs) rather than promoting the Lambdas with their standalone crons. *Decision
+  needed:* sequence 007 → 006, or keep 006 as Lambda-only and add a 6.3 for the state machine.
 - **Assumption:** `pandas_layer_arn` default `arn:aws:lambda:eu-central-1:336392948345:layer:AWSSDKPandas-Python312:16` is still the latest stable version. Verify against https://aws-sdk-pandas.readthedocs.io/en/stable/layers.html before applying.
 - **Risk:** Running `terraform apply` on prod triggers live deployments. The implementer should plan a controlled apply window (e.g. after a successful dev soak period of ≥ 2 weeks). *Mitigation:* Keep task as plan-and-validate only; the actual `terraform apply` is a separate manual step outside this feature.
 - **Dependency:** Task 6.2 is blocked until FEATURE-004 task 4.4 lands and `infrastructure/modules/lambda_gold/` exists.

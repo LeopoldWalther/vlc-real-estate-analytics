@@ -13,6 +13,7 @@ small, version-controlled, independently testable tasks.
 | FEATURE-004 | Gold aggregation Lambda (silver → aggregations JSON) | 🟡 | `feature/gold-aggregation-lambda` | 1–1.5 d | High | Unassigned |
 | FEATURE-005 | Static visualization web app (S3 + CloudFront) | 🔵 | `feature/static-visualization-webapp` | 1–1.5 d | Medium | Unassigned |
 | FEATURE-006 | Prod promotion: wire silver + gold lambdas in prod | 🔵 | `feature/prod-promotion-silver-gold` | ~2 h | High | Unassigned |
+| FEATURE-007 | Step Functions orchestration (bronze → silver → gold) | 🔵 | `feature/step-functions-orchestration` | 12–16 h | Medium | Unassigned |
 
 **Status:** 🔵 planned · 🟡 in progress · 🟢 complete · 🔴 blocked
 
@@ -25,6 +26,9 @@ graph TD
     F004 --> F005[FEATURE-005 Visualization web app]
     F003 --> F006[FEATURE-006 Prod promotion]
     F004 --> F006
+    F003 --> F007[FEATURE-007 Step Functions orchestration]
+    F004 --> F007
+    F007 --> F006
 ```
 
 ## Workflow at a glance
