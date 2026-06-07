@@ -205,7 +205,7 @@ technical_plan:
         Replace it with two focused tests: test_second_run_skips_parquet_write
         (assert put_object not called on second run via mock) and
         test_handler_overwrites_when_forced (event={'force': true} bypasses guard).
-      status: "planned"
+      status: "done"
       complexity: "low"
       estimated_hours: 2
       depends_on: ["3.3"]

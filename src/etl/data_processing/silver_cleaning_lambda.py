@@ -64,21 +64,27 @@ def _list_snapshot_keys(
     s3_client: Any,
     bucket: str,
     bronze_prefix: str,
+    target_date: date | None = None,
 ) -> Dict[Tuple[str, date], List[str]]:
     """
     List all bronze object keys and group them by ``(operation, snapshot_date)``.
 
     The collector names files ``{operation}_{YYYYMMDD}_{HHMMSS}_{page}.json``
-    under ``{bronze_prefix}/``. This function discovers the **latest** snapshot
-    (the one with the most-recent date) for each operation and returns its keys.
+    under ``{bronze_prefix}/``. When *target_date* is given, this function
+    returns **all keys for that specific date** across every operation that has
+    data on that date. When *target_date* is ``None`` (the default), it returns
+    only the **latest** snapshot for each operation.
 
     Args:
+        s3_client: Boto3 S3 client.
         bucket: S3 bucket name.
         bronze_prefix: S3 prefix for bronze objects (e.g. ``"bronze/idealista"``).
+        target_date: When set, return keys for this exact snapshot date instead
+            of filtering to the latest per operation.
 
     Returns:
         Mapping of ``(operation, snapshot_date)`` → list of S3 object keys
-        belonging to the latest snapshot for that operation.
+        for the selected snapshot(s).
     """
     paginator = s3_client.get_paginator("list_objects_v2")
     all_keys: List[str] = []
@@ -98,7 +104,15 @@ def _list_snapshot_keys(
             continue
         groups.setdefault((operation, snapshot_date), []).append(key)
 
-    # Keep only the latest snapshot_date per operation.
+    if target_date is not None:
+        # Return all keys whose snapshot_date matches the requested date.
+        return {
+            (op, snap_date): keys
+            for (op, snap_date), keys in groups.items()
+            if snap_date == target_date
+        }
+
+    # Default: keep only the latest snapshot_date per operation.
     latest: Dict[str, date] = {}
     for operation, snap_date in groups:
         if operation not in latest or snap_date > latest[operation]:
@@ -125,6 +139,32 @@ def _read_elements(s3_client: Any, bucket: str, key: str) -> List[Dict[str, Any]
     obj = s3_client.get_object(Bucket=bucket, Key=key)
     payload: Dict[str, Any] = json.loads(obj["Body"].read())
     return payload.get("elementList", [])
+
+
+def _parquet_key_exists(s3_client: Any, bucket: str, key: str) -> bool:
+    """
+    Return ``True`` when *key* already exists in *bucket*, ``False`` otherwise.
+
+    Uses ``HeadObject`` so no data is downloaded.  A ``ClientError`` with code
+    ``"404"`` means the key is absent; any other error is re-raised.
+
+    Args:
+        s3_client: Boto3 S3 client.
+        bucket: S3 bucket name.
+        key: S3 object key to check.
+
+    Returns:
+        ``True`` if the key exists, ``False`` if it does not.
+    """
+    import botocore.exceptions
+
+    try:
+        s3_client.head_object(Bucket=bucket, Key=key)
+        return True
+    except botocore.exceptions.ClientError as exc:
+        if exc.response["Error"]["Code"] in ("404", "NoSuchKey"):
+            return False
+        raise
 
 
 def _write_parquet(
@@ -178,12 +218,24 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     AWS Lambda entry point for the silver cleaning step.
 
-    Reads environment variables, lists the latest bronze snapshot keys,
-    combines all pages per ``(operation, snapshot_date)``, calls
+    Reads environment variables, lists bronze snapshot keys for the target
+    date (or the latest snapshot when no date is specified), combines all
+    pages per ``(operation, snapshot_date)``, calls
     :func:`silver_transform.clean`, and writes cleaned Parquet to silver.
 
+    **Incremental guard:** before writing, the handler checks whether the
+    output Parquet key already exists in S3 (via ``HeadObject``). If it does,
+    the write is skipped and the result is logged. This prevents redundant
+    re-processing on weekly re-runs and makes the handler safe to call
+    multiple times for the same snapshot.
+
     Args:
-        event: Lambda event payload (unused — handler is schedule-triggered).
+        event: Lambda event payload. Supports an optional key:
+
+            - ``snapshot_date`` (``str``, ISO format ``"YYYY-MM-DD"``):
+              when present, process only this specific snapshot date instead
+              of falling back to the latest-snapshot behaviour.
+
         context: Lambda runtime context (unused).
 
     Returns:
@@ -204,7 +256,16 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     logger.info("Silver cleaning Lambda started. Bucket: %s", bucket)
 
-    snapshot_groups = _list_snapshot_keys(s3, bucket, bronze_prefix)
+    # Resolve the optional snapshot_date override from the event payload.
+    target_date: date | None = None
+    raw_override = event.get("snapshot_date") if isinstance(event, dict) else None
+    if raw_override:
+        from datetime import datetime
+
+        target_date = datetime.strptime(raw_override, "%Y-%m-%d").date()
+        logger.info("snapshot_date override: processing %s only", target_date)
+
+    snapshot_groups = _list_snapshot_keys(s3, bucket, bronze_prefix, target_date)
     if not snapshot_groups:
         logger.warning("No bronze snapshot keys found under %s/", bronze_prefix)
         return {"statusCode": 200, "body": "No bronze snapshots found."}
@@ -240,10 +301,24 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             )
             continue
 
-        out_key = _write_parquet(
+        # Incremental guard: skip if the output Parquet already exists.
+        iso_date = snapshot_date.isoformat()
+        out_key = (
+            f"{silver_prefix}/operation={operation}"
+            f"/snapshot_date={iso_date}/part.parquet"
+        )
+        if _parquet_key_exists(s3, bucket, out_key):
+            logger.info(
+                "Parquet already exists for operation=%s snapshot_date=%s — skipping.",
+                operation,
+                snapshot_date,
+            )
+            continue
+
+        written_key = _write_parquet(
             s3, bucket, silver_prefix, operation, snapshot_date, cleaned
         )
-        written.append(out_key)
+        written.append(written_key)
 
     return {
         "statusCode": 200,
