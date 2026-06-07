@@ -85,9 +85,19 @@ pass, then cleanup.
   - Cache policies: long TTL for static assets, short TTL (e.g. 1 h) for `latest.json`.
 
 ### Phase 3 — Custom domain (ACM + Route 53)
-- [ ] ACM certificate in **us-east-1** (CloudFront requirement) via a `aws.us_east_1` provider alias.
-- [ ] Route 53 alias A/AAAA records pointing the chosen domain at the CloudFront distribution.
-- [ ] DNS validation records for the ACM certificate.
+
+> **Decided.** Target domain: **`vlc-report.leopoldwalther.com`**. The root `leopoldwalther.com`
+> was registered via **Route 53**, so its public hosted zone already exists in the account — the
+> implementer references the existing zone (data source / variable), it is **not** created here.
+> The root zone is a shared, account-level resource; this feature only adds one subdomain record set
+> and is designed so future portfolio projects reuse the same zone + a wildcard certificate.
+
+- [ ] ACM certificate in **us-east-1** (CloudFront requirement) via a `aws.us_east_1` provider
+  alias. Issue a **wildcard** `*.leopoldwalther.com` cert so future subdomains reuse it (one cert,
+  DNS-validated against the existing hosted zone).
+- [ ] Route 53 alias A/AAAA records for `vlc-report.leopoldwalther.com` pointing at the CloudFront
+  distribution, created in the **existing** `leopoldwalther.com` hosted zone (looked up by name).
+- [ ] ACM DNS-validation records created in the same hosted zone.
 
 ### Phase 4 — Deployment
 - [ ] `.github/workflows/deploy-frontend.yml` (`workflow_dispatch`, dev/prod input, mirrors
@@ -138,15 +148,18 @@ pass, then cleanup.
 |---|---|---|---|
 | S3 (frontend assets) | ~$0.023/GB + requests | A few MB of static assets, low traffic | < $0.05 |
 | CloudFront | 1 TB/mo egress free tier, then ~$0.085/GB | Personal/portfolio traffic, well under free tier | < $0.10 |
-| Route 53 hosted zone | $0.50 per hosted zone/mo + query charges | One hosted zone, low query volume | ~$0.50 |
-| ACM certificate | Free for use with CloudFront | One public cert | $0.00 |
-| **Total (new AWS components)** | | | **~$0.65/month** |
+| Route 53 hosted zone | $0.50 per hosted zone/mo + query charges | Shared `leopoldwalther.com` zone — **already exists** (registered root), not new to this feature | $0.00 (shared) |
+| Route 53 queries | ~$0.40 per million queries | Low portfolio traffic | < $0.01 |
+| ACM certificate | Free for use with CloudFront | One reusable `*.leopoldwalther.com` wildcard cert | $0.00 |
+| **Total (new AWS components)** | | | **~$0.15/month** |
 
-- **Cost drivers & cheaper alternatives:** the Route 53 hosted zone ($0.50) dominates. Dropping the
-  custom domain and using the CloudFront default domain removes it entirely (→ < $0.15/mo). Custom
-  domain is a deliberate choice for the consulting showcase.
-- **External / non-AWS costs:** domain registration (if not already owned) is billed by the
-  registrar, typically ~$10–15/year, separate from AWS.
+- **Cost drivers & cheaper alternatives:** because the `leopoldwalther.com` hosted zone already
+  exists (the root was registered via Route 53) and the wildcard cert is reused across subdomains,
+  this feature adds almost nothing — only marginal CloudFront/S3/query cost. The $0.50/mo hosted-zone
+  fee is an existing account-level cost shared by all future portfolio subdomains, not attributable
+  to this feature.
+- **External / non-AWS costs:** the `.com` domain registration (~$13/year via Route 53) is already
+  paid and covers all subdomains.
 - **Budget check:** well within the project's < $5/month target (combined with bronze/silver/gold).
 
 ## Success criteria
@@ -162,9 +175,8 @@ pass, then cleanup.
 
 ## Open questions & risks
 
-- **Question (input needed):** the exact custom domain / subdomain (e.g. `vlc.example.com`) and
-  whether its Route 53 hosted zone already exists or must be created. *Implementer needs this before
-  Phase 3.*
+- **Resolved 2026-06-07:** domain = **`vlc-report.leopoldwalther.com`**; root `leopoldwalther.com`
+  registered via Route 53, so the hosted zone **already exists** and is referenced, not created.
 - **Risk:** ACM cert must live in **us-east-1** for CloudFront — easy to get wrong from an
   eu-central-1 default provider. *Mitigation:* dedicated `aws.us_east_1` provider alias, asserted in
   the technical plan.
@@ -181,3 +193,6 @@ pass, then cleanup.
   (`ChartRenderer` Strategy, `DataSource` Adapter, `Dashboard` SRP), cloud-cost estimate, and the
   agreed decisions — custom domain now (ACM us-east-1 + Route 53), MVP = one chart then iterate,
   plain HTML + Plotly.js + ESM + Vitest. Unified to English.
+- **2026-06-07** — Domain decided: `vlc-report.leopoldwalther.com`. Root `leopoldwalther.com`
+  registered via Route 53 (hosted zone exists). Phase 3 updated to reference the existing zone and
+  issue a reusable `*.leopoldwalther.com` wildcard cert. Open question resolved.
