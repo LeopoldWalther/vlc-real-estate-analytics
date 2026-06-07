@@ -29,6 +29,13 @@ several lenses:
 
 - **Feasibility** — can this be built on the current infrastructure? Any hidden complexity?
 - **Architecture** — does it fit existing patterns and keep concerns separated? Does it add debt?
+- **OOP & SOLID** — for non-trivial components, does the design honour the four pillars
+  (encapsulation, abstraction, inheritance, polymorphism) and SOLID? I flag god-objects, leaking
+  internals, `isinstance` ladders, inheritance used purely for reuse, and concrete AWS clients
+  reached for deep in core logic instead of injected at the edge.
+- **Design patterns** — are the named patterns (Strategy, DI, Adapter, Template Method, Factory,
+  Custom Exceptions) used deliberately and justified, or bolted on? I call out both *missing*
+  abstraction (duplication, coupling) and *over-engineering* (patterns for one-off operations).
 - **Risk** — what can go wrong, are the estimates honest, any performance or compatibility hits?
 - **Completeness** — are tests, edge cases, and docs covered? Is every task a clean
   RED → GREEN → REFACTOR slice?

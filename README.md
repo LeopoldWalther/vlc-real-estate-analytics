@@ -17,6 +17,19 @@ This project collects, cleans, and stores real estate listing data from the Idea
 - **Secure Secrets** — API credentials managed via AWS Secrets Manager
 - **Serverless & Cost-Efficient** — Estimated < $5/month across both environments
 
+## What This Project Demonstrates
+
+This repository doubles as a working reference for the engineering practices I bring to client
+work. It is intentionally small in surface area but production-shaped end to end.
+
+| Capability | How it shows up here |
+|---|---|
+| **Clean Code · OOP · SOLID · Design Patterns** | Domain logic is separated from AWS edges; collaborators are injected (Dependency Injection), third-party SDKs sit behind project-owned interfaces (Adapter), and interchangeable algorithms are encapsulated (Strategy). Standards are codified in [`copilot-instructions.md`](.github/copilot-instructions.md). |
+| **AWS · Serverless · IaC** | Event-driven Lambdas scheduled by EventBridge, least-privilege IAM, encrypted S3, Secrets Manager, SNS alerting — all provisioned with reusable Terraform modules across isolated `dev`/`prod` environments. |
+| **Data Engineering · Medallion Architecture** | A Bronze → Silver → Gold pipeline: raw JSON lands in Bronze, is cleaned into Hive-partitioned Parquet in Silver, and aggregated into an analytics-ready contract in Gold. |
+| **Agentic AI Workflows** | Features are planned, reviewed, and built through a three-stage **Architect · Review · Implement** agent workflow with a CI consistency gate — see [`.github/agents/WORKFLOW.md`](.github/agents/WORKFLOW.md). |
+| **Test-Driven Development · CI/CD** | Every change follows RED → GREEN → REFACTOR with >80% coverage, enforced by pre-commit hooks (black, ruff, mypy) and GitHub Actions running pytest and Terraform validation. |
+
 ## Technology Stack
 
 ### Application

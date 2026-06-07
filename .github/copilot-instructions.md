@@ -87,11 +87,19 @@ src/
     └── valenciaRealEstatePriceAnalysis.ipynb
 ```
 
-### Design Patterns
+### Design Patterns & OOP
+
+The codebase is designed around the **four pillars of OOP** (encapsulation, abstraction,
+inheritance, polymorphism) and the **SOLID** principles. Design patterns are applied deliberately
+where they remove duplication or coupling — never for their own sake. See
+[Object-Oriented Design](#object-oriented-design--the-4-pillars) and
+[SOLID Principles](#solid-principles) below for the standards new code must meet.
 
 - **Strategy Pattern** — `SearchConfig` encapsulates API search parameters; swap configs without changing orchestration logic
-- **Dependency Injection** — AWS clients (`s3_client`, `secrets_client`, `sns_client`) injected at module level; overridable in tests
-- **Single Responsibility** — each function has one clear purpose; Lambda handler delegates to focused helpers
+- **Dependency Injection** — collaborators (object store, secrets provider, notifier) injected via constructors; real AWS implementations by default, fakes in tests
+- **Adapter Pattern** — third-party SDKs (boto3, requests) wrapped behind project-owned interfaces so core logic stays vendor-agnostic
+- **Template Method** — a base collector defines the fetch → parse → persist skeleton; subclasses fill in operation-specific steps
+- **Single Responsibility** — each class/function has one reason to change; the Lambda handler stays thin and delegates to focused collaborators
 - **Custom Exceptions** — `IdealistaAPIError` for domain-specific error handling and clean caller code
 
 ### CI/CD Pipelines (`.github/workflows/`)
@@ -245,7 +253,60 @@ hashicorp/archive = ">= 2.0"
    - Extract magic numbers to named constants
    - Use meaningful variable names (avoid `x1`, `temp`, `data2`)
 
-5. **Coding Principles**
+5. **Object-Oriented Design — the 4 Pillars**
+
+   New non-trivial components SHOULD be modelled with classes that demonstrate the four pillars of
+   OOP. Pure functions remain acceptable for small, stateless transformations, but anything that
+   carries configuration, holds collaborators, or has multiple variants belongs in a class.
+
+   - **Encapsulation** — keep state private (`_prefixed` attributes); expose intent through methods,
+     not raw fields. A `SilverCleaner` owns its rules; callers ask it to `clean()`, they do not reach
+     into its internals.
+   - **Abstraction** — depend on small, focused interfaces (`typing.Protocol` or `abc.ABC`), not on
+     concrete implementations. A handler that needs storage depends on an `ObjectStore` protocol, not
+     on `boto3`'s S3 client directly.
+   - **Inheritance** — share behaviour through a base class only when there is a genuine *is-a*
+     relationship (e.g. `BronzeCollector(BaseCollector)`). Prefer composition over inheritance when in
+     doubt; never inherit just to reuse code.
+   - **Polymorphism** — let callers work against the abstraction so variants are interchangeable
+     (e.g. a `LocalObjectStore` for tests and an `S3ObjectStore` in production satisfy the same
+     protocol). No `isinstance` ladders or `if type == ...` branching.
+
+6. **SOLID Principles**
+
+   All object-oriented code MUST be reviewable against SOLID. Call out which principle a design serves.
+
+   - **S — Single Responsibility** — one reason to change per class. Splitting fetch / transform /
+     persist into separate collaborators is preferred over a god-object Lambda.
+   - **O — Open/Closed** — add behaviour by adding a class, not by editing a `switch`. New aggregations
+     plug in as new strategies.
+   - **L — Liskov Substitution** — any subclass / protocol implementation must be usable wherever the
+     base type is expected, with no surprising preconditions.
+   - **I — Interface Segregation** — keep protocols narrow; a reader should not be forced to implement
+     write methods it never uses.
+   - **D — Dependency Inversion** — high-level orchestration depends on abstractions; concrete AWS
+     clients are injected at the edges (constructor injection), never imported deep in the core logic.
+
+7. **Design Patterns — apply deliberately, never for their own sake**
+
+   Reach for a named pattern only when it removes real duplication or coupling, and name it in the
+   docstring / plan so reviewers understand the intent. Patterns already endorsed in this codebase:
+
+   - **Strategy** — `SearchConfig` / aggregation variants: encapsulate an interchangeable algorithm.
+   - **Dependency Injection** — pass `ObjectStore`, `SecretsProvider`, `Notifier` into constructors;
+     default to real AWS implementations, swap fakes in tests.
+   - **Adapter** — wrap third-party SDKs (boto3, requests) behind project-owned interfaces so the core
+     never speaks a vendor dialect.
+   - **Template Method** — a `BaseCollector` defines the fetch → parse → persist skeleton; subclasses
+     fill in the operation-specific steps.
+   - **Factory** — centralise construction of wired-up objects (e.g. `build_collector(env)`), keeping
+     `lambda_handler` thin.
+   - **Custom Exceptions** — domain errors (`IdealistaAPIError`) over bare `Exception`.
+
+   Avoid over-engineering: do not introduce a pattern, abstract base class, or extra layer for a
+   one-off operation. The simplest design that honours SOLID wins.
+
+8. **Coding Principles**
    - Major bugfixes and features should be developed in separate branches
    - Follow the established branch naming conventions
    - Commit messages should be clear and reference task IDs where applicable
