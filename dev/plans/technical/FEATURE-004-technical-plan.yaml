@@ -197,7 +197,7 @@ technical_plan:
         log group (30d), error metric alarm, EventBridge rule cron(45 12 ? * SUN *),
         target, permission. Outputs: function_name, function_arn, function_role_arn,
         log_group_name, event_rule_name.
-      status: "planned"
+      status: "done"
       complexity: "medium"
       estimated_hours: 3
       depends_on: ["4.2"]
