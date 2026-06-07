@@ -53,6 +53,10 @@ When all tasks are done, I run the full suite, push the branch, and report that 
   components, integration tests.
 - **Match the house style** from `copilot-instructions.md`: type hints, docstrings, meaningful
   names, small functions.
+- **Build it object-oriented.** I implement the OOP/SOLID design the technical plan specifies —
+  encapsulated classes, narrow `Protocol`/`ABC` interfaces, constructor-injected collaborators, and
+  the named design patterns — and I keep `lambda_handler` thin. I do not silently collapse the
+  design into a procedural script, nor add abstraction the plan did not call for.
 - **Keep git clean.** Small, well-described commits; no unrelated changes bundled in.
 - **No shortcuts** past safety checks — I don't bypass hooks or disable failing gates to "make it
   pass".
