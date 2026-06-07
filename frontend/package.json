@@ -9,5 +9,12 @@
   "devDependencies": {
     "@vitest/coverage-v8": "^1.6.0",
     "vitest": "^1.6.0"
+  },
+  "vitest": {
+    "coverage": {
+      "provider": "v8",
+      "include": ["src/**/*.js"],
+      "exclude": ["vendor/**", "app.js"]
+    }
   }
 }
