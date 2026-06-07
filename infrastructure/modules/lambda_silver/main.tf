@@ -107,6 +107,14 @@ resource "aws_iam_role_policy" "silver_lambda_s3" {
         Resource = "${var.s3_bucket_arn}/bronze/idealista/*"
       },
       {
+        Sid    = "ReadSilver"
+        Effect = "Allow"
+        Action = ["s3:GetObject"]
+        # HeadObject on existing silver keys requires GetObject; used by
+        # _parquet_key_exists to skip re-processing already-written snapshots.
+        Resource = "${var.s3_bucket_arn}/silver/*"
+      },
+      {
         Sid    = "WriteSilver"
         Effect = "Allow"
         Action = ["s3:PutObject", "s3:PutObjectAcl"]
