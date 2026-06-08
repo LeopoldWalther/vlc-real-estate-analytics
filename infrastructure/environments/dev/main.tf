@@ -4,6 +4,13 @@ module "listings_bucket" {
   environment = var.environment
 }
 
+# Frontend custom domain. dev uses its own subdomain so it never collides with
+# the prod deployment (which will claim vlc-report.leopoldwalther.com via
+# FEATURE-006). The wildcard ACM cert (*.leopoldwalther.com) covers this name.
+locals {
+  frontend_domain = "vlc-report-dev.leopoldwalther.com"
+}
+
 module "idealista_secrets" {
   source = "../../modules/secrets"
 
@@ -90,16 +97,16 @@ module "frontend" {
   listings_bucket_arn             = module.listings_bucket.listings_bucket_arn
   listings_bucket_regional_domain = module.listings_bucket.listings_bucket_regional_domain
   certificate_arn                 = data.terraform_remote_state.dns.outputs.certificate_arn
-  aliases                         = ["vlc-report.leopoldwalther.com"]
+  aliases                         = [local.frontend_domain]
 }
 
 # ---------------------------------------------------------------------------
-# Route 53 alias records — A + AAAA for vlc-report.leopoldwalther.com
+# Route 53 alias records — A + AAAA for the dev frontend domain
 # pointing at the CloudFront distribution in the existing hosted zone.
 # ---------------------------------------------------------------------------
 resource "aws_route53_record" "frontend_a" {
   zone_id = data.terraform_remote_state.dns.outputs.zone_id
-  name    = "vlc-report.leopoldwalther.com"
+  name    = local.frontend_domain
   type    = "A"
 
   alias {
@@ -111,7 +118,7 @@ resource "aws_route53_record" "frontend_a" {
 
 resource "aws_route53_record" "frontend_aaaa" {
   zone_id = data.terraform_remote_state.dns.outputs.zone_id
-  name    = "vlc-report.leopoldwalther.com"
+  name    = local.frontend_domain
   type    = "AAAA"
 
   alias {
