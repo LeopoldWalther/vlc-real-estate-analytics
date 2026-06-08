@@ -56,8 +56,8 @@ output "cloudfront_url" {
 }
 
 output "custom_domain_url" {
-  description = "Custom domain URL of the frontend (vlc-report.leopoldwalther.com)."
-  value       = "https://vlc-report.leopoldwalther.com"
+  description = "Custom domain URL of the frontend (vlc-report-dev.leopoldwalther.com)."
+  value       = "https://${local.frontend_domain}"
 }
 
 output "frontend_asset_bucket_name" {

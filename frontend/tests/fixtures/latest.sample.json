@@ -62,6 +62,15 @@
         "mean_priceByArea": 2500.0,
         "mean_size": 130.0,
         "mean_price": 325000.0
+      },
+      {
+        "operation": "rent",
+        "district": "Extramurs",
+        "snapshot_date": "2026-01-05",
+        "count_listings": 8,
+        "mean_priceByArea": 12.5,
+        "mean_size": 128.0,
+        "mean_price": 1600.0
       }
     ],
     "rent_vs_sale_ratio": [
