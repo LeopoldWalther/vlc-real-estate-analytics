@@ -29,15 +29,21 @@
  *   (operation, neighbourhood) pair. Each trace has:
  *   { name, x: snapshot_dates[], y: mean_priceByArea[], type, mode, meta }.
  */
-export function formatSeries(block) {
+export function formatSeries(block, operation = null) {
   if (!block || block.length === 0) {
+    return [];
+  }
+
+  // Optionally restrict to a single operation (rent or sale) for separate charts.
+  const records = operation !== null ? block.filter((r) => r.operation === operation) : block;
+  if (records.length === 0) {
     return [];
   }
 
   // Group records by (operation, neighbourhood).
   // Performance: O(1) Map lookup instead of O(n) array scan per record.
   const groups = new Map();
-  for (const record of block) {
+  for (const record of records) {
     const key = `${record.operation}|${record.neighborhood}`;
     if (!groups.has(key)) {
       groups.set(key, {
@@ -82,13 +88,19 @@ export function formatSeries(block) {
  * }>|null|undefined} block
  * @returns {Array<object>} Plotly scatter traces.
  */
-export function formatDistrictSeries(block) {
+export function formatDistrictSeries(block, operation = null) {
   if (!block || block.length === 0) {
     return [];
   }
 
+  // Optionally restrict to a single operation (rent or sale) for separate charts.
+  const records = operation !== null ? block.filter((r) => r.operation === operation) : block;
+  if (records.length === 0) {
+    return [];
+  }
+
   const groups = new Map();
-  for (const record of block) {
+  for (const record of records) {
     const key = `${record.operation}|${record.district}`;
     if (!groups.has(key)) {
       groups.set(key, { operation: record.operation, district: record.district, x: [], y: [] });
@@ -107,6 +119,7 @@ export function formatDistrictSeries(block) {
     meta: { operation: g.operation, district: g.district },
   }));
 }
+
 
 /**
  * Convert rent_vs_sale_ratio records into one Plotly scatter trace per

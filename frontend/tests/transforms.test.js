@@ -63,4 +63,24 @@ describe('formatSeries', () => {
   it('returns [] for undefined input — no throw', () => {
     expect(formatSeries(undefined)).toEqual([]);
   });
+
+  it('filters to rent traces only when operation="rent"', () => {
+    const traces = formatSeries(records, 'rent');
+
+    // Fixture: only rent/Arrancapins → 1 trace
+    expect(traces).toHaveLength(1);
+    traces.forEach((t) => expect(t.meta.operation).toBe('rent'));
+  });
+
+  it('filters to sale traces only when operation="sale"', () => {
+    const traces = formatSeries(records, 'sale');
+
+    // Fixture: sale/Arrancapins + sale/Gran Via → 2 traces
+    expect(traces).toHaveLength(2);
+    traces.forEach((t) => expect(t.meta.operation).toBe('sale'));
+  });
+
+  it('returns [] when operation filter matches nothing — no throw', () => {
+    expect(formatSeries(records, 'unknown')).toEqual([]);
+  });
 });
