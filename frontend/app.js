@@ -6,7 +6,6 @@
  */
 
 import { DataSource } from './src/data_source.js';
-import { Dashboard } from './src/dashboard.js';
 import { priceTimeSeriesRentRenderer, priceTimeSeriesSaleRenderer } from './src/charts/price_time_series.js';
 import { priceTimeSeriesDistrictRentRenderer, priceTimeSeriesDistrictSaleRenderer } from './src/charts/price_time_series_district.js';
 import { rentVsSaleRatioRenderer } from './src/charts/rent_vs_sale_ratio.js';
@@ -50,35 +49,9 @@ let activePopulation = 'general';
 let cachedData = null;
 
 /**
- * Mount all renderers using the currently active population block.
- * general-only renderers always receive data.general.
+ * Load the gold data once, then render every chart. General-only renderers
+ * always receive data.general; toggle renderers receive the active population.
  */
-function mountAll(data) {
-  const pop = data[activePopulation];
-
-  for (const renderer of GENERAL_ONLY_RENDERERS) {
-    const container = containers[renderer.id];
-    if (!container) continue;
-    globalThis.Plotly.newPlot(container, ...Object.values(renderer.render(data.general)).map(Object.values).flat());
-  }
-
-  // Use the Dashboard for toggle-able renderers so the same wiring applies.
-  const toggleDash = new (class {
-    constructor() { this._renderers = TOGGLE_RENDERERS; }
-    mount() {
-      for (const r of this._renderers) {
-        const c = containers[r.id];
-        if (!c) continue;
-        const fig = r.render(pop);
-        globalThis.Plotly.newPlot(c, fig.data, fig.layout);
-      }
-    }
-  })();
-  toggleDash.mount();
-}
-
-// Simpler: use Dashboard directly for all renderers, adapting population per renderer.
-// Replace the above with a single clean pass:
 async function run() {
   cachedData = await dataSource.load();
 
@@ -102,7 +75,7 @@ async function run() {
   const toggleEl = document.getElementById('population-toggle');
   if (toggleEl && cachedData.relevant) {
     toggleEl.style.display = 'flex';
-    toggleEl.addEventListener('change', (e) => {
+    toggleEl.addEventListener('change', async (e) => {
       activePopulation = e.target.value;
       for (const renderer of TOGGLE_RENDERERS) {
         const container = containers[renderer.id];
