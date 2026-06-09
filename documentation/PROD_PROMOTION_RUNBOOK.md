@@ -21,8 +21,7 @@ Run the silver backfill script against the **prod** bucket and **prod** Lambda. 
 ```bash
 python src/etl/data_processing/backfill_silver.py \
   --bucket prod-vlc-real-estate-analytics-listings \
-  --lambda-name prod-silver-cleaner \
-  --region eu-central-1
+  --function-name prod-silver-cleaner
 ```
 
 This may take 20–40 minutes depending on the number of historical snapshots. Monitor progress in
