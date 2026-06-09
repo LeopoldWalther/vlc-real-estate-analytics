@@ -45,3 +45,15 @@ module "silver_cleaner" {
   sns_topic_arn    = module.idealista_notifications.topic_arn
   pandas_layer_arn = var.pandas_layer_arn
 }
+
+module "gold_aggregator" {
+  source = "../../modules/lambda_gold"
+
+  environment      = var.environment
+  aws_region       = var.aws_region
+  s3_bucket_name   = module.listings_bucket.listings_bucket_name
+  s3_bucket_arn    = module.listings_bucket.listings_bucket_arn
+  sns_topic_arn    = module.idealista_notifications.topic_arn
+  pandas_layer_arn = var.pandas_layer_arn
+  ratio_min_count  = 5
+}
