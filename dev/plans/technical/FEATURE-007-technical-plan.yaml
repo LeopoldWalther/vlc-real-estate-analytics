@@ -1,0 +1,238 @@
+metadata:
+  for_feature: "FEATURE-007"
+  title: "Step Functions orchestration of the bronze -> silver -> gold pipeline"
+  created_by: "@reviewer"
+  created_at: "2026-06-09"
+  version: "1.0"
+  total_tasks: 6
+  estimated_hours: 14
+  risk_level: "medium"
+  critical_path: ["7.1", "7.2", "7.3", "7.4", "7.5"]
+  reviewed_plan: "dev/reviews/REVIEW-FEATURE-007.md"
+
+validation:
+  required_checks:
+    - "ASL unit test (rendered definition: 3 Tasks in order + Retry + Catch + Choice on statusCode + NotifyFailure->Fail)"
+    - "terraform fmt -check"
+    - "terraform validate (module + dev env)"
+    - "workflow-consistency"
+  min_coverage: "ASL definition assertions network-free; Terraform validate green"
+
+tasks:
+  - id: "7.1"
+    title: "ASL definition + pipeline_orchestrator state machine"
+    description: >
+      Create infrastructure/modules/pipeline_orchestrator/ with state_machine.asl.json rendered via
+      templatefile (Lambda + SNS ARNs injected, never hardcoded) and aws_sfn_state_machine of type
+      STANDARD. Three Task states (arn:aws:states:::lambda:invoke) bronze -> silver -> gold, each with
+      a Retry block (IntervalSeconds 30, MaxAttempts 2, BackoffRate 2.0). Pass test_mode into the
+      bronze Task input; invoke silver with {} so it uses its latest-snapshot branch (review L2).
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 3
+    depends_on: []
+    branch: "feature/step-functions-orchestration/7.1-asl-state-machine"
+    commit_message: "feat(infra): add pipeline_orchestrator state machine + ASL definition"
+    acceptance_criteria:
+      - "GIVEN rendered ASL WHEN parsed THEN three Task states exist in order bronze->silver->gold"
+      - "each Task has Retry (MaxAttempts 2, BackoffRate 2.0) and no hardcoded ARNs"
+      - "bronze Task input carries test_mode; silver Task input is {}"
+      - "aws_sfn_state_machine type == STANDARD"
+    allowed_files:
+      - "infrastructure/modules/pipeline_orchestrator/**"
+    forbidden_files:
+      - "infrastructure/modules/lambda_*/**"
+      - "infrastructure/environments/**"
+      - "src/etl/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "infrastructure/modules/pipeline_orchestrator/main.tf"
+      - "infrastructure/modules/pipeline_orchestrator/state_machine.asl.json"
+      - "infrastructure/modules/pipeline_orchestrator/variables.tf"
+      - "infrastructure/modules/pipeline_orchestrator/outputs.tf"
+    files_to_modify: []
+
+  - id: "7.2"
+    title: "Failure propagation — Choice on statusCode + Catch into NotifyFailure"
+    description: >
+      Resolve review finding H1. After each Lambda Task add a Choice state inspecting
+      $.Payload.statusCode: != 200 routes to a shared NotifyFailure state. Additionally wire a Catch
+      on each Task (for raised exceptions) into the same NotifyFailure, with ResultPath "$.error" so
+      the SNS message carries the failed state name + $.error.Error + $.error.Cause (review M2).
+      NotifyFailure is an SNS Publish (arn:aws:states:::sns:publish) to the existing topic, then Fail.
+      This makes failure handling handler-agnostic so the bronze handler's swallowed-500 return still
+      stops the pipeline. No Python is modified.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2.5
+    depends_on: ["7.1"]
+    branch: "feature/step-functions-orchestration/7.2-failure-propagation"
+    commit_message: "feat(infra): stop pipeline on stage failure via Choice(statusCode)+Catch+SNS"
+    acceptance_criteria:
+      - "GIVEN any Task returns statusCode != 200 THEN execution routes to NotifyFailure (not downstream)"
+      - "GIVEN any Task raises THEN Catch routes to NotifyFailure with ResultPath $.error"
+      - "NotifyFailure publishes an SNS message naming the failed stage + Error + Cause, then Fail"
+      - "a forced bronze 500 (swallowed return) stops silver and gold from running"
+      - "no file under src/etl/ is modified"
+    allowed_files:
+      - "infrastructure/modules/pipeline_orchestrator/**"
+    forbidden_files:
+      - "src/etl/**"
+      - "infrastructure/environments/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "infrastructure/modules/pipeline_orchestrator/state_machine.asl.json"
+      - "infrastructure/modules/pipeline_orchestrator/main.tf"
+
+  - id: "7.3"
+    title: "IAM, scheduling trigger, and CloudWatch logging"
+    description: >
+      State-machine IAM role: lambda:InvokeFunction on exactly the three Lambda ARNs, sns:Publish on
+      the topic, CloudWatch Logs for the state machine - nothing else. Add the trigger: an EventBridge
+      Scheduler schedule cron(0 12 ? * SUN *) with a StartExecution target, plus its OWN IAM role
+      allowing states:StartExecution on the state machine (review M3). CloudWatch log group
+      /aws/vendedlogs/states/{env}-medallion-pipeline, 30-day retention, ALL-level logging enabled.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2.5
+    depends_on: ["7.2"]
+    branch: "feature/step-functions-orchestration/7.3-iam-schedule-logging"
+    commit_message: "feat(infra): least-privilege IAM + weekly StartExecution trigger + SFN logging"
+    acceptance_criteria:
+      - "state-machine role grants InvokeFunction on exactly 3 Lambda ARNs + sns:Publish on the topic"
+      - "a separate trigger role grants states:StartExecution on the state machine only"
+      - "exactly one schedule (cron 0 12 ? * SUN *) targets StartExecution"
+      - "state machine has ALL-level logging to a 30-day log group"
+      - "terraform validate + fmt -check pass for the module"
+    allowed_files:
+      - "infrastructure/modules/pipeline_orchestrator/**"
+    forbidden_files:
+      - "src/etl/**"
+      - "infrastructure/environments/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "infrastructure/modules/pipeline_orchestrator/main.tf"
+      - "infrastructure/modules/pipeline_orchestrator/variables.tf"
+      - "infrastructure/modules/pipeline_orchestrator/outputs.tf"
+
+  - id: "7.4"
+    title: "Gate per-Lambda schedules behind create_schedule flag"
+    description: >
+      Resolve the plan's open question in favour of a flag (review L1). Add a create_schedule bool
+      variable (default true) to lambda_bronze, lambda_silver, lambda_gold and wrap each module's
+      aws_cloudwatch_event_rule / target / lambda_permission in count = var.create_schedule ? 1 : 0.
+      Keeps the modules independently usable; the env disables them when wiring the orchestrator.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: []
+    branch: "feature/step-functions-orchestration/7.4-create-schedule-flag"
+    commit_message: "refactor(infra): gate per-Lambda EventBridge schedules behind create_schedule"
+    acceptance_criteria:
+      - "each lambda_* module declares create_schedule bool (default true)"
+      - "EventBridge rule/target/permission use count = var.create_schedule ? 1 : 0"
+      - "with create_schedule=true the modules plan identically to today (no diff)"
+      - "terraform validate + fmt -check pass for all three modules"
+    allowed_files:
+      - "infrastructure/modules/lambda_bronze/main.tf"
+      - "infrastructure/modules/lambda_bronze/variables.tf"
+      - "infrastructure/modules/lambda_silver/main.tf"
+      - "infrastructure/modules/lambda_silver/variables.tf"
+      - "infrastructure/modules/lambda_gold/main.tf"
+      - "infrastructure/modules/lambda_gold/variables.tf"
+    forbidden_files:
+      - "src/etl/**"
+      - "infrastructure/environments/**"
+    can_run_parallel_with: ["7.1", "7.2", "7.3"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "infrastructure/modules/lambda_bronze/main.tf"
+      - "infrastructure/modules/lambda_bronze/variables.tf"
+      - "infrastructure/modules/lambda_silver/main.tf"
+      - "infrastructure/modules/lambda_silver/variables.tf"
+      - "infrastructure/modules/lambda_gold/main.tf"
+      - "infrastructure/modules/lambda_gold/variables.tf"
+    reversible_note: "Reverting to default true restores the standalone schedules."
+
+  - id: "7.5"
+    title: "Wire orchestrator into dev + validate"
+    description: >
+      Instantiate module "pipeline_orchestrator" in environments/dev/main.tf, passing the three Lambda
+      ARNs (from the existing module outputs), the SNS topic ARN, environment, region, and
+      test_mode = true. Set create_schedule = false on the bronze/silver/gold module blocks so the
+      single schedule lives only in the orchestrator. Prod wiring is deferred to / coordinated with
+      FEATURE-006 (promote the state machine, not the three crons).
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: ["7.3", "7.4"]
+    branch: "feature/step-functions-orchestration/7.5-wire-dev"
+    commit_message: "feat(infra): wire pipeline_orchestrator into dev; disable per-Lambda schedules"
+    acceptance_criteria:
+      - "dev/main.tf instantiates module.pipeline_orchestrator with the 3 Lambda ARNs + SNS topic"
+      - "bronze/silver/gold module blocks set create_schedule = false"
+      - "terraform plan shows the 3 old EventBridge rules destroyed and 1 schedule created"
+      - "terraform validate + fmt -check pass for environments/dev"
+      - "prod wiring NOT added here (coordinated with FEATURE-006)"
+    allowed_files:
+      - "infrastructure/environments/dev/main.tf"
+      - "infrastructure/environments/dev/outputs.tf"
+    forbidden_files:
+      - "infrastructure/environments/prod/**"
+      - "src/etl/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "infrastructure/environments/dev/main.tf"
+      - "infrastructure/environments/dev/outputs.tf"
+
+  - id: "7.6"
+    title: "Document orchestration + re-run runbook"
+    description: >
+      Document the state machine in documentation/DATA_PROCESSING_LAYER.md: the bronze->silver->gold
+      diagram, retry/catch/Choice failure behaviour, the single weekly trigger, and how to re-run a
+      failed execution from the Step Functions console. Note the FEATURE-006 coordination (prod wires
+      the orchestrator + create_schedule=false).
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 0.5
+    depends_on: ["7.5"]
+    branch: "feature/step-functions-orchestration/7.6-docs"
+    commit_message: "docs: document medallion pipeline orchestration + re-run runbook"
+    acceptance_criteria:
+      - "DATA_PROCESSING_LAYER.md has the state machine diagram + retry/catch/Choice description"
+      - "runbook explains re-running a failed execution from the console"
+      - "notes that prod wiring is owned by FEATURE-006 (orchestrator, not crons)"
+    allowed_files:
+      - "documentation/DATA_PROCESSING_LAYER.md"
+    forbidden_files:
+      - "infrastructure/**"
+      - "src/etl/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "documentation/DATA_PROCESSING_LAYER.md"
+
+git_workflow:
+  base_branch: "main"
+  branch_per_task: true
+  pr_strategy: "One PR per task branch; squash-merge. Snapshot terraform plan in the 7.5 PR."
+  apply_policy: >
+    plan + validate run in CI on every PR. The real `terraform apply` in dev (which destroys the three
+    EventBridge rules and creates the state machine in one change) is a deliberate manual step; verify
+    exactly one schedule remains post-apply. Prod apply is owned by FEATURE-006.
+
+notes:
+  - "H1 (critical): the bronze handler swallows exceptions and returns statusCode 500 instead of raising; relying on Catch alone would let silver/gold run on failed bronze. Task 7.2 adds a Choice on $.Payload.statusCode so failure handling is handler-agnostic and touches no Python."
+  - "M1: FEATURE-004 / lambda_gold already exists in the tree with its own schedule — the plan's gold-gating risk is stale; all three Task states ship together."
+  - "Standard (not Express) Workflow: bronze can run up to 15 min, past Express's 5-min cap."
+  - "Stages are idempotent (silver HeadObject guard, gold overwrites latest.json, bronze timestamped keys) so Retry re-invocation is safe."
+  - "Coordinate with FEATURE-006: land 007 in dev first, then amend 006 to wire the state machine into prod with create_schedule=false — the two plans must not both own the prod schedule."

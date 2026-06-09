@@ -1,0 +1,189 @@
+metadata:
+  for_feature: "FEATURE-006"
+  title: "Prod promotion — silver, gold, and frontend (vlc-report.leopoldwalther.com)"
+  created_by: "@reviewer"
+  created_at: "2026-06-09"
+  version: "1.0"
+  total_tasks: 5
+  estimated_hours: 4
+  risk_level: "medium"
+  critical_path: ["6.1", "6.2", "6.3", "6.4", "6.5"]
+  reviewed_plan: "dev/reviews/REVIEW-FEATURE-006.md"
+
+validation:
+  required_checks:
+    - "terraform fmt -check"
+    - "terraform validate"
+    - "terraform plan (no errors; reviewed before apply)"
+    - "frontend: npm test (Vitest) green"
+  min_coverage: "n/a (infrastructure + static frontend; no new Python)"
+
+tasks:
+  - id: "6.1"
+    title: "Wire silver_cleaner into prod"
+    description: >
+      Add the lambda_silver module block to prod/main.tf mirroring dev, and add the
+      pandas_layer_arn variable to prod/variables.tf. Prod runs full pagination, so do NOT
+      set test_mode. Verify the AWSSDKPandas-Python312 layer version at apply time (review M3).
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 0.5
+    depends_on: []
+    branch: "feature/prod-promotion/6.1-silver"
+    commit_message: "feat(infra): wire silver_cleaner into prod environment"
+    acceptance_criteria:
+      - "GIVEN prod/main.tf WHEN planned THEN module.silver_cleaner is created with no test_mode"
+      - "prod/variables.tf declares pandas_layer_arn with the same default as dev"
+      - "terraform fmt -check and terraform validate pass for environments/prod"
+    allowed_files:
+      - "infrastructure/environments/prod/main.tf"
+      - "infrastructure/environments/prod/variables.tf"
+    forbidden_files:
+      - "infrastructure/modules/**"
+      - "infrastructure/environments/dev/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "infrastructure/environments/prod/main.tf"
+      - "infrastructure/environments/prod/variables.tf"
+
+  - id: "6.2"
+    title: "Wire gold_aggregator into prod"
+    description: >
+      Add the lambda_gold module block to prod/main.tf mirroring dev (pass pandas_layer_arn and
+      ratio_min_count). Reuse the same listings bucket and SNS topic already wired in prod.
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 0.5
+    depends_on: ["6.1"]
+    branch: "feature/prod-promotion/6.2-gold"
+    commit_message: "feat(infra): wire gold_aggregator into prod environment"
+    acceptance_criteria:
+      - "GIVEN prod/main.tf WHEN planned THEN module.gold_aggregator is created"
+      - "gold_aggregator consumes module.silver_cleaner outputs / shared bucket + SNS topic"
+      - "terraform fmt -check and terraform validate pass for environments/prod"
+    allowed_files:
+      - "infrastructure/environments/prod/main.tf"
+    forbidden_files:
+      - "infrastructure/modules/**"
+      - "infrastructure/environments/dev/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "infrastructure/environments/prod/main.tf"
+
+  - id: "6.3"
+    title: "Wire frontend module into prod (vlc-report.leopoldwalther.com)"
+    description: >
+      Promote the frontend module to prod, mirroring dev/main.tf exactly. Add a frontend_domain
+      local set to vlc-report.leopoldwalther.com, the shared/dns terraform_remote_state data block,
+      the module.frontend block (aliases = [local.frontend_domain], cert from remote state), and
+      the Route 53 A + AAAA alias records pointing at the CloudFront distribution
+      (zone Z2FDTNDATAQYW2). No us-east-1 provider is needed — the wildcard cert comes from the
+      shared/dns remote state. Resolves review finding H1.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 1
+    depends_on: ["6.2"]
+    branch: "feature/prod-promotion/6.3-frontend"
+    commit_message: "feat(infra): wire frontend (vlc-report.leopoldwalther.com) into prod"
+    acceptance_criteria:
+      - "GIVEN prod/main.tf WHEN planned THEN module.frontend + frontend_a + frontend_aaaa are created"
+      - "local.frontend_domain == 'vlc-report.leopoldwalther.com'"
+      - "certificate_arn and zone_id are sourced from data.terraform_remote_state.dns"
+      - "no aws.us_east_1 provider alias is introduced (cert is from remote state)"
+      - "terraform fmt -check and terraform validate pass for environments/prod"
+    allowed_files:
+      - "infrastructure/environments/prod/main.tf"
+    forbidden_files:
+      - "infrastructure/modules/**"
+      - "infrastructure/environments/dev/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "infrastructure/environments/prod/main.tf"
+
+  - id: "6.4"
+    title: "Add prod frontend outputs (deploy workflow contract)"
+    description: >
+      Add the four frontend outputs to prod/outputs.tf that the deploy-frontend.yml workflow
+      requires: frontend_asset_bucket_name and frontend_distribution_id (read via
+      terraform output -raw), plus cloudfront_url and custom_domain_url for convenience. Without
+      the first two, the workflow's "Read Terraform outputs" step fails. Resolves H1 (outputs half).
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 0.5
+    depends_on: ["6.3"]
+    branch: "feature/prod-promotion/6.4-outputs"
+    commit_message: "feat(infra): expose prod frontend outputs for deploy workflow"
+    acceptance_criteria:
+      - "prod/outputs.tf declares frontend_asset_bucket_name and frontend_distribution_id"
+      - "prod/outputs.tf declares cloudfront_url and custom_domain_url"
+      - "terraform fmt -check and terraform validate pass for environments/prod"
+      - "deploy-frontend.yml requires NO change to target prod (environment choice already exists)"
+    allowed_files:
+      - "infrastructure/environments/prod/outputs.tf"
+    forbidden_files:
+      - "infrastructure/modules/**"
+      - "infrastructure/environments/dev/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "infrastructure/environments/prod/outputs.tf"
+
+  - id: "6.5"
+    title: "Prod backfill + deploy runbook (silver -> gold -> frontend)"
+    description: >
+      Operational task, executed during the gated apply window. After terraform apply of prod,
+      populate data in strict order BEFORE the frontend is deployed so the site never renders
+      empty/sparse charts (review H2, same footgun as FEATURE-005 M3):
+      (1) run backfill_silver.py against the prod listings bucket + prod-silver-cleaner for all
+      bronze dates; (2) verify the silver parquet count matches expected bronze snapshots for both
+      operations; (3) invoke prod-gold-aggregator and confirm gold/aggregations/latest.json has the
+      full sale + rent date history; (4) trigger deploy-frontend.yml with environment=prod, which
+      syncs assets and invalidates CloudFront. Document the exact commands/counts in the PR.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: ["6.4"]
+    branch: "feature/prod-promotion/6.5-backfill-runbook"
+    commit_message: "docs(infra): prod backfill + deploy runbook for FEATURE-006"
+    acceptance_criteria:
+      - "Runbook documents the ordered steps: apply -> silver backfill -> verify count -> gold -> deploy"
+      - "Silver backfill MUST complete (parquet count verified) before gold is invoked"
+      - "gold/aggregations/latest.json in prod contains full sale + rent history before frontend deploy"
+      - "https://vlc-report.leopoldwalther.com serves the same visualization as dev, on prod data"
+    allowed_files:
+      - "documentation/**"
+      - "dev/plans/**"
+    forbidden_files:
+      - "infrastructure/modules/**"
+      - "src/etl/**"
+    can_run_parallel_with: []
+    reversible: false
+    files_to_create:
+      - "documentation/PROD_PROMOTION_RUNBOOK.md"
+    files_to_modify: []
+
+git_workflow:
+  base_branch: "main"
+  branch_per_task: true
+  pr_strategy: "One PR per task branch; squash-merge. Snapshot `terraform plan` output in the 6.3 PR."
+  apply_policy: >
+    Terraform plan + validate run in CI on every PR. The real `terraform apply` against prod is a
+    deliberate, announced, gated step performed only after the >=2-week dev soak — NOT automated by
+    these PRs. Capture the reviewed plan output before applying.
+
+notes:
+  - "Prod mirrors dev/main.tf almost verbatim; the only differences are no test_mode (full pagination) and frontend_domain = vlc-report.leopoldwalther.com."
+  - "Wildcard cert *.leopoldwalther.com (one subdomain level) already covers vlc-report.leopoldwalther.com — same constraint dev satisfies."
+  - "No us-east-1 provider alias: certificate_arn + zone_id come from the shared/dns remote state, which must be applied once before prod is planned."
+  - "deploy-frontend.yml already has an environment=prod choice and reads frontend_asset_bucket_name + frontend_distribution_id — task 6.4 makes those outputs exist."
+  - "vlc-report.leopoldwalther.com is free since FEATURE-005 task 5.7 moved dev to vlc-report-dev — no Route 53 collision expected (review L2)."
+  - "If FEATURE-007 (Step Functions) lands first, wire the pipeline_orchestrator into prod instead of promoting the per-Lambda crons (review L1)."
+  - "Update the FEATURE-006 plan header: it Needs FEATURE-005 (frontend module) + FEATURE-004 (gold); it does not 'unblock' 005 (review M2)."

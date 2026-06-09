@@ -1,6 +1,6 @@
 # FEATURE-005 — Static Visualization Web App (S3 + CloudFront)
 
-**Status:** 🔵 Planned · **Effort:** M (~1.5–2 d) · **Priority:** Medium
+**Status:** 🟢 Complete · **Effort:** M (~1.5–2 d) · **Priority:** Medium
 **Branch root:** `feature/static-visualization-webapp` · **Created:** 2026-06-03 · **Updated:** 2026-06-07
 
 > Authored by `@architect`. Reviewed by `@reviewer` (see `dev/reviews/REVIEW-FEATURE-005.md`).
@@ -45,11 +45,13 @@ or each other. Even in plain JS (ESM modules, no framework) the OOP/SOLID intent
   the ratio time series, or the boxplots later means **adding a renderer module**, never editing the
   dashboard or existing charts. The MVP ships one renderer; the rest follow the same contract.
 - **Adapter + Dependency Inversion — `DataSource`.** A thin adapter wraps `fetch()` and returns the
-  parsed schema-v1.0 object. The `Dashboard` depends on the `DataSource` interface, not on `fetch`
-  directly, so tests inject an in-memory fake that returns a fixture — no network in unit tests.
-- **Single Responsibility — `Dashboard` orchestrator.** One object wires the `DataSource` and the
-  list of `ChartRenderer`s, mounts each into its container, and owns nothing else (no transform
-  logic, no fetch logic).
+  parsed schema-v1.0 object. `app.js` depends on the `DataSource` interface, not on `fetch`
+  directly, so tests inject an in-memory fake (`FakeDataSource`) that returns a fixture — no network
+  in unit tests.
+- **Single Responsibility — `run()` orchestrator in `app.js`.** The `run()` function wires the
+  `DataSource` and all `ChartRenderer`s, renders every chart, and attaches the population toggle.
+  It owns no transform logic and no fetch logic; those remain in their own modules. (The `Dashboard`
+  class was removed in task 5.9 — `run()` is the single orchestration path.)
 - **Pure transforms stay pure.** `formatSeries(block)` and friends are small, stateless functions
   the renderers call — unit-tested in isolation with Vitest. No class wrapping where a function does.
 - **Schema-version guard.** The `DataSource` checks `schema_version` and fails loudly on a mismatch,

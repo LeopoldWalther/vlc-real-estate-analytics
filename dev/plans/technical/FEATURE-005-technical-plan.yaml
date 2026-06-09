@@ -1,0 +1,371 @@
+technical_plan:
+  metadata:
+    for_feature: "FEATURE-005"
+    created_by: "reviewer_agent"
+    created_at: "2026-06-09T00:00:00Z"
+    version: "1.0"
+    total_tasks: 9
+    estimated_hours: 22
+    risk_level: "low"
+    critical_path: ["5.1", "5.2", "5.3", "5.5", "5.6", "5.4", "5.7", "5.8"]
+    reviewed_plan: "dev/reviews/REVIEW-FEATURE-005.md"
+    note: >-
+      Retroactive technical plan. Tasks 5.1–5.7 shipped; 5.8 outstanding plus the
+      M1 cleanup task (5.9) raised in the review. Authoritative for task status.
+
+  validation:
+    required_checks:
+      - "node-test"
+      - "terraform-validate"
+      - "workflow-consistency"
+    min_coverage: 80
+
+  # ---------------------------------------------------------------------------
+  # Architecture: plain HTML + ESM modules + vendored Plotly.js v2.35.2, served
+  # from a private S3 bucket via CloudFront (dual origin: assets long TTL, gold
+  # 1h TTL, both OAC). Custom domain via ACM (us-east-1) + Route 53. Data source
+  # is gold/aggregations/latest.json (schema v1.0, frozen by FEATURE-004).
+  # ---------------------------------------------------------------------------
+  architecture:
+    frontend_entry: "frontend/index.html"
+    js_entry: "frontend/app.js"
+    data_url_pattern: "/gold/aggregations/latest.json"   # same-origin via CloudFront
+    plotly_version: "2.35.2"
+    plotly_delivery: "vendored same-origin (frontend/vendor/plotly.min.js)"
+    test_framework: "Vitest 1.6.1"
+    chart_renderer_contract: "{ id, title, render(populationBlock) -> { data, layout } }"
+    chart_renderer_pattern: "Strategy + Open/Closed — new chart = new module, no app.js edit"
+    data_source_pattern: "Adapter + Dependency Inversion; FakeDataSource in tests; schema_version guard throws on mismatch"
+
+  decisions:
+    - "SEPARATE rent/sale charts via factory renderer — 200x scale difference makes shared Y-axis unreadable"
+    - "GENERAL_ONLY_RENDERERS vs TOGGLE_RENDERERS — relevant block has no price time-series (too sparse); explicit split avoids silent empty charts"
+    - "BOXPLOT split rent/sale via makeBoxplotRenderer — same 200x scale issue; dedicated Y-axis labels"
+    - "automargin:true + explicit margin on all layouts; overflow:hidden on .chart-container — no clipping/overflow"
+    - "Plotly.react for toggle re-renders (diff) vs newPlot (full teardown)"
+    - "buildRelevantLabel(filter) derives toggle label from gold relevant_filter — never hardcoded"
+    - "toggle change handler MUST be async (await Plotly.react in a sync callback is a SyntaxError that blanks ALL charts)"
+    - "CloudFront dual origin: assets (long TTL) + gold prefix (1h TTL), same-origin, no CORS"
+    - "OAC not OAI; S3 Block Public Access on"
+    - "ACM cert in us-east-1 via aws.us_east_1 provider alias (CloudFront requirement)"
+    - "dev domain vlc-report-dev.leopoldwalther.com — wildcard *.leopoldwalther.com covers only ONE subdomain level"
+    - "window.CONFIG.DATA_URL injected per env; deploy workflow can override without source edit"
+    - "Vitest + FakeDataSource — no DOM/network/Plotly mock; suite runs <250ms"
+    - "aws s3 sync excludes tests/, node_modules/, coverage/, *.test.js — no test files in CDN"
+    - "Gold MUST be re-run AFTER silver backfill fully completes — verify parquet count before invoking"
+
+  tasks:
+    - id: "5.1"
+      title: "Frontend skeleton + DataSource + transforms + first chart (MVP)"
+      description: >-
+        Scaffold frontend/. index.html (title + one chart container +
+        window.CONFIG.DATA_URL), styles.css, app.js ESM entry. DataSource adapter
+        over fetch() with schema_version guard + FakeDataSource for tests. Pure
+        formatSeries in transforms.js. First ChartRenderer in
+        src/charts/price_time_series.js. Vitest suite + package.json (Vitest dev dep only).
+      status: "done"
+      complexity: "medium"
+      estimated_hours: 4
+      depends_on: []
+      branch: "feature/static-visualization-webapp/5.1-frontend-skeleton"
+      commit_message: "feat(frontend): skeleton, DataSource, transforms, first chart renderer"
+      acceptance_criteria:
+        - "DataSource.load() fetches + validates schema_version; FakeDataSource returns fixture without network"
+        - "formatSeries returns one trace per (operation, neighbourhood); [] for empty/missing input"
+        - "priceTimeSeriesRenderer.render(block) returns { data, layout }"
+        - "Vitest tests pass; coverage >= 80% on new JS"
+      allowed_files:
+        - "frontend/**"
+      forbidden_files:
+        - "infrastructure/**"
+        - "src/etl/**"
+      can_run_parallel_with: []
+      reversible: true
+      files_to_create:
+        - "frontend/index.html"
+        - "frontend/styles.css"
+        - "frontend/app.js"
+        - "frontend/src/data_source.js"
+        - "frontend/src/transforms.js"
+        - "frontend/src/charts/price_time_series.js"
+        - "frontend/tests/transforms.test.js"
+        - "frontend/tests/price_time_series.test.js"
+        - "frontend/tests/data_source.test.js"
+        - "frontend/tests/fixtures/latest.sample.json"
+        - "frontend/package.json"
+      files_to_modify: []
+
+    - id: "5.2"
+      title: "Terraform module frontend/: private S3 + CloudFront dual origin + OAC"
+      description: >-
+        infrastructure/modules/frontend/ — private S3 asset bucket (Block Public
+        Access on), CloudFront with two origins via OAC: frontend assets and the
+        listings bucket gold/aggregations/ prefix. Long TTL for assets, 1h TTL for
+        gold JSON. Outputs: distribution_id, distribution_domain, asset_bucket_name.
+      status: "done"
+      complexity: "medium"
+      estimated_hours: 4
+      depends_on: ["5.1"]
+      branch: "feature/static-visualization-webapp/5.2-infra-module"
+      commit_message: "feat(terraform): frontend module with s3 + cloudfront dual origin + oac"
+      acceptance_criteria:
+        - "S3 bucket private; Block Public Access enabled"
+        - "CloudFront origin 1 = assets bucket (OAC); origin 2 = listings gold/ prefix (OAC)"
+        - "Cache policy: long TTL assets, 1h TTL for /gold/aggregations/*"
+        - "terraform validate + fmt clean; outputs exposed"
+      allowed_files:
+        - "infrastructure/modules/frontend/**"
+      forbidden_files:
+        - "frontend/**"
+        - "src/etl/**"
+      can_run_parallel_with: []
+      reversible: true
+      files_to_create:
+        - "infrastructure/modules/frontend/main.tf"
+        - "infrastructure/modules/frontend/variables.tf"
+        - "infrastructure/modules/frontend/outputs.tf"
+      files_to_modify: []
+
+    - id: "5.3"
+      title: "ACM cert (us-east-1) + Route 53 alias records"
+      description: >-
+        aws.us_east_1 provider alias. Reference the wildcard *.leopoldwalther.com
+        ACM cert in us-east-1. Route 53 A + AAAA alias records pointing the subdomain
+        at CloudFront (alias zone ID Z2FDTNDATAQYW2).
+      status: "done"
+      complexity: "medium"
+      estimated_hours: 3
+      depends_on: ["5.2"]
+      branch: "feature/static-visualization-webapp/5.3-acm-route53"
+      commit_message: "feat(terraform): acm cert + route53 alias records for custom domain"
+      acceptance_criteria:
+        - "ACM cert in us-east-1 via aws.us_east_1 alias; wildcard covers vlc-report-dev.leopoldwalther.com"
+        - "Route 53 A + AAAA alias records -> CloudFront"
+        - "terraform validate + plan show expected ACM + Route 53 resources"
+      allowed_files:
+        - "infrastructure/environments/dev/**"
+        - "infrastructure/modules/frontend/**"
+      forbidden_files:
+        - "frontend/**"
+        - "src/etl/**"
+      can_run_parallel_with: []
+      reversible: true
+      files_to_create: []
+      files_to_modify:
+        - "infrastructure/environments/dev/main.tf"
+        - "infrastructure/modules/frontend/main.tf"
+
+    - id: "5.4"
+      title: "Remaining chart renderers (ratio, ratio-time-series, boxplot, district) + population toggle"
+      description: >-
+        Add the Phase-5 renderers as new modules. Split rent/sale for price_time_series
+        (factory makeTimeSeriesRenderer), district (makeDistrictRenderer) and boxplot
+        (makeBoxplotRenderer). Population toggle in index.html hidden until JS confirms
+        relevant data. app.js wires GENERAL_ONLY_RENDERERS + TOGGLE_RENDERERS; toggle
+        handler async; Plotly.react for re-render; chart titles carry the active
+        population via buildRelevantLabel. automargin + margin + overflow:hidden.
+      status: "done"
+      complexity: "medium"
+      estimated_hours: 5
+      depends_on: ["5.1"]
+      branch: "feature/static-visualization-webapp/5.7-remaining-charts"
+      commit_message: "feat(frontend): ratio, boxplot, district renderers + population toggle"
+      acceptance_criteria:
+        - "rentVsSaleRatioRenderer, ratioTimeSeriesRenderer present"
+        - "boxplotRentRenderer + boxplotSaleRenderer (separate Y-axes)"
+        - "priceTimeSeriesDistrictRentRenderer + priceTimeSeriesDistrictSaleRenderer"
+        - "Toggle shows only when cachedData.relevant exists; handler async; uses Plotly.react"
+        - "GENERAL_ONLY_RENDERERS always use cachedData.general regardless of toggle"
+        - "Toggle-chart titles include active population via buildRelevantLabel(gold relevant_filter)"
+        - "automargin:true + margin on all layouts; overflow:hidden on .chart-container"
+        - "70/70 Vitest tests pass"
+      allowed_files:
+        - "frontend/**"
+      forbidden_files:
+        - "infrastructure/**"
+        - "src/etl/**"
+      can_run_parallel_with: ["5.2", "5.3"]
+      reversible: true
+      files_to_create:
+        - "frontend/src/charts/rent_vs_sale_ratio.js"
+        - "frontend/src/charts/rent_vs_sale_ratio_time_series.js"
+        - "frontend/src/charts/boxplot_by_neighborhood.js"
+        - "frontend/src/charts/price_time_series_district.js"
+        - "frontend/tests/rent_vs_sale_ratio.test.js"
+        - "frontend/tests/rent_vs_sale_ratio_time_series.test.js"
+        - "frontend/tests/boxplot_by_neighborhood.test.js"
+        - "frontend/tests/price_time_series_district.test.js"
+        - "frontend/tests/transforms_additional.test.js"
+      files_to_modify:
+        - "frontend/app.js"
+        - "frontend/index.html"
+        - "frontend/styles.css"
+        - "frontend/src/transforms.js"
+        - "frontend/src/charts/price_time_series.js"
+
+    - id: "5.5"
+      title: "Wire frontend module in dev"
+      description: >-
+        Instantiate module.frontend in infrastructure/environments/dev/main.tf,
+        consuming the shared DNS remote state. Outputs: cloudfront_url,
+        custom_domain_url, frontend_asset_bucket_name, frontend_distribution_id.
+      status: "done"
+      complexity: "low"
+      estimated_hours: 2
+      depends_on: ["5.2", "5.3"]
+      branch: "feature/static-visualization-webapp/5.5-wire-dev"
+      commit_message: "feat(terraform): wire frontend module in dev consuming shared dns remote state"
+      acceptance_criteria:
+        - "module.frontend instantiated in dev/main.tf; terraform validate + plan green"
+        - "outputs expose cloudfront_url, custom_domain_url, asset_bucket_name, distribution_id"
+      allowed_files:
+        - "infrastructure/environments/dev/**"
+      forbidden_files:
+        - "frontend/**"
+        - "src/etl/**"
+      can_run_parallel_with: []
+      reversible: true
+      files_to_create: []
+      files_to_modify:
+        - "infrastructure/environments/dev/main.tf"
+        - "infrastructure/environments/dev/outputs.tf"
+
+    - id: "5.6"
+      title: "Deploy workflow (GitHub Actions)"
+      description: >-
+        .github/workflows/deploy-frontend.yml (workflow_dispatch, environment dev/prod).
+        aws s3 sync frontend/ excluding tests/, node_modules/, coverage/, *.test.js,
+        then aws cloudfront create-invalidation --paths "/*". Mirrors deploy-lambda.yml.
+      status: "done"
+      complexity: "low"
+      estimated_hours: 1
+      depends_on: ["5.5"]
+      branch: "feature/static-visualization-webapp/5.6-deploy-workflow"
+      commit_message: "ci(frontend): deploy-frontend workflow with s3 sync + cloudfront invalidation"
+      acceptance_criteria:
+        - "workflow_dispatch with environment input (dev/prod)"
+        - "s3 sync excludes tests/, node_modules/, coverage/, *.test.js"
+        - "CloudFront invalidation after sync"
+      allowed_files:
+        - ".github/workflows/deploy-frontend.yml"
+      forbidden_files:
+        - "frontend/**"
+        - "src/etl/**"
+      can_run_parallel_with: []
+      reversible: true
+      files_to_create:
+        - ".github/workflows/deploy-frontend.yml"
+      files_to_modify: []
+
+    - id: "5.7"
+      title: "Dedicated dev subdomain vlc-report-dev.leopoldwalther.com"
+      description: >-
+        Switch the dev CloudFront alias from vlc-report to vlc-report-dev (best
+        practice: isolate dev from prod by domain). vlc-report-dev chosen over
+        dev.vlc-report because the wildcard cert covers only one subdomain level.
+        local.frontend_domain for DRY; Route 53 A + AAAA updated.
+      status: "done"
+      complexity: "low"
+      estimated_hours: 1
+      depends_on: ["5.5"]
+      branch: "feature/static-visualization-webapp/5.7-remaining-charts"
+      commit_message: "chore(infra): serve dev frontend on dedicated vlc-report-dev subdomain"
+      acceptance_criteria:
+        - "local.frontend_domain = vlc-report-dev.leopoldwalther.com"
+        - "CloudFront aliases + Route 53 A/AAAA updated; old vlc-report records destroyed"
+        - "custom_domain_url output = https://vlc-report-dev.leopoldwalther.com"
+      allowed_files:
+        - "infrastructure/environments/dev/**"
+      forbidden_files:
+        - "frontend/**"
+        - "src/etl/**"
+      can_run_parallel_with: []
+      reversible: true
+      files_to_create: []
+      files_to_modify:
+        - "infrastructure/environments/dev/main.tf"
+        - "infrastructure/environments/dev/outputs.tf"
+
+    - id: "5.8"
+      title: "Tests CI + docs (node-test workflow, pre-commit hook, FRONTEND_LAYER.md, README)"
+      description: >-
+        Add .github/workflows/node-test.yml (push/PR: npm ci + vitest run, gating
+        frontend changes like python-test.yml gates ETL). Add a frontend pre-commit
+        hook running vitest. Write documentation/FRONTEND_LAYER.md (architecture,
+        ChartRenderer/DataSource design, chart inventory, deploy + invalidation steps,
+        gold/silver ordering note from review M3). Update README Source Code Layout +
+        medallion diagram to include the visualization layer.
+      status: "done"
+      complexity: "low"
+      estimated_hours: 2
+      depends_on: ["5.4", "5.6"]
+      branch: "feature/static-visualization-webapp/5.8-tests-docs"
+      commit_message: "docs(frontend): node-test CI, pre-commit hook, FRONTEND_LAYER.md, README update"
+      acceptance_criteria:
+        - "node-test.yml triggers on push/PR, runs vitest, green on main"
+        - "pre-commit hook runs vitest before frontend JS commits"
+        - "FRONTEND_LAYER.md covers architecture, patterns, chart inventory, deploy, gold/silver ordering"
+        - "README Source Code Layout includes frontend/; medallion diagram shows visualization layer"
+        - "validate_workflow.py passes"
+      allowed_files:
+        - ".github/workflows/node-test.yml"
+        - ".pre-commit-config.yaml"
+        - "documentation/FRONTEND_LAYER.md"
+        - "README.md"
+      forbidden_files:
+        - "frontend/src/**"
+        - "infrastructure/**"
+      can_run_parallel_with: []
+      reversible: true
+      files_to_create:
+        - ".github/workflows/node-test.yml"
+        - "documentation/FRONTEND_LAYER.md"
+      files_to_modify:
+        - ".pre-commit-config.yaml"
+        - "README.md"
+
+    - id: "5.9"
+      title: "Resolve dead Dashboard class (review M1)"
+      description: >-
+        app.js was refactored to inline orchestration in run() and no longer imports
+        src/dashboard.js, leaving the Dashboard class alive only via dashboard.test.js.
+        Pick one path: (a) restore app.js to construct + mount() a Dashboard so the SRP
+        design that the plan documents is the one that runs (preferred), OR (b) delete
+        dashboard.js + dashboard.test.js and update the plan's Design section to describe
+        the inlined run(). Either way one orchestration path remains.
+      status: "done"
+      complexity: "low"
+      estimated_hours: 1
+      depends_on: ["5.4"]
+      branch: "feature/static-visualization-webapp/5.9-resolve-dashboard"
+      commit_message: "refactor(frontend): single orchestration path (resolve dead Dashboard class)"
+      acceptance_criteria:
+        - "Exactly one orchestration path exists (Dashboard.mount OR inlined run)"
+        - "No unused exports; no test exercising dead production code"
+        - "FEATURE-005 plan Design section matches the shipped orchestration"
+        - "Vitest suite green"
+      allowed_files:
+        - "frontend/app.js"
+        - "frontend/src/dashboard.js"
+        - "frontend/tests/dashboard.test.js"
+        - "dev/plans/FEATURE-005-static-visualization-webapp.md"
+      forbidden_files:
+        - "infrastructure/**"
+        - "src/etl/**"
+      can_run_parallel_with: ["5.8"]
+      reversible: true
+      files_to_create: []
+      files_to_modify:
+        - "frontend/app.js"
+
+  git_workflow:
+    branch_root: "feature/static-visualization-webapp"
+    per_task_branch: true
+    merge_strategy: "PR to main referencing FEATURE-005"
+    final_step: "Open PR after 5.8 + 5.9 land; ensure node-test + terraform-validate + workflow-consistency are green"
+
+  notes:
+    - "Tasks 5.1–5.7 shipped on branch feature/static-visualization-webapp/5.7-remaining-charts and earlier sub-branches."
+    - "Outstanding before merge: 5.8 (CI + docs) and 5.9 (dead Dashboard cleanup, review M1)."
+    - "FEATURE-006 reuses module.frontend + shared DNS state for prod (vlc-report.leopoldwalther.com)."
+    - "FEATURE-007 (Step Functions) removes the silver->gold timing race documented in review M3."
