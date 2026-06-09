@@ -111,11 +111,13 @@ work. It is intentionally small in surface area but production-shaped end to end
 │  gold/aggregations│
 └────────┬─────────┘
          │
-         ▼
-┌──────────────────┐
-│  Jupyter         │  valenciaRealEstatePriceAnalysis.ipynb
-│  Notebooks       │  pandas reads silver Parquet directly
-└──────────────────┘
+         ├────────────────────────────────────────┐
+         ▼                                        ▼
+┌──────────────────┐                 ┌──────────────────────┐
+│  Jupyter         │                 │  CloudFront + S3     │  vlc-report-dev / vlc-report
+│  Notebooks       │                 │  Static frontend     │  Plain HTML + ESM + Plotly.js
+│  pandas → silver │                 │  /gold/aggregations/ │  Two-population toggle
+└──────────────────┘                 └──────────────────────┘
 ```
 
 ### S3 Medallion Layout
@@ -142,21 +144,33 @@ work. It is intentionally small in surface area but production-shaped end to end
 ```
 infrastructure/
 ├── bootstrap/              # Remote state S3 bucket + DynamoDB lock (one-time)
+├── shared/dns/             # ACM wildcard cert + Route 53 zone (shared across envs)
 ├── modules/
 │   ├── lambda_bronze/      # Bronze Collector: Lambda, IAM, EventBridge, CloudWatch
 │   ├── lambda_silver/      # Silver Cleaner: Lambda, IAM, EventBridge, CW Alarm
 │   ├── lambda_gold/        # Gold Aggregator: Lambda, IAM, EventBridge, CW Alarm
+│   ├── frontend/           # CloudFront + private S3 assets + OAC; Route 53 aliases
 │   ├── s3/                 # S3 listings bucket (AES-256 encryption)
 │   ├── secrets/            # Secrets Manager secrets for API credentials
 │   └── sns/                # SNS topic for error alerting
 └── environments/
-    ├── dev/                # Dev environment (test_mode=true for collector)
+    ├── dev/                # Dev environment (test_mode=true; vlc-report-dev.leopoldwalther.com)
     └── prod/               # Production environment
 ```
 
 ### Source Code Layout
 
 ```
+frontend/
+├── index.html                          # Single page; 8 chart containers; population toggle
+├── app.js                              # Entry — DataSource, renderers, toggle handler
+├── styles.css
+├── vendor/plotly.min.js                # Vendored Plotly.js v2.35.2
+├── src/
+│   ├── data_source.js                  # DataSource (fetch + schema guard) + FakeDataSource
+│   ├── transforms.js                   # Pure formatSeries helpers
+│   └── charts/                         # One module per chart (Strategy pattern)
+└── tests/                              # Vitest suite (70 tests, no network/DOM)
 src/
 ├── etl/
 │   ├── data_collection/

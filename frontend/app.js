@@ -1,8 +1,11 @@
 /**
- * App entry point — wires the DataSource, renderers, and Dashboard.
+ * App entry point — wires the DataSource and all chart renderers.
  *
  * window.CONFIG.DATA_URL is injected per-environment (dev/prod) either inline
  * in index.html or via a config.js sync'd by the deploy workflow.
+ *
+ * Orchestration lives entirely in run(): load gold data, render every chart,
+ * then attach the population toggle for the four charts that support it.
  */
 
 import { DataSource } from './src/data_source.js';
