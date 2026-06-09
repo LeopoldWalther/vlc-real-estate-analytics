@@ -28,9 +28,10 @@ export const rentVsSaleRatioRenderer = {
       data: traces,
       layout: {
         title: { text: this.title },
-        xaxis: { title: { text: 'Rent price per m² (€/m²)' } },
-        yaxis: { title: { text: 'Sale price per m² (€/m²)' } },
+        xaxis: { title: { text: 'Rent price per m² per month (€)' }, automargin: true },
+        yaxis: { title: { text: 'Sale price per m² (€)' }, automargin: true },
         hovermode: 'closest',
+        margin: { l: 80, r: 40, t: 60, b: 80 },
       },
     };
   },

@@ -26,9 +26,10 @@ export const ratioTimeSeriesRenderer = {
       data: traces,
       layout: {
         title: { text: this.title },
-        xaxis: { title: { text: 'Date' } },
-        yaxis: { title: { text: 'Sale/Rent ratio' } },
+        xaxis: { title: { text: 'Date' }, automargin: true },
+        yaxis: { title: { text: 'Sale/Rent ratio' }, automargin: true },
         legend: { orientation: 'v' },
+        margin: { l: 80, r: 40, t: 60, b: 60 },
       },
     };
   },

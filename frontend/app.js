@@ -10,14 +10,15 @@ import { priceTimeSeriesRentRenderer, priceTimeSeriesSaleRenderer } from './src/
 import { priceTimeSeriesDistrictRentRenderer, priceTimeSeriesDistrictSaleRenderer } from './src/charts/price_time_series_district.js';
 import { rentVsSaleRatioRenderer } from './src/charts/rent_vs_sale_ratio.js';
 import { ratioTimeSeriesRenderer } from './src/charts/rent_vs_sale_ratio_time_series.js';
-import { boxplotRenderer } from './src/charts/boxplot_by_neighborhood.js';
+import { boxplotRentRenderer, boxplotSaleRenderer } from './src/charts/boxplot_by_neighborhood.js';
 
 // Renderers that exist in both 'general' and 'relevant' populations.
 // The population toggle switches which block is passed to render().
 const TOGGLE_RENDERERS = [
   rentVsSaleRatioRenderer,
   ratioTimeSeriesRenderer,
-  boxplotRenderer,
+  boxplotRentRenderer,
+  boxplotSaleRenderer,
 ];
 
 // Renderers only available in the 'general' population block.
@@ -39,7 +40,8 @@ const containers = {
   'price-time-series-district-sale': document.getElementById('price-time-series-district-sale'),
   'rent-vs-sale-ratio':              document.getElementById('rent-vs-sale-ratio'),
   'rent-vs-sale-ratio-time-series':  document.getElementById('rent-vs-sale-ratio-time-series'),
-  'boxplot-by-neighborhood':         document.getElementById('boxplot-by-neighborhood'),
+  'boxplot-by-neighborhood-rent':    document.getElementById('boxplot-by-neighborhood-rent'),
+  'boxplot-by-neighborhood-sale':    document.getElementById('boxplot-by-neighborhood-sale'),
 };
 
 const dataSource = new DataSource(window.CONFIG.DATA_URL);

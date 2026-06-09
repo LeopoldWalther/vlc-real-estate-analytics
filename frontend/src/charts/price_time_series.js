@@ -32,9 +32,10 @@ function makeTimeSeriesRenderer(id, title, operation, yAxisLabel) {
         data: traces,
         layout: {
           title: { text: title },
-          xaxis: { title: { text: 'Date' } },
-          yaxis: { title: { text: yAxisLabel } },
+          xaxis: { title: { text: 'Date' }, automargin: true },
+          yaxis: { title: { text: yAxisLabel }, automargin: true },
           legend: { orientation: 'v' },
+          margin: { l: 80, r: 40, t: 60, b: 60 },
         },
       };
     },
