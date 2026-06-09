@@ -26,6 +26,7 @@ PLANS_README = PLANS_DIR / "README.md"
 # CI checks a technical plan is allowed to require.
 ALLOWED_CHECKS = {
     "python-lint-and-test",
+    "node-test",
     "terraform-validate",
     "workflow-consistency",
 }

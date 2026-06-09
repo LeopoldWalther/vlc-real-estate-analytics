@@ -58,4 +58,13 @@ repos:
         language: system
         pass_filenames: false
         always_run: false
-        files: ^src/etl/.*\.py$
+
+      # Run Vitest for frontend JS changes
+      - id: vitest
+        name: vitest
+        entry: bash -c 'cd frontend && npm test'
+        language: system
+        files: ^frontend/.*\.js$
+        exclude: ^frontend/vendor/
+        pass_filenames: false
+        always_run: false
