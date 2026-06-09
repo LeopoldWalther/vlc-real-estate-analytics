@@ -80,10 +80,12 @@ aws s3 cp s3://prod-vlc-real-estate-analytics-listings/gold/aggregations/latest.
 import json, sys
 data = json.load(sys.stdin)
 gen = data['general']
-sale_dates = [p['snapshot_date'] for p in gen.get('neighbourhood_price_by_date', {}).get('sale', [])]
-rent_dates = [p['snapshot_date'] for p in gen.get('neighbourhood_price_by_date', {}).get('rent', [])]
-print(f'Sale dates: {len(set(sale_dates))}')
-print(f'Rent dates: {len(set(rent_dates))}')
+ts = gen.get('price_time_series_neighborhood', [])
+sale_dates = {p['snapshot_date'] for p in ts if p.get('operation') == 'sale'}
+rent_dates = {p['snapshot_date'] for p in ts if p.get('operation') == 'rent'}
+print(f'Sale dates: {len(sale_dates)}')
+print(f'Rent dates: {len(rent_dates)}')
+print(f'Schema:     {data[\"schema_version\"]}')
 "
 ```
 
