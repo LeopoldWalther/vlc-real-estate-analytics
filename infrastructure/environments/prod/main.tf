@@ -34,3 +34,14 @@ module "idealista_collector" {
   secret_arn_pmv  = module.idealista_secrets.secret_arn_pmv
   sns_topic_arn   = module.idealista_notifications.topic_arn
 }
+
+module "silver_cleaner" {
+  source = "../../modules/lambda_silver"
+
+  environment      = var.environment
+  aws_region       = var.aws_region
+  s3_bucket_name   = module.listings_bucket.listings_bucket_name
+  s3_bucket_arn    = module.listings_bucket.listings_bucket_arn
+  sns_topic_arn    = module.idealista_notifications.topic_arn
+  pandas_layer_arn = var.pandas_layer_arn
+}
