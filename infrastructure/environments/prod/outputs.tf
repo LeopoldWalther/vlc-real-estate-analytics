@@ -49,3 +49,23 @@ output "lambda_event_rule_name" {
   description = "Name of the EventBridge rule triggering the Lambda"
   value       = module.idealista_collector.event_rule_name
 }
+
+output "cloudfront_url" {
+  description = "Default CloudFront distribution URL (available immediately, before the custom domain is active)."
+  value       = "https://${module.frontend.distribution_domain_name}"
+}
+
+output "custom_domain_url" {
+  description = "Custom domain URL of the prod frontend (vlc-report.leopoldwalther.com)."
+  value       = "https://${local.frontend_domain}"
+}
+
+output "frontend_asset_bucket_name" {
+  description = "Name of the private S3 bucket holding frontend static assets. Used by the deploy workflow."
+  value       = module.frontend.asset_bucket_name
+}
+
+output "frontend_distribution_id" {
+  description = "CloudFront distribution ID. Used by the deploy workflow for cache invalidation."
+  value       = module.frontend.distribution_id
+}

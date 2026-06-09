@@ -25,7 +25,7 @@ tasks:
       Add the lambda_silver module block to prod/main.tf mirroring dev, and add the
       pandas_layer_arn variable to prod/variables.tf. Prod runs full pagination, so do NOT
       set test_mode. Verify the AWSSDKPandas-Python312 layer version at apply time (review M3).
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 0.5
     depends_on: []
@@ -53,7 +53,7 @@ tasks:
     description: >
       Add the lambda_gold module block to prod/main.tf mirroring dev (pass pandas_layer_arn and
       ratio_min_count). Reuse the same listings bucket and SNS topic already wired in prod.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 0.5
     depends_on: ["6.1"]
@@ -83,7 +83,7 @@ tasks:
       the Route 53 A + AAAA alias records pointing at the CloudFront distribution
       (zone Z2FDTNDATAQYW2). No us-east-1 provider is needed — the wildcard cert comes from the
       shared/dns remote state. Resolves review finding H1.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 1
     depends_on: ["6.2"]
@@ -113,7 +113,7 @@ tasks:
       requires: frontend_asset_bucket_name and frontend_distribution_id (read via
       terraform output -raw), plus cloudfront_url and custom_domain_url for convenience. Without
       the first two, the workflow's "Read Terraform outputs" step fails. Resolves H1 (outputs half).
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 0.5
     depends_on: ["6.3"]
@@ -147,7 +147,7 @@ tasks:
       operations; (3) invoke prod-gold-aggregator and confirm gold/aggregations/latest.json has the
       full sale + rent date history; (4) trigger deploy-frontend.yml with environment=prod, which
       syncs assets and invalidates CloudFront. Document the exact commands/counts in the PR.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 1.5
     depends_on: ["6.4"]
