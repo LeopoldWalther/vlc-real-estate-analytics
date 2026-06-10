@@ -15,6 +15,7 @@ small, version-controlled, independently testable tasks.
 | FEATURE-006 | Prod promotion: wire silver + gold lambdas in prod | 🟢 | `feature/prod-promotion-silver-gold` | ~7 h | High | Unassigned |
 | FEATURE-007 | Step Functions orchestration (bronze → silver → gold) | 🔵 | `feature/step-functions-orchestration` | 12–16 h | Medium | Unassigned |
 | FEATURE-008 | OOP/SOLID refactor of the ETL pipeline | 🔵 | `feature/oop-refactor-pipeline` | M (~1.5–2 d) | Medium | Unassigned |
+| FEATURE-009 | Frontend redesign: mobile-first, professional polish | 🔵 | `feature/frontend-redesign` | M (~8–10 h) | Medium | Unassigned |
 
 **Status:** 🔵 planned · 🟡 in progress · 🟢 complete · 🔴 blocked
 
@@ -33,6 +34,8 @@ graph TD
     F003 --> F008[FEATURE-008 OOP/SOLID refactor]
     F004 --> F008
     F008 -.-> F007
+    F005 --> F009[FEATURE-009 Frontend redesign]
+    F006 --> F009
 ```
 
 ## Workflow at a glance
