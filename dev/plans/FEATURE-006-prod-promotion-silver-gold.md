@@ -1,7 +1,7 @@
 # FEATURE-006 — Prod promotion: wire silver + gold lambdas in production
 
-**Status:** � Complete · **Effort:** S (~2 h) · **Priority:** High
-**Branch root:** `feature/prod-promotion-silver-gold` · **Created:** 2026-06-05 · **Updated:** 2026-06-05
+**Status:** 🟢 Complete · **Effort:** S–M (~7 h) · **Priority:** High
+**Branch root:** `feature/prod-promotion-silver-gold` · **Created:** 2026-06-05 · **Updated:** 2026-06-10
 
 > Authored by `@architect`. Reviewed by `@reviewer` (see `dev/reviews/REVIEW-FEATURE-006.md`).
 > Implemented by `@implementer` from `dev/plans/technical/FEATURE-006-technical-plan.yaml`.

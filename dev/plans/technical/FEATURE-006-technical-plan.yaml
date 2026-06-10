@@ -3,11 +3,11 @@ metadata:
   title: "Prod promotion — silver, gold, and frontend (vlc-report.leopoldwalther.com)"
   created_by: "@reviewer"
   created_at: "2026-06-09"
-  version: "1.0"
-  total_tasks: 5
-  estimated_hours: 4
+  version: "1.1"
+  total_tasks: 7
+  estimated_hours: 7
   risk_level: "medium"
-  critical_path: ["6.1", "6.2", "6.3", "6.4", "6.5"]
+  critical_path: ["6.1", "6.2", "6.3", "6.4", "6.5", "6.6", "6.7"]
   reviewed_plan: "dev/reviews/REVIEW-FEATURE-006.md"
 
 validation:
@@ -170,6 +170,85 @@ tasks:
       - "documentation/PROD_PROMOTION_RUNBOOK.md"
     files_to_modify: []
 
+  - id: "6.6"
+    title: "Shared GitHub OIDC provider + least-privilege deploy role"
+    description: >
+      Replace long-lived static IAM user keys for CI/CD with GitHub Actions OIDC (review H3). Create a
+      new account-global Terraform stack infrastructure/shared/github-oidc/ that mirrors the
+      shared/dns pattern (own backend, applied once). It provisions: (a) an
+      aws_iam_openid_connect_provider for https://token.actions.githubusercontent.com with audience
+      sts.amazonaws.com; (b) an IAM deploy role whose trust policy restricts the OIDC subject to this
+      repo and its dev/prod environments
+      (repo:LeopoldWalther/vlc-real-estate-analytics:environment:dev|prod) and the sts.amazonaws.com
+      audience; (c) a least-privilege permission policy scoped to what the two deploy workflows do:
+      s3:PutObject/DeleteObject/ListBucket on the dev+prod frontend asset buckets,
+      cloudfront:CreateInvalidation on the dev+prod distributions, lambda update-function-code for the
+      collector functions, and read access to the Terraform remote state (S3 + DynamoDB lock) so
+      `terraform output` works. Expose the role ARN as a stack output.
+    status: "done"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: ["6.4"]
+    branch: "feature/prod-promotion/6.6-github-oidc"
+    commit_message: "feat(infra): GitHub OIDC provider + least-privilege deploy role (shared)"
+    acceptance_criteria:
+      - "infrastructure/shared/github-oidc/ has its own backend.tf, providers.tf, variables.tf, main.tf, outputs.tf"
+      - "aws_iam_openid_connect_provider targets token.actions.githubusercontent.com with audience sts.amazonaws.com"
+      - "Role trust policy uses StringEquals on :aud and StringLike on :sub scoped to repo + dev/prod environments only (no wildcard repo)"
+      - "Permission policy is least-privilege: S3 frontend buckets, CloudFront CreateInvalidation, Lambda update, and TF state read — no admin/* or s3:* on all buckets"
+      - "terraform fmt -check and terraform validate pass for the new stack"
+      - "Stack output github_actions_deploy_role_arn is exposed for the workflows to consume"
+    allowed_files:
+      - "infrastructure/shared/github-oidc/**"
+    forbidden_files:
+      - "infrastructure/environments/**"
+      - "src/etl/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "infrastructure/shared/github-oidc/backend.tf"
+      - "infrastructure/shared/github-oidc/providers.tf"
+      - "infrastructure/shared/github-oidc/variables.tf"
+      - "infrastructure/shared/github-oidc/main.tf"
+      - "infrastructure/shared/github-oidc/outputs.tf"
+    files_to_modify: []
+
+  - id: "6.7"
+    title: "Migrate deploy workflows from static keys to OIDC"
+    description: >
+      Migrate both deploy-frontend.yml and deploy-lambda.yml off long-lived IAM user keys to assume the
+      OIDC deploy role from task 6.6 (review H3). Add `permissions: id-token: write` and
+      `contents: read` to each workflow, and replace aws-access-key-id/aws-secret-access-key in the
+      aws-actions/configure-aws-credentials@v4 step with `role-to-assume` (sourced from a repo
+      variable/secret, e.g. AWS_DEPLOY_ROLE_ARN) plus the existing aws-region. Remove the now-unused
+      AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY Environment secrets after a successful dev test deploy.
+      Re-run the prod frontend deploy to unblock the FEATURE-006 deliverable.
+    status: "done"
+    complexity: "low"
+    estimated_hours: 1
+    depends_on: ["6.6"]
+    branch: "feature/prod-promotion/6.7-workflows-oidc"
+    commit_message: "ci: assume AWS deploy role via OIDC instead of static keys"
+    acceptance_criteria:
+      - "Both deploy workflows declare permissions: id-token: write and contents: read"
+      - "configure-aws-credentials uses role-to-assume (no aws-access-key-id/aws-secret-access-key)"
+      - "A dev frontend deploy run succeeds end-to-end via OIDC (S3 sync + CloudFront invalidation)"
+      - "A prod frontend deploy run succeeds via OIDC and https://vlc-report.leopoldwalther.com serves the dashboard"
+      - "Static-key Environment secrets are removed once OIDC is verified"
+    allowed_files:
+      - ".github/workflows/deploy-frontend.yml"
+      - ".github/workflows/deploy-lambda.yml"
+    forbidden_files:
+      - "infrastructure/**"
+      - "src/etl/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - ".github/workflows/deploy-frontend.yml"
+      - ".github/workflows/deploy-lambda.yml"
+
 git_workflow:
   base_branch: "main"
   branch_per_task: true
@@ -187,3 +266,5 @@ notes:
   - "vlc-report.leopoldwalther.com is free since FEATURE-005 task 5.7 moved dev to vlc-report-dev — no Route 53 collision expected (review L2)."
   - "If FEATURE-007 (Step Functions) lands first, wire the pipeline_orchestrator into prod instead of promoting the per-Lambda crons (review L1)."
   - "Update the FEATURE-006 plan header: it Needs FEATURE-005 (frontend module) + FEATURE-004 (gold); it does not 'unblock' 005 (review M2)."
+  - "Tasks 6.6/6.7 (review H3) replace CI static IAM user keys with GitHub OIDC; the OIDC provider is account-global, so it lives in shared/github-oidc/ (mirrors shared/dns) and is applied once for both dev + prod."
+  - "The OIDC role trust policy MUST pin :sub to repo + environment (no wildcard) and :aud to sts.amazonaws.com to prevent any repo/branch from assuming the deploy role."
