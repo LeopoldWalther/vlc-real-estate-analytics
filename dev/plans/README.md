@@ -12,7 +12,7 @@ small, version-controlled, independently testable tasks.
 | FEATURE-003 | Silver cleaning Lambda (bronze → cleaned listings) | 🟢 | `feature/silver-cleaning-lambda` | 1.5–2 d | High | @implementer |
 | FEATURE-004 | Gold aggregation Lambda (silver → aggregations JSON) | 🟢 | `feature/gold-aggregation-lambda` | 1–1.5 d | High | Unassigned |
 | FEATURE-005 | Static visualization web app (S3 + CloudFront) | 🟢 | `feature/static-visualization-webapp` | 1.5–2 d | Medium | Unassigned |
-| FEATURE-006 | Prod promotion: wire silver + gold lambdas in prod | � | `feature/prod-promotion-silver-gold` | ~2 h | High | Unassigned |
+| FEATURE-006 | Prod promotion: wire silver + gold lambdas in prod | 🟢 | `feature/prod-promotion-silver-gold` | ~7 h | High | Unassigned |
 | FEATURE-007 | Step Functions orchestration (bronze → silver → gold) | 🔵 | `feature/step-functions-orchestration` | 12–16 h | Medium | Unassigned |
 | FEATURE-008 | OOP/SOLID refactor of the ETL pipeline | 🔵 | `feature/oop-refactor-pipeline` | M (~1.5–2 d) | Medium | Unassigned |
 

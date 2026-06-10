@@ -60,7 +60,33 @@ task (6.3) and flags the data-ordering and stale-dependency issues that come wit
   is the same footgun).
 - **Effort:** S (operational, no code).
 
-### 🟡 M1 — `terraform apply` on prod is a live, hard-to-reverse deployment
+### � H3 — Prod deploy is blocked: no AWS credentials, and static keys are the wrong fix
+
+- **Problem:** The `Deploy Frontend` workflow run against `environment: prod` fails at
+  **Configure AWS Credentials** with *"Credentials could not be loaded … Could not load credentials
+  from any providers."* The `dev` GitHub Environment has `AWS_ACCESS_KEY_ID` /
+  `AWS_SECRET_ACCESS_KEY` secrets; the `prod` Environment has none. Both `deploy-frontend.yml` and
+  `deploy-lambda.yml` authenticate with **long-lived static IAM user keys**
+  ([deploy-frontend.yml](../../.github/workflows/deploy-frontend.yml#L25-L28)).
+- **Impact:** Prod frontend (and any prod Lambda deploy) cannot run. The headline FEATURE-006
+  deliverable — the live prod site — is blocked at the last step.
+- **Recommendation:** Do **not** simply paste static keys into the `prod` Environment. Adopt
+  **GitHub OIDC**: a `token.actions.githubusercontent.com` OpenID Connect provider plus a
+  least-privilege IAM role that GitHub Actions assumes for short-lived credentials — **no stored
+  secrets, nothing to rotate or leak**. This is the AWS-recommended CI/CD pattern. Model the new
+  account-global stack on the existing `shared/dns` pattern
+  ([infrastructure/shared/dns](../../infrastructure/shared/dns)): a new
+  `infrastructure/shared/github-oidc/` stack, applied once, owning the OIDC provider + deploy role.
+  The role's trust policy restricts `sub` to this repo and its `dev` / `prod` environments; the
+  permission policy is scoped to what the two deploy workflows actually do (S3 sync to the frontend
+  asset buckets, CloudFront `CreateInvalidation`, Lambda update, and Terraform state/output reads).
+  Then migrate **both** workflows to `role-to-assume` + `permissions: id-token: write` and delete the
+  static-key secrets.
+- **Evidence:** Failed `prod` run screenshot (Configure AWS Credentials, exit early); dev secrets
+  exist but prod does not; both deploy workflows use `secrets.AWS_ACCESS_KEY_ID`.
+- **Effort:** M (~2–3 h: ~1 h OIDC Terraform, ~1 h workflow migration + a test deploy on dev).
+
+### �🟡 M1 — `terraform apply` on prod is a live, hard-to-reverse deployment
 
 - **Problem:** This feature plans-and-validates, but the actual prod apply creates a public CloudFront
   distribution, Route 53 records, and scheduled Lambdas in the live account.
@@ -106,6 +132,12 @@ task (6.3) and flags the data-ordering and stale-dependency issues that come wit
   already established. Separate distributions per environment is the right call.
 - **Promote frontend in a separate FEATURE-008+.** Rejected: the user wants prod data *and* its
   website together; splitting them leaves the deliverable half-done. Fold it into 006 as task 6.3.
+- **Static IAM user keys in the prod Environment (vs. OIDC).** The fastest unblock for H3: create a
+  dedicated deploy IAM user, scope a policy, store its keys as `prod` Environment secrets. Trade-off:
+  long-lived credentials that must be rotated and can leak; two more secrets per environment; the
+  same anti-pattern the dev workflow already carries. Verdict: use **OIDC** — comparable setup
+  effort, no stored secrets, and it lets us retire the dev static keys too. A dedicated IAM user is
+  the acceptable fallback only if OIDC is blocked.
 
 ## Risks
 
@@ -113,6 +145,7 @@ task (6.3) and flags the data-ordering and stale-dependency issues that come wit
 | --- | --- | --- | --- | --- |
 | Prod frontend omitted (plan as written) | High | High | 🔴 | Add task 6.3 (H1) |
 | Prod site renders empty until backfill | High | Med | 🔴 | Ordered backfill→gold→deploy runbook (H2) |
+| Prod deploy blocked — no creds; static keys are wrong fix | High | High | 🔴 | GitHub OIDC provider + least-privilege role (H3) |
 | Live prod apply hard to reverse | Med | High | 🟡 | Plan-only scope; gated apply window (M1) |
 | Workflow output step fails (missing prod outputs) | Med | Med | 🟡 | Add 4 frontend outputs to prod/outputs.tf (H1) |
 | Stale pandas layer ARN | Low | Med | 🟡 | Verify at apply time (M3) |
@@ -121,9 +154,10 @@ task (6.3) and flags the data-ordering and stale-dependency issues that come wit
 ## Effort check
 
 - **Plan estimate:** S (~2 h) — covers silver + gold only.
-- **Reviewer estimate:** S–M (~3–4 h) — adds 6.3 prod frontend (~1 h TF) + 6.4 outputs/runbook
-  (~0.5 h) + the operational backfill (~1 h, mostly waiting). Confidence: High; all pieces already
-  exist in dev.
+- **Reviewer estimate:** M (~6–7 h) — adds 6.3 prod frontend (~1 h TF) + 6.4 outputs/runbook
+  (~0.5 h) + the operational backfill (~1 h, mostly waiting) + 6.6/6.7 GitHub OIDC provider/role and
+  workflow migration (~2–3 h, H3). Confidence: High; all infra pieces already exist in dev or mirror
+  the `shared/dns` pattern.
 
 ## Reuse & conflicts
 
@@ -134,12 +168,13 @@ task (6.3) and flags the data-ordering and stale-dependency issues that come wit
 
 ## Approval criteria
 
-- **Blockers (must fix):** H1 (add prod frontend task + outputs), H2 (backfill→gold→deploy ordering).
+- **Blockers (must fix):** H1 (add prod frontend task + outputs), H2 (backfill→gold→deploy ordering),
+  H3 (GitHub OIDC provider + role; migrate deploy workflows off static keys).
 - **Recommended:** M1 (plan-only/gated apply), M2 (fix dependency direction), M3 (verify layer ARN).
 - **Optional:** L1 (007 coordination), L2 (free-name note).
 
 ## Next step
 
-Update the plan to add **6.3 (wire `frontend` in prod)** and **6.4 (prod frontend outputs + backfill
-runbook)**, then `@implementer Implement FEATURE-006`. Keep the actual prod `terraform apply` as a
-deliberate gated step after the dev soak.
+H1, H2, M-items are done. Remaining: implement **6.6 (shared GitHub OIDC provider + deploy role)**
+and **6.7 (migrate `deploy-frontend.yml` + `deploy-lambda.yml` to OIDC)**, then re-run the prod
+frontend deploy. Keep the actual prod `terraform apply` as a deliberate gated step.
