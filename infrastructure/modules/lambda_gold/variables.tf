@@ -48,3 +48,14 @@ variable "ratio_min_count" {
   type        = number
   default     = 5
 }
+
+variable "create_schedule" {
+  description = <<-EOT
+    When true (default), an EventBridge rule triggers this Lambda on the
+    module's built-in cron schedule. Set to false when the pipeline_orchestrator
+    module owns the trigger (Step Functions) so the per-Lambda schedule is not
+    created alongside the orchestrator schedule.
+  EOT
+  type        = bool
+  default     = true
+}

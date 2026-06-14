@@ -1,0 +1,177 @@
+{
+  "Comment": "Medallion pipeline: bronze (collect) -> silver (clean) -> gold (aggregate). Each stage is retried twice on transient errors. Any stage failure (raised exception OR non-200 statusCode) routes to NotifyFailure, which publishes an SNS alert and terminates the execution.",
+  "StartAt": "RunBronzeCollector",
+  "States": {
+    "RunBronzeCollector": {
+      "Type": "Task",
+      "Comment": "Invoke the Idealista listings collector. Passes test_mode so dev runs stay within API limits; in prod test_mode is false so all pages are collected.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${bronze_function_arn}",
+        "Payload": {
+          "test_mode.$": "$.test_mode"
+        }
+      },
+      "ResultPath": "$.bronze_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0,
+          "Comment": "Retry on transient Lambda service errors; exponential back-off to reduce thundering-herd risk."
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error",
+          "Comment": "Catch any unhandled exception (after retries exhausted) and route to the shared failure notifier."
+        }
+      ],
+      "Next": "CheckBronzeStatus"
+    },
+    "CheckBronzeStatus": {
+      "Type": "Choice",
+      "Comment": "Inspect the bronze Lambda response statusCode. The bronze handler swallows some errors and returns a 500 instead of raising — this Choice stops the pipeline in those cases without requiring a Python change.",
+      "Choices": [
+        {
+          "Variable": "$.bronze_result.Payload.statusCode",
+          "NumericEquals": 200,
+          "Next": "RunSilverCleaner"
+        }
+      ],
+      "Default": "NotifyFailure"
+    },
+    "RunSilverCleaner": {
+      "Type": "Task",
+      "Comment": "Invoke the silver cleaning Lambda. Empty payload so it uses its own latest-snapshot discovery logic (review L2).",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${silver_function_arn}",
+        "Payload": {}
+      },
+      "ResultPath": "$.silver_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0,
+          "Comment": "Retry on transient Lambda service errors."
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error",
+          "Comment": "Catch any unhandled exception after retries and route to the failure notifier."
+        }
+      ],
+      "Next": "CheckSilverStatus"
+    },
+    "CheckSilverStatus": {
+      "Type": "Choice",
+      "Comment": "Inspect the silver Lambda response statusCode.",
+      "Choices": [
+        {
+          "Variable": "$.silver_result.Payload.statusCode",
+          "NumericEquals": 200,
+          "Next": "RunGoldAggregator"
+        }
+      ],
+      "Default": "NotifyFailure"
+    },
+    "RunGoldAggregator": {
+      "Type": "Task",
+      "Comment": "Invoke the gold aggregation Lambda. Empty payload — aggregates all available silver data.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${gold_function_arn}",
+        "Payload": {}
+      },
+      "ResultPath": "$.gold_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0,
+          "Comment": "Retry on transient Lambda service errors."
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error",
+          "Comment": "Catch any unhandled exception after retries and route to the failure notifier."
+        }
+      ],
+      "Next": "CheckGoldStatus"
+    },
+    "CheckGoldStatus": {
+      "Type": "Choice",
+      "Comment": "Inspect the gold Lambda response statusCode.",
+      "Choices": [
+        {
+          "Variable": "$.gold_result.Payload.statusCode",
+          "NumericEquals": 200,
+          "Next": "ExtractSummary"
+        }
+      ],
+      "Default": "NotifyFailure"
+    },
+    "ExtractSummary": {
+      "Type": "Pass",
+      "Comment": "Parse the bronze body JSON string and collect key metrics from all three stages so the success notification can reference them with States.Format. ResultPath merges $.summary into the execution state without overwriting stage results.",
+      "Parameters": {
+        "bronze_data.$": "States.StringToJson($.bronze_result.Payload.body)",
+        "silver_rows_written.$": "$.silver_result.Payload.rows_written",
+        "silver_parquet_files.$": "$.silver_result.Payload.parquet_files_written",
+        "gold_key.$": "$.gold_result.Payload.key",
+        "gold_bytes.$": "$.gold_result.Payload.bytes",
+        "execution_name.$": "$$.Execution.Name",
+        "start_time.$": "$$.Execution.StartTime"
+      },
+      "ResultPath": "$.summary",
+      "Next": "NotifySuccess"
+    },
+    "NotifySuccess": {
+      "Type": "Task",
+      "Comment": "Publish a post-run summary to SNS after every successful execution so operators receive key metrics by email. Includes data counts and sizes from all three stages and the execution start time. ResultPath null prevents the SNS response from polluting the state.",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${sns_topic_arn}",
+        "Subject": "Medallion pipeline succeeded",
+        "Message.$": "States.Format('Pipeline run SUCCEEDED\n\nExecution : {}\nStarted   : {}\n\nBronze  — {} sale pages, {} rent pages | {} MB collected | {}s\nSilver  — {} listings cleaned | {} Parquet file(s) written\nGold    — {} | {} bytes', $.summary.execution_name, $.summary.start_time, $.summary.bronze_data.sale_pages, $.summary.bronze_data.rent_pages, $.summary.bronze_data.total_size_mb, $.summary.bronze_data.duration_seconds, $.summary.silver_rows_written, $.summary.silver_parquet_files, $.summary.gold_key, $.summary.gold_bytes)"
+      },
+      "ResultPath": null,
+      "Next": "PipelineSucceeded"
+    },
+    "PipelineSucceeded": {
+      "Type": "Succeed",
+      "Comment": "All three stages completed successfully."
+    },
+    "NotifyFailure": {
+      "Type": "Task",
+      "Comment": "Publish a failure notification to SNS. Uses States.Format with the execution name. The $.error path is populated by Catch states (raised exceptions); for Choice-default paths (statusCode != 200) it may be absent — the SNS message therefore avoids referencing $.error directly.",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${sns_topic_arn}",
+        "Subject": "Medallion pipeline failed",
+        "Message.$": "States.Format('Medallion pipeline execution {} failed. Check the Step Functions console and CloudWatch logs for details: /aws/vendedlogs/states/', $$.Execution.Name)"
+      },
+      "ResultPath": null,
+      "Next": "PipelineFailed"
+    },
+    "PipelineFailed": {
+      "Type": "Fail",
+      "Comment": "Terminal failure state — marks the execution as FAILED in Step Functions after the SNS notification has been published.",
+      "Error": "PipelineFailure",
+      "Cause": "A pipeline stage returned a non-200 status or raised an exception. See the SNS notification for details."
+    }
+  }
+}

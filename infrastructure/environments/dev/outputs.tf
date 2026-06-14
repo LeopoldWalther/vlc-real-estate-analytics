@@ -69,3 +69,13 @@ output "frontend_distribution_id" {
   description = "CloudFront distribution ID. Used by the deploy workflow for cache invalidation."
   value       = module.frontend.distribution_id
 }
+
+output "pipeline_state_machine_arn" {
+  description = "ARN of the medallion pipeline Step Functions state machine."
+  value       = module.pipeline_orchestrator.state_machine_arn
+}
+
+output "pipeline_state_machine_name" {
+  description = "Name of the medallion pipeline Step Functions state machine."
+  value       = module.pipeline_orchestrator.state_machine_name
+}

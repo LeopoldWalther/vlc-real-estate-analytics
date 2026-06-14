@@ -244,6 +244,140 @@ Silver is a **current-state** layer. It reflects the most recently collected sna
 
 Aggregation (median price, price-per-m² by neighborhood) belongs in the gold layer where the aggregation logic can evolve independently of the silver cleaning rules. Silver is the single source of truth for cleaned individual records.
 
+---
+
+## Pipeline Orchestration (Step Functions)
+
+> **FEATURE-007** — introduced in `feature/step-functions-orchestration`.
+
+The three stages (bronze → silver → gold) are now orchestrated by an AWS Step Functions **Standard** state machine. A single EventBridge Scheduler trigger fires the state machine; the per-Lambda EventBridge rules are disabled (`create_schedule = false`) to prevent double-invocation.
+
+### Architecture
+
+```
+┌─────────────────────────┐
+│  EventBridge Scheduler  │  cron(0 12 ? * SUN *)  — every Sunday 12:00 UTC
+└────────────┬────────────┘
+             │ StartExecution (test_mode: true/false)
+             ▼
+┌─────────────────────────────────────────────────────────────┐
+│  Step Functions — {env}-medallion-pipeline (STANDARD)       │
+│                                                             │
+│  RunBronzeCollector ──(200)──▶ RunSilverCleaner             │
+│       │                             │                       │
+│   (Catch / !=200)              (Catch / !=200)              │
+│       │                             │                       │
+│       ▼                             ▼                       │
+│  CheckBronzeStatus           CheckSilverStatus              │
+│       │  200                        │  200                  │
+│       └──────────────┐  ┌───────────┘                       │
+│                      ▼  ▼                                   │
+│               RunGoldAggregator                             │
+│                      │                                      │
+│               (Catch / !=200)                               │
+│                      │                                      │
+│               CheckGoldStatus                               │
+│                 │         │                                  │
+│              200 ▼         ▼ other                          │
+│         PipelineSucceeded  NotifyFailure ──▶ PipelineFailed │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Retry behaviour
+
+Each Task state retries up to **2 times** on transient Lambda service errors (`Lambda.ServiceException`, `Lambda.AWSLambdaException`, `Lambda.SdkClientException`, `Lambda.TooManyRequestsException`) with an initial interval of 30 s and a back-off rate of 2.0 (30 s → 60 s).
+
+### Failure handling
+
+Two failure paths stop the pipeline before downstream stages run:
+
+| Path | Condition | Route |
+|---|---|---|
+| Raised exception | Lambda throws (after retries exhausted) | `Catch → NotifyFailure` with `ResultPath: $.error` |
+| Swallowed error | Lambda returns `statusCode != 200` | `Choice default → NotifyFailure` |
+
+`NotifyFailure` publishes an SNS message with the Step Functions execution name, then transitions to the `PipelineFailed` (Fail) state. This ensures the bronze handler's swallowed-500 return stops silver and gold from running.
+
+### Terraform module
+
+**Path**: `infrastructure/modules/pipeline_orchestrator/`
+
+```
+modules/pipeline_orchestrator/
+├── main.tf                  # State machine, IAM roles, Scheduler, CloudWatch log group
+├── state_machine.asl.json   # ASL definition (ARNs injected via templatefile)
+├── variables.tf             # Input variables
+└── outputs.tf               # state_machine_arn, state_machine_name, log_group_name, etc.
+```
+
+#### Key variables
+
+| Variable | Type | Default | Description |
+|---|---|---|---|
+| `environment` | string | — | `dev` or `prod` |
+| `aws_region` | string | — | AWS region |
+| `bronze_function_arn` | string | — | ARN of the bronze collector Lambda |
+| `silver_function_arn` | string | — | ARN of the silver cleaner Lambda |
+| `gold_function_arn` | string | — | ARN of the gold aggregator Lambda |
+| `sns_topic_arn` | string | — | SNS topic for failure notifications |
+| `test_mode` | bool | `false` | Passed to bronze Lambda; limits to 1 page/operation in dev |
+
+#### Resources created
+
+| Resource | Name pattern |
+|---|---|
+| Step Functions state machine | `{env}-medallion-pipeline` |
+| SFN execution IAM role | `{env}-medallion-pipeline-sfn-role` |
+| Scheduler trigger IAM role | `{env}-medallion-pipeline-scheduler-role` |
+| EventBridge Scheduler schedule | `{env}-medallion-pipeline-weekly` |
+| CloudWatch log group | `/aws/vendedlogs/states/{env}-medallion-pipeline` |
+
+#### Logging
+
+ALL-level logging is enabled. Execution history (including state input/output) is written to `/aws/vendedlogs/states/{env}-medallion-pipeline` with 30-day retention.
+
+### Dev wiring
+
+The orchestrator is wired into `infrastructure/environments/dev/main.tf`:
+
+```hcl
+module "pipeline_orchestrator" {
+  source = "../../modules/pipeline_orchestrator"
+
+  environment         = var.environment
+  aws_region          = var.aws_region
+  bronze_function_arn = module.idealista_collector.function_arn
+  silver_function_arn = module.silver_cleaner.function_arn
+  gold_function_arn   = module.gold_aggregator.function_arn
+  sns_topic_arn       = module.idealista_notifications.topic_arn
+  test_mode           = true  # 1 page/operation in dev
+}
+```
+
+All three lambda modules set `create_schedule = false` — the orchestrator is the single trigger.
+
+> **Prod wiring** is coordinated with FEATURE-006 (prod promotion). The `pipeline_orchestrator` module is applied to prod alongside the same `create_schedule = false` change on the three Lambda modules.
+
+### Re-running a failed execution
+
+To manually re-run the pipeline after a failure:
+
+1. Open the [Step Functions console](https://eu-central-1.console.aws.amazon.com/states/home?region=eu-central-1) → **State machines** → `{env}-medallion-pipeline`.
+2. Find the failed execution and open it to identify the failing stage.
+3. Check CloudWatch logs at `/aws/vendedlogs/states/{env}-medallion-pipeline` for details.
+4. Fix the root cause (e.g. re-invoke the bronze Lambda if the API was temporarily unavailable).
+5. Click **New execution** → paste the original input JSON (or use `{"test_mode": false}` for prod):
+
+```bash
+# Start a new execution from the CLI
+aws stepfunctions start-execution \
+  --state-machine-arn "arn:aws:states:eu-central-1:<ACCOUNT_ID>:stateMachine:prod-medallion-pipeline" \
+  --input '{"test_mode": false}' \
+  --region eu-central-1
+```
+
+The state machine is **idempotent**: re-running bronze overwrites the same S3 key prefix; re-running silver overwrites the same silver partition; re-running gold overwrites `gold/aggregations/latest.json`.
+
 ### Why pandas layer instead of bundled?
 
 The `AWSSDKPandas-Python312` managed layer saves ~50 MB of deployment package size, is kept up-to-date by AWS, and avoids the complexity of compiling native extensions (pyarrow) for the Lambda runtime.

@@ -19,6 +19,6 @@ output "log_group_name" {
 }
 
 output "event_rule_name" {
-  description = "Name of the EventBridge schedule rule"
-  value       = aws_cloudwatch_event_rule.silver_weekly_trigger.name
+  description = "Name of the EventBridge schedule rule (empty string when create_schedule = false)."
+  value       = var.create_schedule ? aws_cloudwatch_event_rule.silver_weekly_trigger[0].name : ""
 }

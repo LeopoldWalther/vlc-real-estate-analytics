@@ -27,7 +27,7 @@ tasks:
       STANDARD. Three Task states (arn:aws:states:::lambda:invoke) bronze -> silver -> gold, each with
       a Retry block (IntervalSeconds 30, MaxAttempts 2, BackoffRate 2.0). Pass test_mode into the
       bronze Task input; invoke silver with {} so it uses its latest-snapshot branch (review L2).
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 3
     depends_on: []
@@ -63,7 +63,7 @@ tasks:
       NotifyFailure is an SNS Publish (arn:aws:states:::sns:publish) to the existing topic, then Fail.
       This makes failure handling handler-agnostic so the bronze handler's swallowed-500 return still
       stops the pipeline. No Python is modified.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2.5
     depends_on: ["7.1"]
@@ -95,7 +95,7 @@ tasks:
       Scheduler schedule cron(0 12 ? * SUN *) with a StartExecution target, plus its OWN IAM role
       allowing states:StartExecution on the state machine (review M3). CloudWatch log group
       /aws/vendedlogs/states/{env}-medallion-pipeline, 30-day retention, ALL-level logging enabled.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2.5
     depends_on: ["7.2"]
@@ -127,7 +127,7 @@ tasks:
       variable (default true) to lambda_bronze, lambda_silver, lambda_gold and wrap each module's
       aws_cloudwatch_event_rule / target / lambda_permission in count = var.create_schedule ? 1 : 0.
       Keeps the modules independently usable; the env disables them when wiring the orchestrator.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: []
@@ -168,7 +168,7 @@ tasks:
       test_mode = true. Set create_schedule = false on the bronze/silver/gold module blocks so the
       single schedule lives only in the orchestrator. Prod wiring is deferred to / coordinated with
       FEATURE-006 (promote the state machine, not the three crons).
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 1.5
     depends_on: ["7.3", "7.4"]
@@ -200,7 +200,7 @@ tasks:
       diagram, retry/catch/Choice failure behaviour, the single weekly trigger, and how to re-run a
       failed execution from the Step Functions console. Note the FEATURE-006 coordination (prod wires
       the orchestrator + create_schedule=false).
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 0.5
     depends_on: ["7.5"]

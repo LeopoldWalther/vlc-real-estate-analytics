@@ -268,9 +268,15 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     snapshot_groups = _list_snapshot_keys(s3, bucket, bronze_prefix, target_date)
     if not snapshot_groups:
         logger.warning("No bronze snapshot keys found under %s/", bronze_prefix)
-        return {"statusCode": 200, "body": "No bronze snapshots found."}
+        return {
+            "statusCode": 200,
+            "body": "No bronze snapshots found.",
+            "parquet_files_written": 0,
+            "rows_written": 0,
+        }
 
     written: List[str] = []
+    rows_written: int = 0
     for (operation, snapshot_date), keys in sorted(snapshot_groups.items()):
         logger.info(
             "Processing operation=%s snapshot_date=%s (%d pages)",
@@ -319,8 +325,11 @@ def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             s3, bucket, silver_prefix, operation, snapshot_date, cleaned
         )
         written.append(written_key)
+        rows_written += len(cleaned)
 
     return {
         "statusCode": 200,
+        "parquet_files_written": len(written),
+        "rows_written": rows_written,
         "body": f"Wrote {len(written)} Parquet file(s): {written}",
     }
