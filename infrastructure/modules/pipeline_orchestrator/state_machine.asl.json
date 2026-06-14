@@ -119,10 +119,37 @@
         {
           "Variable": "$.gold_result.Payload.statusCode",
           "NumericEquals": 200,
-          "Next": "PipelineSucceeded"
+          "Next": "ExtractSummary"
         }
       ],
       "Default": "NotifyFailure"
+    },
+    "ExtractSummary": {
+      "Type": "Pass",
+      "Comment": "Parse the bronze body JSON string and collect key metrics from all three stages so the success notification can reference them with States.Format. ResultPath merges $.summary into the execution state without overwriting stage results.",
+      "Parameters": {
+        "bronze_data.$": "States.StringToJson($.bronze_result.Payload.body)",
+        "silver_rows_written.$": "$.silver_result.Payload.rows_written",
+        "silver_parquet_files.$": "$.silver_result.Payload.parquet_files_written",
+        "gold_key.$": "$.gold_result.Payload.key",
+        "gold_bytes.$": "$.gold_result.Payload.bytes",
+        "execution_name.$": "$$.Execution.Name",
+        "start_time.$": "$$.Execution.StartTime"
+      },
+      "ResultPath": "$.summary",
+      "Next": "NotifySuccess"
+    },
+    "NotifySuccess": {
+      "Type": "Task",
+      "Comment": "Publish a post-run summary to SNS after every successful execution so operators receive key metrics by email. Includes data counts and sizes from all three stages and the execution start time. ResultPath null prevents the SNS response from polluting the state.",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${sns_topic_arn}",
+        "Subject": "Medallion pipeline succeeded",
+        "Message.$": "States.Format('Pipeline run SUCCEEDED\n\nExecution : {}\nStarted   : {}\n\nBronze  — {} sale pages, {} rent pages | {} MB collected | {}s\nSilver  — {} listings cleaned | {} Parquet file(s) written\nGold    — {} | {} bytes', $.summary.execution_name, $.summary.start_time, $.summary.bronze_data.sale_pages, $.summary.bronze_data.rent_pages, $.summary.bronze_data.total_size_mb, $.summary.bronze_data.duration_seconds, $.summary.silver_rows_written, $.summary.silver_parquet_files, $.summary.gold_key, $.summary.gold_bytes)"
+      },
+      "ResultPath": null,
+      "Next": "PipelineSucceeded"
     },
     "PipelineSucceeded": {
       "Type": "Succeed",
