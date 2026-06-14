@@ -9,7 +9,7 @@
       "Parameters": {
         "FunctionName": "${bronze_function_arn}",
         "Payload": {
-          "test_mode.$": "$.test_mode"
+          "test_mode": ${test_mode}
         }
       },
       "ResultPath": "$.bronze_result",

@@ -14,11 +14,12 @@ terraform {
 # ARNs are injected at plan time; no hardcoded ARNs in the JSON file.
 # ---------------------------------------------------------------------------
 locals {
-  asl_definition = templatefile("${path.module}/state_machine.asl.json", {
+  asl_definition = templatefile("${path.module}/state_machine.asl.json.tftpl", {
     bronze_function_arn = var.bronze_function_arn
     silver_function_arn = var.silver_function_arn
     gold_function_arn   = var.gold_function_arn
     sns_topic_arn       = var.sns_topic_arn
+    test_mode           = var.test_mode
   })
 }
 
@@ -179,11 +180,9 @@ resource "aws_scheduler_schedule" "weekly_pipeline" {
     arn      = aws_sfn_state_machine.medallion_pipeline.arn
     role_arn = aws_iam_role.scheduler_trigger.arn
 
-    # Inject test_mode from the Terraform variable so dev runs are limited
-    # to 1 page per operation and prod runs collect all pages.
-    input = jsonencode({
-      test_mode = var.test_mode
-    })
+    # Empty input — test_mode is baked into the ASL definition at plan time
+    # via templatefile, so the execution input does not need to carry it.
+    input = jsonencode({})
   }
 }
 
