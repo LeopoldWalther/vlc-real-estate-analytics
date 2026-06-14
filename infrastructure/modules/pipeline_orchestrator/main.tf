@@ -192,7 +192,7 @@ resource "aws_scheduler_schedule" "weekly_pipeline" {
 # ---------------------------------------------------------------------------
 resource "aws_iam_role" "scheduler_trigger" {
   name        = "${var.environment}-medallion-pipeline-scheduler-role"
-  description = "EventBridge Scheduler role — starts the medallion pipeline state machine only."
+  description = "EventBridge Scheduler role: starts the medallion pipeline state machine only."
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
