@@ -1,0 +1,68 @@
+{
+  "Comment": "Medallion pipeline: bronze (collect) -> silver (clean) -> gold (aggregate). Each stage is retried twice on transient failures before the execution fails.",
+  "StartAt": "RunBronzeCollector",
+  "States": {
+    "RunBronzeCollector": {
+      "Type": "Task",
+      "Comment": "Invoke the Idealista listings collector. Passes test_mode so dev runs stay within API limits; in prod test_mode is false so all pages are collected.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${bronze_function_arn}",
+        "Payload": {
+          "test_mode.$": "$.test_mode"
+        }
+      },
+      "ResultPath": "$.bronze_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0,
+          "Comment": "Retry on transient Lambda service errors; exponential back-off to reduce thundering-herd risk."
+        }
+      ],
+      "Next": "RunSilverCleaner"
+    },
+    "RunSilverCleaner": {
+      "Type": "Task",
+      "Comment": "Invoke the silver cleaning Lambda. Empty payload so it uses its own latest-snapshot discovery logic (review L2).",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${silver_function_arn}",
+        "Payload": {}
+      },
+      "ResultPath": "$.silver_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0,
+          "Comment": "Retry on transient Lambda service errors."
+        }
+      ],
+      "Next": "RunGoldAggregator"
+    },
+    "RunGoldAggregator": {
+      "Type": "Task",
+      "Comment": "Invoke the gold aggregation Lambda. Empty payload — aggregates all available silver data.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${gold_function_arn}",
+        "Payload": {}
+      },
+      "ResultPath": "$.gold_result",
+      "Retry": [
+        {
+          "ErrorEquals": ["Lambda.ServiceException", "Lambda.AWSLambdaException", "Lambda.SdkClientException", "Lambda.TooManyRequestsException"],
+          "IntervalSeconds": 30,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0,
+          "Comment": "Retry on transient Lambda service errors."
+        }
+      ],
+      "End": true
+    }
+  }
+}
