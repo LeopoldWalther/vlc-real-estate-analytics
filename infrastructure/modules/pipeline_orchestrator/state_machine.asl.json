@@ -1,5 +1,5 @@
 {
-  "Comment": "Medallion pipeline: bronze (collect) -> silver (clean) -> gold (aggregate). Each stage is retried twice on transient failures before the execution fails.",
+  "Comment": "Medallion pipeline: bronze (collect) -> silver (clean) -> gold (aggregate). Each stage is retried twice on transient errors. Any stage failure (raised exception OR non-200 statusCode) routes to NotifyFailure, which publishes an SNS alert and terminates the execution.",
   "StartAt": "RunBronzeCollector",
   "States": {
     "RunBronzeCollector": {
@@ -22,7 +22,27 @@
           "Comment": "Retry on transient Lambda service errors; exponential back-off to reduce thundering-herd risk."
         }
       ],
-      "Next": "RunSilverCleaner"
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error",
+          "Comment": "Catch any unhandled exception (after retries exhausted) and route to the shared failure notifier."
+        }
+      ],
+      "Next": "CheckBronzeStatus"
+    },
+    "CheckBronzeStatus": {
+      "Type": "Choice",
+      "Comment": "Inspect the bronze Lambda response statusCode. The bronze handler swallows some errors and returns a 500 instead of raising — this Choice stops the pipeline in those cases without requiring a Python change.",
+      "Choices": [
+        {
+          "Variable": "$.bronze_result.Payload.statusCode",
+          "NumericEquals": 200,
+          "Next": "RunSilverCleaner"
+        }
+      ],
+      "Default": "NotifyFailure"
     },
     "RunSilverCleaner": {
       "Type": "Task",
@@ -42,7 +62,27 @@
           "Comment": "Retry on transient Lambda service errors."
         }
       ],
-      "Next": "RunGoldAggregator"
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error",
+          "Comment": "Catch any unhandled exception after retries and route to the failure notifier."
+        }
+      ],
+      "Next": "CheckSilverStatus"
+    },
+    "CheckSilverStatus": {
+      "Type": "Choice",
+      "Comment": "Inspect the silver Lambda response statusCode.",
+      "Choices": [
+        {
+          "Variable": "$.silver_result.Payload.statusCode",
+          "NumericEquals": 200,
+          "Next": "RunGoldAggregator"
+        }
+      ],
+      "Default": "NotifyFailure"
     },
     "RunGoldAggregator": {
       "Type": "Task",
@@ -62,7 +102,49 @@
           "Comment": "Retry on transient Lambda service errors."
         }
       ],
-      "End": true
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error",
+          "Comment": "Catch any unhandled exception after retries and route to the failure notifier."
+        }
+      ],
+      "Next": "CheckGoldStatus"
+    },
+    "CheckGoldStatus": {
+      "Type": "Choice",
+      "Comment": "Inspect the gold Lambda response statusCode.",
+      "Choices": [
+        {
+          "Variable": "$.gold_result.Payload.statusCode",
+          "NumericEquals": 200,
+          "Next": "PipelineSucceeded"
+        }
+      ],
+      "Default": "NotifyFailure"
+    },
+    "PipelineSucceeded": {
+      "Type": "Succeed",
+      "Comment": "All three stages completed successfully."
+    },
+    "NotifyFailure": {
+      "Type": "Task",
+      "Comment": "Publish a failure notification to SNS. Uses States.Format with the execution name. The $.error path is populated by Catch states (raised exceptions); for Choice-default paths (statusCode != 200) it may be absent — the SNS message therefore avoids referencing $.error directly.",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "${sns_topic_arn}",
+        "Subject": "Medallion pipeline failed",
+        "Message.$": "States.Format('Medallion pipeline execution {} failed. Check the Step Functions console and CloudWatch logs for details: /aws/vendedlogs/states/', $$.Execution.Name)"
+      },
+      "ResultPath": null,
+      "Next": "PipelineFailed"
+    },
+    "PipelineFailed": {
+      "Type": "Fail",
+      "Comment": "Terminal failure state — marks the execution as FAILED in Step Functions after the SNS notification has been published.",
+      "Error": "PipelineFailure",
+      "Cause": "A pipeline stage returned a non-200 status or raised an exception. See the SNS notification for details."
     }
   }
 }
