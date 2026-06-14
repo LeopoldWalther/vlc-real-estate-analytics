@@ -193,6 +193,8 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
 
 # EventBridge rule to trigger Lambda weekly (every Sunday at 12:00 UTC)
 resource "aws_cloudwatch_event_rule" "weekly_trigger" {
+  count = var.create_schedule ? 1 : 0
+
   name                = "${var.environment}-idealista-collector-weekly"
   description         = "Trigger Idealista listings collector weekly"
   schedule_expression = "cron(0 12 ? * SUN *)" # Every Sunday at 12:00 UTC
@@ -207,7 +209,9 @@ resource "aws_cloudwatch_event_rule" "weekly_trigger" {
 
 # EventBridge target
 resource "aws_cloudwatch_event_target" "lambda_target" {
-  rule      = aws_cloudwatch_event_rule.weekly_trigger.name
+  count = var.create_schedule ? 1 : 0
+
+  rule      = aws_cloudwatch_event_rule.weekly_trigger[0].name
   target_id = "IdealistaCollectorLambda"
   arn       = aws_lambda_function.idealista_collector.arn
 
@@ -218,9 +222,11 @@ resource "aws_cloudwatch_event_target" "lambda_target" {
 
 # Permission for EventBridge to invoke Lambda
 resource "aws_lambda_permission" "allow_eventbridge" {
+  count = var.create_schedule ? 1 : 0
+
   statement_id  = "AllowExecutionFromEventBridge"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.idealista_collector.function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.weekly_trigger.arn
+  source_arn    = aws_cloudwatch_event_rule.weekly_trigger[0].arn
 }

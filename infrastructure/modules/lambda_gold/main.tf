@@ -223,6 +223,8 @@ resource "aws_cloudwatch_metric_alarm" "gold_lambda_errors" {
 # (45 min after the bronze collector, 15 min after silver, ensuring silver is ready)
 # ---------------------------------------------------------------------------
 resource "aws_cloudwatch_event_rule" "gold_weekly_trigger" {
+  count = var.create_schedule ? 1 : 0
+
   name                = "${var.environment}-gold-aggregator-weekly"
   description         = "Trigger gold aggregation Lambda weekly, 15 min after the silver cleaner"
   schedule_expression = "cron(45 12 ? * SUN *)"
@@ -236,15 +238,19 @@ resource "aws_cloudwatch_event_rule" "gold_weekly_trigger" {
 }
 
 resource "aws_cloudwatch_event_target" "gold_lambda_target" {
-  rule      = aws_cloudwatch_event_rule.gold_weekly_trigger.name
+  count = var.create_schedule ? 1 : 0
+
+  rule      = aws_cloudwatch_event_rule.gold_weekly_trigger[0].name
   target_id = "GoldAggregatorLambda"
   arn       = aws_lambda_function.gold_aggregator.arn
 }
 
 resource "aws_lambda_permission" "allow_eventbridge_gold" {
+  count = var.create_schedule ? 1 : 0
+
   statement_id  = "AllowExecutionFromEventBridge"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.gold_aggregator.function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.gold_weekly_trigger.arn
+  source_arn    = aws_cloudwatch_event_rule.gold_weekly_trigger[0].arn
 }

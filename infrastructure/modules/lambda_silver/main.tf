@@ -230,6 +230,8 @@ resource "aws_cloudwatch_metric_alarm" "silver_lambda_errors" {
 # (30 min after the collector's cron(0 12 ? * SUN *) to ensure bronze is ready)
 # ---------------------------------------------------------------------------
 resource "aws_cloudwatch_event_rule" "silver_weekly_trigger" {
+  count = var.create_schedule ? 1 : 0
+
   name                = "${var.environment}-silver-cleaner-weekly"
   description         = "Trigger silver cleaning Lambda weekly, 30 min after the bronze collector"
   schedule_expression = "cron(30 12 ? * SUN *)"
@@ -243,15 +245,19 @@ resource "aws_cloudwatch_event_rule" "silver_weekly_trigger" {
 }
 
 resource "aws_cloudwatch_event_target" "silver_lambda_target" {
-  rule      = aws_cloudwatch_event_rule.silver_weekly_trigger.name
+  count = var.create_schedule ? 1 : 0
+
+  rule      = aws_cloudwatch_event_rule.silver_weekly_trigger[0].name
   target_id = "SilverCleanerLambda"
   arn       = aws_lambda_function.silver_cleaner.arn
 }
 
 resource "aws_lambda_permission" "allow_eventbridge_silver" {
+  count = var.create_schedule ? 1 : 0
+
   statement_id  = "AllowExecutionFromEventBridge"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.silver_cleaner.function_name
   principal     = "events.amazonaws.com"
-  source_arn    = aws_cloudwatch_event_rule.silver_weekly_trigger.arn
+  source_arn    = aws_cloudwatch_event_rule.silver_weekly_trigger[0].arn
 }
