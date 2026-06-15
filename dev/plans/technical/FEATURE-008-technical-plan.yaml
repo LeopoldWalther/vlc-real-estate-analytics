@@ -1,0 +1,340 @@
+metadata:
+  for_feature: "FEATURE-008"
+  title: "OOP/SOLID refactor of the ETL pipeline (bronze, silver, gold)"
+  created_by: "@reviewer"
+  created_at: "2026-06-15"
+  version: "1.0"
+  total_tasks: 9
+  estimated_hours: 19
+  risk_level: "medium"
+  critical_path: ["8.1", "8.2", "8.4", "8.6"]
+  reviewed_plan: "dev/reviews/REVIEW-FEATURE-008.md"
+
+validation:
+  required_checks:
+    - "pytest (all ETL unit + integration tests green)"
+    - "black --check"
+    - "ruff"
+    - "mypy (widened src/etl scope)"
+    - "terraform fmt -check"
+    - "terraform validate (lambda_bronze/silver/gold modules + dev env)"
+    - "gold schema-v1.0 golden-master byte-for-byte equality"
+  min_coverage: ">80% on new classes; existing behaviour tests preserved"
+
+tasks:
+  - id: "8.1"
+    title: "Decide packaging strategy + capture gold golden-master (review H1, M1)"
+    description: >
+      Resolve review H1 BEFORE any class is written. Decide between (a) shared src/etl/common/
+      package with a packaging change, or (b) duplicated Protocols per Lambda. Recommended: (a).
+      If (a): change lambda_bronze (source_file -> source_dir staging common/), lambda_silver and
+      lambda_gold archive_file blocks so src/etl/common/ lands at the zip root and existing flat
+      imports keep working; run terraform validate. Also capture review M1: generate a gold
+      latest.json from a fixed silver fixture and commit it as the golden-master regression fixture
+      asserted by the gold tests. No behaviour change.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2.5
+    depends_on: []
+    branch: "feature/oop-refactor-pipeline/8.1-packaging-and-golden-master"
+    commit_message: "chore(etl): lock gold golden-master + decide shared-package packaging"
+    acceptance_criteria:
+      - "GIVEN the chosen packaging WHEN terraform validate runs on all 3 lambda modules THEN it passes"
+      - "GIVEN a fixed silver fixture WHEN gold runs THEN output equals the committed golden-master byte-for-byte"
+      - "the packaging decision (shared vs duplicated) is recorded in the plan progress log"
+      - "no observable Lambda behaviour changes"
+    allowed_files:
+      - "infrastructure/modules/lambda_bronze/**"
+      - "infrastructure/modules/lambda_silver/**"
+      - "infrastructure/modules/lambda_gold/**"
+      - "src/etl/data_processing/tests/**"
+      - "dev/plans/FEATURE-008-oop-refactor-pipeline.md"
+    forbidden_files:
+      - "src/etl/data_collection/idealista_listings_collector.py"
+      - "infrastructure/environments/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "src/etl/data_processing/tests/fixtures/gold_latest_golden.json"
+    files_to_modify:
+      - "infrastructure/modules/lambda_bronze/main.tf"
+      - "infrastructure/modules/lambda_silver/main.tf"
+      - "infrastructure/modules/lambda_gold/main.tf"
+
+  - id: "8.2"
+    title: "Shared edge Protocols + AWS adapters + in-memory fakes (Phase 1)"
+    description: >
+      Create src/etl/common/ with three narrow Protocols and their adapters/fakes (Abstraction,
+      Adapter, DI, Interface Segregation). ObjectStore (get_bytes, put_bytes, list_keys; resolve M3
+      by exposing existence via 'key in list_keys' or a separate narrow exists()) with S3ObjectStore
+      (wraps boto3) + InMemoryObjectStore. SecretsProvider (get_secret) with SecretsManagerProvider +
+      fake. Notifier (notify_failure) with SnsNotifier + fake. Each class names the pillar/pattern it
+      serves in its docstring. Unit-test every adapter contract against the fakes; S3ObjectStore via
+      moto.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 3
+    depends_on: ["8.1"]
+    branch: "feature/oop-refactor-pipeline/8.2-common-edge-interfaces"
+    commit_message: "feat(etl): add common ObjectStore/SecretsProvider/Notifier protocols + adapters"
+    acceptance_criteria:
+      - "GIVEN InMemoryObjectStore WHEN put_bytes then get_bytes THEN round-trips identically"
+      - "GIVEN S3ObjectStore under moto WHEN list_keys(prefix) THEN returns only matching keys"
+      - "boto3 is imported only inside adapter classes, never in core logic"
+      - "each Protocol is narrow (ISP) and each class docstring names its pattern/pillar"
+      - "new modules covered >80%; mypy passes on src/etl/common/"
+    allowed_files:
+      - "src/etl/common/**"
+    forbidden_files:
+      - "src/etl/data_collection/**"
+      - "src/etl/data_processing/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "src/etl/common/__init__.py"
+      - "src/etl/common/object_store.py"
+      - "src/etl/common/secrets_provider.py"
+      - "src/etl/common/notifier.py"
+      - "src/etl/common/tests/__init__.py"
+      - "src/etl/common/tests/test_object_store.py"
+      - "src/etl/common/tests/test_secrets_provider.py"
+      - "src/etl/common/tests/test_notifier.py"
+    files_to_modify: []
+
+  - id: "8.3"
+    title: "Widen mypy pre-commit scope to src/etl (review M2)"
+    description: >
+      Widen the mypy hook files pattern from the single bronze file to ^src/etl/ and add required
+      additional_dependencies (boto3-stubs, pandas-stubs, types-requests). Fix the resulting type
+      errors in existing modules. This is the GREEN gate that keeps the new classes type-checked.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["8.2"]
+    branch: "feature/oop-refactor-pipeline/8.3-widen-mypy"
+    commit_message: "chore(ci): widen mypy pre-commit scope to src/etl and fix fallout"
+    acceptance_criteria:
+      - "GIVEN pre-commit run mypy THEN it type-checks all of src/etl/ and passes"
+      - "additional_dependencies include the stubs needed for boto3/pandas/requests"
+      - "no test behaviour changes"
+    allowed_files:
+      - ".pre-commit-config.yaml"
+      - "src/etl/**"
+    forbidden_files:
+      - "infrastructure/**"
+    can_run_parallel_with: ["8.2"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - ".pre-commit-config.yaml"
+
+  - id: "8.4"
+    title: "Bronze: SearchConfig Strategy + BronzeCollector + Factory (Phase 2)"
+    description: >
+      Promote the existing SearchConfig into per-operation Strategy variants (sale/rent) - extend, do
+      not replace (review L2). Introduce BronzeCollector taking ObjectStore, SecretsProvider, Notifier
+      and a SearchConfig via constructor, exposing collect() following fetch -> parse -> persist
+      (Template Method, SRP, DI). Wrap requests behind a small adapter so core logic is vendor-neutral.
+      Add build_collector(env) Factory; reduce lambda_handler to build -> collect -> return. CRITICAL:
+      preserve the bronze response body fields consumed by FEATURE-007 ExtractSummary (sale/rent page
+      counts, size, duration).
+    status: "not_started"
+    complexity: "high"
+    estimated_hours: 4
+    depends_on: ["8.2"]
+    branch: "feature/oop-refactor-pipeline/8.4-bronze-collector-object"
+    commit_message: "refactor(bronze): extract BronzeCollector + Strategy configs + Factory handler"
+    acceptance_criteria:
+      - "GIVEN injected fakes WHEN collect() runs THEN it fetches, parses and persists without real AWS"
+      - "lambda_handler only wires objects (Factory) and delegates"
+      - "module-level boto3 clients removed; SDKs reached only via adapters"
+      - "bronze response body keeps the fields FEATURE-007 ExtractSummary parses"
+      - "bronze unit tests rewritten against fakes (review H2); behaviour preserved"
+    allowed_files:
+      - "src/etl/data_collection/**"
+      - "src/etl/common/**"
+    forbidden_files:
+      - "src/etl/data_processing/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["8.5"]
+    reversible: true
+    files_to_create:
+      - "src/etl/data_collection/bronze_collector.py"
+      - "src/etl/data_collection/tests/test_bronze_collector.py"
+    files_to_modify:
+      - "src/etl/data_collection/idealista_listings_collector.py"
+      - "src/etl/data_collection/tests/test_idealista_collector.py"
+
+  - id: "8.5"
+    title: "Silver: SilverCleaner object + thin handler (Phase 3)"
+    description: >
+      Introduce SilverCleaner that owns the cleaning rules (Encapsulation - private state, no external
+      reach-in), depends on ObjectStore (DI), and calls the genuinely pure helpers in silver_transform
+      unchanged. Keep the incremental HeadObject/exists guard. Reduce silver lambda_handler to Factory
+      wire-up + clean(). CRITICAL: preserve the return shape rows_written / parquet_files_written added
+      in FEATURE-007 so the orchestrator summary keeps working.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2.5
+    depends_on: ["8.2"]
+    branch: "feature/oop-refactor-pipeline/8.5-silver-cleaner-object"
+    commit_message: "refactor(silver): extract SilverCleaner + thin Factory handler"
+    acceptance_criteria:
+      - "GIVEN injected ObjectStore fake WHEN clean() runs THEN it reads bronze, writes silver parquet"
+      - "cleaning rules are encapsulated; pure silver_transform helpers unchanged"
+      - "incremental guard preserved (no duplicate parquet writes)"
+      - "handler returns rows_written and parquet_files_written on all paths"
+      - "existing silver integration tests pass (import paths only)"
+    allowed_files:
+      - "src/etl/data_processing/silver_cleaning_lambda.py"
+      - "src/etl/data_processing/silver_cleaner.py"
+      - "src/etl/data_processing/tests/**"
+      - "src/etl/common/**"
+    forbidden_files:
+      - "src/etl/data_processing/gold_aggregation_lambda.py"
+      - "src/etl/data_processing/gold_aggregate.py"
+      - "infrastructure/**"
+    can_run_parallel_with: ["8.4"]
+    reversible: true
+    files_to_create:
+      - "src/etl/data_processing/silver_cleaner.py"
+      - "src/etl/data_processing/tests/test_silver_cleaner.py"
+    files_to_modify:
+      - "src/etl/data_processing/silver_cleaning_lambda.py"
+
+  - id: "8.6"
+    title: "Gold: Aggregation strategies + GoldAggregator + thin handler (Phase 4)"
+    description: >
+      Model each aggregation as an Aggregation strategy behind a common interface (Strategy,
+      Open/Closed, Polymorphism) so new datasets plug in by adding a class. Introduce GoldAggregator
+      that composes the strategies, depends on ObjectStore (DI), and produces the frozen schema-v1.0
+      contract. Keep gold_aggregate pure helpers where they earn their keep. Reduce gold lambda_handler
+      to Factory wire-up. CRITICAL: assert byte-for-byte equality against the 8.1 golden-master.
+    status: "not_started"
+    complexity: "high"
+    estimated_hours: 4
+    depends_on: ["8.1", "8.2"]
+    branch: "feature/oop-refactor-pipeline/8.6-gold-aggregator-strategies"
+    commit_message: "refactor(gold): Aggregation strategies + GoldAggregator + thin handler"
+    acceptance_criteria:
+      - "GIVEN the fixed silver fixture WHEN GoldAggregator runs THEN output equals 8.1 golden-master byte-for-byte"
+      - "each aggregation is a strategy behind a common interface (add a class, not edit a switch)"
+      - "no isinstance ladders; variants interchangeable via the interface"
+      - "handler only wires objects (Factory) and delegates"
+      - "existing gold smoke/schema tests pass"
+    allowed_files:
+      - "src/etl/data_processing/gold_aggregation_lambda.py"
+      - "src/etl/data_processing/gold_aggregate.py"
+      - "src/etl/data_processing/gold_aggregator.py"
+      - "src/etl/data_processing/tests/**"
+      - "src/etl/common/**"
+    forbidden_files:
+      - "src/etl/data_processing/silver_cleaning_lambda.py"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "src/etl/data_processing/gold_aggregator.py"
+      - "src/etl/data_processing/tests/test_gold_aggregator.py"
+    files_to_modify:
+      - "src/etl/data_processing/gold_aggregation_lambda.py"
+      - "src/etl/data_processing/gold_aggregate.py"
+
+  - id: "8.7"
+    title: "Full-suite + terraform validation pass"
+    description: >
+      Run the entire ETL test suite, black/ruff/mypy, and terraform validate on all three lambda
+      modules + dev env. Confirm the gold golden-master still matches and the FEATURE-007 orchestrator
+      summary contract (bronze body fields + silver return shape) is intact. Fix any regressions.
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 1
+    depends_on: ["8.4", "8.5", "8.6"]
+    branch: "feature/oop-refactor-pipeline/8.7-full-validation"
+    commit_message: "test(etl): full-suite + terraform validation after OOP refactor"
+    acceptance_criteria:
+      - "all ETL tests pass; coverage >80% on new code"
+      - "black/ruff/mypy clean across src/etl/"
+      - "terraform validate green on all 3 lambda modules + dev env"
+      - "gold golden-master byte-for-byte unchanged"
+    allowed_files:
+      - "src/etl/**"
+    forbidden_files:
+      - "infrastructure/environments/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify: []
+
+  - id: "8.8"
+    title: "Docs: per-layer Design subsection + README source layout (Phase 5)"
+    description: >
+      Add a short Design subsection to each DATA_*_LAYER.md naming the patterns and class
+      responsibilities (BronzeCollector/SilverCleaner/GoldAggregator + the common edge interfaces).
+      Update the Source Code Layout in README.md to show src/etl/common/ and the new class modules.
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 1
+    depends_on: ["8.7"]
+    branch: "feature/oop-refactor-pipeline/8.8-docs"
+    commit_message: "docs(etl): document OOP design + patterns per layer"
+    acceptance_criteria:
+      - "each DATA_*_LAYER.md has a Design subsection naming pillars + patterns"
+      - "README Source Code Layout reflects src/etl/common/ and the class modules"
+      - "no code changes"
+    allowed_files:
+      - "documentation/DATA_COLLECTION_LAYER.md"
+      - "documentation/DATA_PROCESSING_LAYER.md"
+      - "documentation/DATA_GOLD_LAYER.md"
+      - "README.md"
+    forbidden_files:
+      - "src/etl/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "documentation/DATA_COLLECTION_LAYER.md"
+      - "documentation/DATA_PROCESSING_LAYER.md"
+      - "documentation/DATA_GOLD_LAYER.md"
+      - "README.md"
+
+  - id: "8.9"
+    title: "Mark FEATURE-008 done + progress log"
+    description: >
+      Flip the plan status to done, append the progress log entry, and confirm the success criteria
+      checklist is fully ticked.
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 0.5
+    depends_on: ["8.8"]
+    branch: "feature/oop-refactor-pipeline/8.9-close-out"
+    commit_message: "docs(plan): mark FEATURE-008 complete"
+    acceptance_criteria:
+      - "FEATURE-008 plan status == Done with a dated progress-log entry"
+      - "all success criteria checkboxes ticked"
+    allowed_files:
+      - "dev/plans/FEATURE-008-oop-refactor-pipeline.md"
+      - "dev/plans/technical/FEATURE-008-technical-plan.yaml"
+    forbidden_files:
+      - "src/etl/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "dev/plans/FEATURE-008-oop-refactor-pipeline.md"
+
+git_workflow:
+  branch_root: "feature/oop-refactor-pipeline"
+  strategy: >
+    One branch per task off main, small atomic commits, rebase before PR. 8.4 and 8.5 can proceed in
+    parallel (disjoint files). 8.6 depends on the 8.1 golden-master. Each refactor task is a
+    RED (existing tests) -> GREEN (new seams) -> REFACTOR slice that preserves observable behaviour.
+  pr_per_phase: true
+
+notes:
+  - "Blocking review findings folded in: H1 (8.1 packaging), H2 (8.4 bronze test rewrite), M1 (8.1 golden-master), M2 (8.3 mypy), M3 (8.2 ISP ObjectStore)."
+  - "Behaviour-preserving guardrail: FEATURE-007 orchestrator consumes bronze body summary fields + silver rows_written/parquet_files_written - do not change those shapes (8.4, 8.5)."
+  - "Do not over-engineer: pure silver_transform/gold_aggregate helpers stay pure; classes only where they remove real duplication/coupling."
