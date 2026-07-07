@@ -1,473 +1,117 @@
 """
-Lambda function to collect Valencia real estate listings from Idealista API.
+Lambda entry point for the bronze Idealista collector (thin handler).
 
-This function queries the Idealista API for both sale and rent listings,
-stores the results in S3, and uses AWS Secrets Manager for API credentials.
+FEATURE-008 OOP refactor: all collection logic lives in
+:mod:`bronze_collector`; this module only
 
-Architecture:
-- Strategy Pattern: SearchConfig encapsulates API search parameters
-- Dependency Injection: AWS clients can be injected for testing
-- Single Responsibility: Each function has one clear purpose
-- Error Handling: Custom exceptions for domain-specific errors
+1. wires up the production collaborators (**Factory** —
+   :func:`build_collector`), and
+2. translates the :class:`~bronze_collector.CollectionResult` into the
+   Lambda response body (**Single Responsibility**).
+
+The response body keeps the exact fields FEATURE-007's ExtractSummary
+state parses: ``message``, ``timestamp``, ``sale_pages``, ``rent_pages``,
+``duration_seconds``, ``total_size_mb``.
 """
 
-import base64
 import json
 import logging
 import os
-from datetime import datetime
-from typing import Dict, Optional
+from typing import Any, Dict
 
-import boto3
-import requests
-from botocore.exceptions import ClientError
+from bronze_collector import (  # noqa: F401 — re-exported for compatibility
+    BronzeCollector,
+    IdealistaAPIError,
+    IdealistaApiClient,
+    SearchConfig,
+)
+from common.notifier import SnsNotifier
+from common.object_store import S3ObjectStore
+from common.secrets_provider import SecretsManagerProvider
 
 # Configure logging
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# Initialize AWS clients
-s3_client = boto3.client("s3")
-secrets_client = boto3.client("secretsmanager")
-sns_client = boto3.client("sns")
 
-# Environment variables (validated in lambda_handler)
-S3_BUCKET = os.environ.get("S3_BUCKET")
-S3_PREFIX = os.environ.get(
-    "S3_PREFIX", "bronze/idealista/"
-)  # Medallion Architecture: bronze layer
-SECRET_NAME_LVW = os.environ.get("SECRET_NAME_LVW")
-SECRET_NAME_PMV = os.environ.get("SECRET_NAME_PMV")
-SNS_TOPIC_ARN = os.environ.get("SNS_TOPIC_ARN")
-# AWS_REGION is automatically provided by Lambda runtime
-
-# Constants
-API_TIMEOUT_SECONDS = 30
-OAUTH_TOKEN_URL = "https://api.idealista.com/oauth/token"
-DEFAULT_MAX_PAGES = None  # Process all pages unless specified
-
-
-class IdealistaAPIError(Exception):
-    """Custom exception for Idealista API errors."""
-
-    pass
-
-
-class SearchConfig:
-    """Configuration for Idealista API search parameters."""
-
-    BASE_URL = "https://api.idealista.com/3.5/"
-    COUNTRY = "es"
-
-    def __init__(self):
-        self.max_items = "50"
-        self.order = "distance"
-        self.center = "39.4693441,-0.379561"  # Valencia city center
-        self.distance = "1500"  # meters
-        self.property_type = "homes"
-        self.sort = "asc"
-        self.min_size = "100"
-        self.max_size = "160"
-        self.elevator = "true"
-        self.air_conditioning = "true"
-        self.preservation = "good"
-        self.language = "en"
-
-    def build_url(self, operation: str) -> str:
-        """
-        Build the search URL for the given operation.
-
-        Args:
-            operation: Either 'sale' or 'rent'
-
-        Returns:
-            Formatted URL string with placeholder for page number
-        """
-        return (
-            f"{self.BASE_URL}{self.COUNTRY}/search"
-            f"?operation={operation}"
-            f"&maxItems={self.max_items}"
-            f"&order={self.order}"
-            f"&center={self.center}"
-            f"&distance={self.distance}"
-            f"&propertyType={self.property_type}"
-            f"&sort={self.sort}"
-            f"&minSize={self.min_size}"
-            f"&maxSize={self.max_size}"
-            f"&numPage=%s"
-            f"&elevator={self.elevator}"
-            # f"&airConditioning={self.air_conditioning}"
-            f"&preservation={self.preservation}"
-            f"&language={self.language}"
-        )
-
-
-def get_secret(secret_name: str) -> Dict[str, str]:
+def build_collector(env: Dict[str, str]) -> BronzeCollector:
     """
-    Retrieve secret from AWS Secrets Manager.
+    Factory: construct a fully wired production BronzeCollector.
+
+    All AWS adapters are instantiated here — at the composition edge —
+    and injected into the collector (Dependency Inversion). Tests build
+    the collector directly with in-memory fakes instead.
 
     Args:
-        secret_name: Name of the secret to retrieve
+        env: Environment mapping (normally ``os.environ``) providing
+            S3_BUCKET, SECRET_NAME_LVW, SECRET_NAME_PMV, SNS_TOPIC_ARN
+            and optionally S3_PREFIX.
 
     Returns:
-        Dictionary containing the secret values
+        A ready-to-run collector.
 
     Raises:
-        IdealistaAPIError: If secret cannot be retrieved
+        IdealistaAPIError: If a required environment variable is missing.
     """
-    try:
-        response = secrets_client.get_secret_value(SecretId=secret_name)
-        return json.loads(response["SecretString"])
-    except ClientError as e:
-        logger.error(f"Error retrieving secret {secret_name}: {e}")
-        raise IdealistaAPIError(f"Failed to retrieve credentials: {e}")
+    s3_bucket = env.get("S3_BUCKET")
+    secret_name_lvw = env.get("SECRET_NAME_LVW")
+    secret_name_pmv = env.get("SECRET_NAME_PMV")
+    sns_topic_arn = env.get("SNS_TOPIC_ARN")
 
-
-def get_oauth_token(api_key: str, api_secret: str) -> str:
-    """
-    Obtain OAuth token from Idealista API.
-
-    Args:
-        api_key: Idealista API key
-        api_secret: Idealista API secret
-
-    Returns:
-        OAuth access token
-
-    Raises:
-        IdealistaAPIError: If token cannot be obtained
-    """
-    try:
-        message = f"{api_key}:{api_secret}"
-        auth_header = "Basic " + base64.b64encode(message.encode("ascii")).decode(
-            "ascii"
+    if not all([s3_bucket, secret_name_lvw, secret_name_pmv, sns_topic_arn]):
+        raise IdealistaAPIError(
+            "Missing required environment variables: "
+            "S3_BUCKET, SECRET_NAME_LVW, SECRET_NAME_PMV, SNS_TOPIC_ARN"
         )
 
-        headers = {
-            "Authorization": auth_header,
-            "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-        }
-        params = {"grant_type": "client_credentials", "scope": "read"}
+    # Narrowed by the guard above; assertions keep mypy precise.
+    assert s3_bucket is not None
+    assert secret_name_lvw is not None
+    assert secret_name_pmv is not None
+    assert sns_topic_arn is not None
 
-        response = requests.post(
-            OAUTH_TOKEN_URL,
-            headers=headers,
-            params=params,
-            timeout=API_TIMEOUT_SECONDS,
-        )
-        response.raise_for_status()
+    # Medallion Architecture: bronze layer prefix.
+    s3_prefix = env.get("S3_PREFIX", "bronze/idealista/")
 
-        return response.json()["access_token"]
-    except (requests.RequestException, KeyError) as e:
-        logger.error(f"Error obtaining OAuth token: {e}")
-        raise IdealistaAPIError(f"Failed to obtain OAuth token: {e}")
-
-
-def query_api(api_key: str, api_secret: str, url: str) -> str:
-    """
-    Query the Idealista API with the given URL.
-
-    Args:
-        api_key: Idealista API key
-        api_secret: Idealista API secret
-        url: Complete URL to query
-
-    Returns:
-        JSON response as string
-
-    Raises:
-        IdealistaAPIError: If API query fails
-    """
-    try:
-        token = get_oauth_token(api_key, api_secret)
-        headers = {
-            "Content-Type": "Content-Type: multipart/form-data;",
-            "Authorization": f"Bearer {token}",
-        }
-
-        response = requests.post(url, headers=headers, timeout=API_TIMEOUT_SECONDS)
-        response.raise_for_status()
-
-        if not response.text:
-            raise IdealistaAPIError(
-                "Empty response from API - may have exceeded rate limit"
-            )
-
-        return response.text
-    except requests.RequestException as e:
-        logger.error(f"Error querying API: {e}")
-        raise IdealistaAPIError(f"Failed to query API: {e}")
-
-
-def upload_to_s3(bucket: str, key: str, data: str) -> None:
-    """
-    Upload data to S3 bucket.
-
-    Args:
-        bucket: S3 bucket name
-        key: S3 object key
-        data: Data to upload as string
-
-    Raises:
-        IdealistaAPIError: If upload fails
-    """
-    try:
-        s3_client.put_object(
-            Bucket=bucket, Key=key, Body=data, ContentType="application/json"
-        )
-        logger.info(f"Successfully uploaded {key} to {bucket}")
-    except ClientError as e:
-        logger.error(f"Error uploading to S3: {e}")
-        raise IdealistaAPIError(f"Failed to upload to S3: {e}")
-
-
-def process_operation(
-    operation: str,
-    api_key: str,
-    api_secret: str,
-    bucket: str,
-    timestamp: str,
-    max_pages: Optional[int] = None,
-) -> int:
-    """
-    Process a single operation (sale or rent) by querying all pages and uploading to S3.
-
-    Args:
-        operation: Either 'sale' or 'rent'
-        api_key: Idealista API key
-        api_secret: Idealista API secret
-        bucket: S3 bucket name
-        timestamp: Timestamp string for filenames
-        max_pages: Maximum number of pages to process (for testing). None = all pages
-
-    Returns:
-        Number of pages processed
-
-    Raises:
-        IdealistaAPIError: If processing fails
-    """
-    config = SearchConfig()
-    url_template = config.build_url(operation)
-
-    page = 1
-    total_pages = 1  # Will be updated from first API response
-
-    while page <= total_pages:
-        # Stop if we've reached the test limit
-        if max_pages is not None and page > max_pages:
-            logger.info(f"Reached max_pages limit ({max_pages}), stopping")
-            break
-
-        url = url_template % page
-        logger.info(f"Processing {operation} page {page}/{total_pages}")
-
-        try:
-            response_json = query_api(api_key, api_secret, url)
-            response_data = json.loads(response_json)
-
-            # Update total pages from API response
-            total_pages = response_data.get("totalPages", total_pages)
-
-            # Upload to S3 (with prefix for bronze layer)
-            filename = f"{S3_PREFIX}{operation}_{timestamp}_{page}.json"
-            upload_to_s3(bucket, filename, response_json)
-
-            page += 1
-        except json.JSONDecodeError as e:
-            logger.error(
-                f"Error parsing JSON response for {operation} page {page}: {e}"
-            )
-            raise IdealistaAPIError(f"Invalid JSON response: {e}")
-
-    pages_processed = page - 1
-    logger.info(
-        f"Completed {operation} operation: {pages_processed} pages written to S3"
+    return BronzeCollector(
+        object_store=S3ObjectStore(bucket=s3_bucket),
+        secrets_provider=SecretsManagerProvider(),
+        notifier=SnsNotifier(topic_arn=sns_topic_arn),
+        api_client=IdealistaApiClient(),
+        secret_name_lvw=secret_name_lvw,
+        secret_name_pmv=secret_name_pmv,
+        s3_prefix=s3_prefix,
     )
-    return pages_processed
 
 
-def send_notification(
-    topic_arn: str,
-    timestamp: str,
-    sale_pages: int,
-    rent_pages: int,
-    duration_seconds: float,
-    total_size_mb: float,
-) -> None:
+def lambda_handler(event: Any, context: Any) -> Dict[str, Any]:
     """
-    Send execution summary notification via SNS.
+    AWS Lambda handler: build the collector, run it, shape the response.
 
     Args:
-        topic_arn: ARN of the SNS topic
-        timestamp: Timestamp of execution
-        sale_pages: Number of sale listing pages processed
-        rent_pages: Number of rent listing pages processed
-        duration_seconds: Execution duration in seconds
-        total_size_mb: Total size of uploaded files in MB
-
-    Raises:
-        IdealistaAPIError: If notification fails
-    """
-    try:
-        # Format timestamp for email
-        dt = datetime.strptime(timestamp, "%Y%m%d_%H%M%S")
-        formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S")
-
-        # Build subject
-        subject = f"✅ Idealista Listings Collected Successfully - {formatted_time} UTC"
-
-        # Build message body
-        message = f"""Idealista Listings Collection - Execution Summary
-{'=' * 60}
-
-Execution Details:
-  • Time: {formatted_time} UTC
-  • Duration: {duration_seconds:.1f} seconds
-  • Result: Successfully completed
-
-Files Created:
-  • Sale listings: {sale_pages} pages (sale_{timestamp}_1.json through {sale_pages}.json)
-  • Rent listings: {rent_pages} pages (rent_{timestamp}_1.json through {rent_pages}.json)
-  • Total: {sale_pages + rent_pages} files uploaded to bronze/idealista/ folder
-  • Total size: ~{total_size_mb:.1f} MB
-
-Storage Location:
-  s3://prod-vlc-real-estate-analytics-listings/bronze/idealista/
-
-Next Execution:
-  Next Sunday at 12:00 UTC
-
-{'=' * 60}
-Automated notification from AWS Lambda
-"""
-
-        # Publish to SNS
-        sns_client.publish(
-            TopicArn=topic_arn,
-            Subject=subject,
-            Message=message,
-        )
-        logger.info("Successfully sent notification email")
-    except ClientError as e:
-        logger.error(f"Error sending notification: {e}")
-        # Don't raise exception - notification failure shouldn't fail the Lambda
-    except Exception as e:
-        logger.error(f"Unexpected error sending notification: {e}")
-        # Don't raise exception - notification failure shouldn't fail the Lambda
-
-
-def lambda_handler(event, context) -> Dict:
-    """
-    AWS Lambda handler function.
-
-    Args:
-        event: Lambda event object (supports 'test_mode': true to limit to 1 page)
-        context: Lambda context object
+        event: Lambda event object (supports ``'test_mode': true`` to
+            limit collection to 1 page per operation).
+        context: Lambda context object (unused).
 
     Returns:
-        Response dictionary with status code and message
+        Response dictionary with status code and JSON body.
     """
-    start_time = datetime.now()
-
     try:
-        # Check for test mode
         test_mode = event.get("test_mode", False) if isinstance(event, dict) else False
-        max_pages = 1 if test_mode else None
 
-        if test_mode:
-            logger.info("Running in TEST MODE - will only process 1 page per operation")
-
-        # Validate environment variables
-        if not all([S3_BUCKET, SECRET_NAME_LVW, SECRET_NAME_PMV, SNS_TOPIC_ARN]):
-            raise IdealistaAPIError(
-                "Missing required environment variables: S3_BUCKET, SECRET_NAME_LVW, SECRET_NAME_PMV, SNS_TOPIC_ARN"
-            )
-
-        # Type assertions for mypy
-        assert S3_BUCKET is not None
-        assert SECRET_NAME_LVW is not None
-        assert SECRET_NAME_PMV is not None
-        assert SNS_TOPIC_ARN is not None
-
-        # Generate timestamp for filenames
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-        # Retrieve credentials from Secrets Manager
-        logger.info("Retrieving credentials from Secrets Manager")
-        credentials_lvw = get_secret(SECRET_NAME_LVW)
-        credentials_pmv = get_secret(SECRET_NAME_PMV)
-
-        # Process sale listings (using lvw credentials)
-        logger.info("Processing sale listings")
-        sale_pages = process_operation(
-            operation="sale",
-            api_key=credentials_lvw["api_key"],
-            api_secret=credentials_lvw["api_secret"],
-            bucket=S3_BUCKET,
-            timestamp=timestamp,
-            max_pages=max_pages,
-        )
-
-        # Process rent listings (using pmv credentials)
-        logger.info("Processing rent listings")
-        rent_pages = process_operation(
-            operation="rent",
-            api_key=credentials_pmv["api_key"],
-            api_secret=credentials_pmv["api_secret"],
-            bucket=S3_BUCKET,
-            timestamp=timestamp,
-            max_pages=max_pages,
-        )
-
-        # Calculate execution metrics
-        end_time = datetime.now()
-        duration_seconds = (end_time - start_time).total_seconds()
-
-        # Calculate total file size by listing uploaded objects
-        total_size_bytes = 0
-        try:
-            prefix = f"{S3_PREFIX}sale_{timestamp}"
-            response = s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=prefix)
-            if "Contents" in response:
-                total_size_bytes += sum(obj["Size"] for obj in response["Contents"])
-
-            prefix = f"{S3_PREFIX}rent_{timestamp}"
-            response = s3_client.list_objects_v2(Bucket=S3_BUCKET, Prefix=prefix)
-            if "Contents" in response:
-                total_size_bytes += sum(obj["Size"] for obj in response["Contents"])
-        except ClientError as e:
-            logger.warning(f"Could not calculate file sizes: {e}")
-            total_size_bytes = 0
-
-        total_size_mb = total_size_bytes / (1024 * 1024)
-
-        message = (
-            f"Successfully collected listings: "
-            f"{sale_pages} sale pages, {rent_pages} rent pages"
-        )
-        logger.info(message)
-
-        # Send notification email (only in production, not in test mode)
-        if not test_mode:
-            send_notification(
-                topic_arn=SNS_TOPIC_ARN,
-                timestamp=timestamp,
-                sale_pages=sale_pages,
-                rent_pages=rent_pages,
-                duration_seconds=duration_seconds,
-                total_size_mb=total_size_mb,
-            )
+        collector = build_collector(dict(os.environ))
+        result = collector.collect(test_mode=test_mode)
 
         return {
             "statusCode": 200,
             "body": json.dumps(
                 {
-                    "message": message,
-                    "timestamp": timestamp,
-                    "sale_pages": sale_pages,
-                    "rent_pages": rent_pages,
-                    "duration_seconds": duration_seconds,
-                    "total_size_mb": round(total_size_mb, 2),
+                    "message": result.message,
+                    "timestamp": result.timestamp,
+                    "sale_pages": result.sale_pages,
+                    "rent_pages": result.rent_pages,
+                    "duration_seconds": result.duration_seconds,
+                    "total_size_mb": round(result.total_size_mb, 2),
                 }
             ),
         }

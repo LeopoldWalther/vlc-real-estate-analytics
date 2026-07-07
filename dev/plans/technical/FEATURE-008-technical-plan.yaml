@@ -139,7 +139,7 @@ tasks:
       Add build_collector(env) Factory; reduce lambda_handler to build -> collect -> return. CRITICAL:
       preserve the bronze response body fields consumed by FEATURE-007 ExtractSummary (sale/rent page
       counts, size, duration).
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 4
     depends_on: ["8.2"]
