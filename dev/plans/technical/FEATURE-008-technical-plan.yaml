@@ -71,7 +71,7 @@ tasks:
       fake. Notifier (notify_failure) with SnsNotifier + fake. Each class names the pillar/pattern it
       serves in its docstring. Unit-test every adapter contract against the fakes; S3ObjectStore via
       moto.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 3
     depends_on: ["8.1"]
