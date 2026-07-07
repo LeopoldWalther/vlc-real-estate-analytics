@@ -247,7 +247,7 @@ tasks:
       Run the entire ETL test suite, black/ruff/mypy, and terraform validate on all three lambda
       modules + dev env. Confirm the gold golden-master still matches and the FEATURE-007 orchestrator
       summary contract (bronze body fields + silver return shape) is intact. Fix any regressions.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 1
     depends_on: ["8.4", "8.5", "8.6"]
