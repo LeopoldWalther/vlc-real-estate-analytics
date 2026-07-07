@@ -13,11 +13,40 @@ terraform {
   }
 }
 
-# Data source to archive the Lambda function code
+# ---------------------------------------------------------------------------
+# Deployment package — bundles the collector modules at the zip root plus the
+# shared src/etl/common/ package (edge Protocols + AWS adapters) under
+# common/ so `from common... import ...` resolves at Lambda cold start.
+#
+# fileset() keeps this future-proof: new top-level .py modules in
+# data_collection/ or common/ are picked up automatically (tests live in
+# tests/ subdirectories and are therefore never matched).
+# ---------------------------------------------------------------------------
+locals {
+  etl_root        = "${path.module}/../../../src/etl"
+  collector_files = fileset("${local.etl_root}/data_collection", "*.py")
+  common_files    = fileset("${local.etl_root}/common", "*.py")
+}
+
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_file = "${path.module}/../../../src/etl/data_collection/idealista_listings_collector.py"
   output_path = "${path.module}/lambda_function.zip"
+
+  dynamic "source" {
+    for_each = local.collector_files
+    content {
+      content  = file("${local.etl_root}/data_collection/${source.value}")
+      filename = source.value
+    }
+  }
+
+  dynamic "source" {
+    for_each = local.common_files
+    content {
+      content  = file("${local.etl_root}/common/${source.value}")
+      filename = "common/${source.value}"
+    }
+  }
 }
 
 # IAM role for Lambda function

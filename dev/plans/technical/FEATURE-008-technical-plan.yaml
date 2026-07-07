@@ -32,7 +32,7 @@ tasks:
       imports keep working; run terraform validate. Also capture review M1: generate a gold
       latest.json from a fixed silver fixture and commit it as the golden-master regression fixture
       asserted by the gold tests. No behaviour change.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2.5
     depends_on: []

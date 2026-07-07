@@ -1,6 +1,6 @@
 # FEATURE-008 — OOP/SOLID refactor of the ETL pipeline
 
-**Status:** 🔵 Planned · **Effort:** M (~1.5–2 d) · **Priority:** Medium
+**Status:** � In Progress · **Effort:** M (~1.5–2 d) · **Priority:** Medium
 **Branch root:** `feature/oop-refactor-pipeline` · **Created:** 2026-06-07 · **Updated:** 2026-06-07
 
 > Authored by `@architect`. Reviewed by `@reviewer` (see `dev/reviews/REVIEW-FEATURE-008.md`).
@@ -140,3 +140,11 @@ unit tests assert the new seams; the implementation is the GREEN/REFACTOR.
 ## Progress log
 
 - **2026-06-07** — Plan authored by `@architect`. Awaiting review.
+- **2026-07-07** — Task 8.1 done by `@implementer`. **Packaging decision: shared `src/etl/common/`
+  package (review H1 option a).** All three Lambda `archive_file` blocks now build the zip from
+  dynamic `source` blocks: handler-directory top-level `*.py` at the zip root (flat imports
+  preserved) + `common/*.py` staged under `common/` via `fileset()` — future class modules
+  (8.4–8.6) are picked up without further infra edits. Gold golden-master captured (review M1):
+  deterministic silver fixture (161 rows) + byte-for-byte `gold_latest_golden.json` asserted by
+  `tests/test_gold_golden_master.py` with frozen `generated_at`. `terraform validate` green, full
+  ETL suite green (86 passed).
