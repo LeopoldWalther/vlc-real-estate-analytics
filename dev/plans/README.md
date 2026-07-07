@@ -14,7 +14,7 @@ small, version-controlled, independently testable tasks.
 | FEATURE-005 | Static visualization web app (S3 + CloudFront) | 🟢 | `feature/static-visualization-webapp` | 1.5–2 d | Medium | Unassigned |
 | FEATURE-006 | Prod promotion: wire silver + gold lambdas in prod | 🟢 | `feature/prod-promotion-silver-gold` | ~7 h | High | Unassigned |
 | FEATURE-007 | Step Functions orchestration (bronze → silver → gold) | 🔵 | `feature/step-functions-orchestration` | 12–16 h | Medium | Unassigned |
-| FEATURE-008 | OOP/SOLID refactor of the ETL pipeline | 🔵 | `feature/oop-refactor-pipeline` | M (~1.5–2 d) | Medium | Unassigned |
+| FEATURE-008 | OOP/SOLID refactor of the ETL pipeline | 🟢 | `feature/oop-refactor-pipeline` | M (~1.5–2 d) | Medium | @implementer |
 | FEATURE-009 | Frontend redesign: mobile-first, professional polish | 🔵 | `feature/frontend-redesign` | M (~8–10 h) | Medium | Unassigned |
 
 **Status:** 🔵 planned · 🟡 in progress · 🟢 complete · 🔴 blocked

@@ -14,22 +14,44 @@ terraform {
 }
 
 # ---------------------------------------------------------------------------
-# Deployment package — bundles silver_cleaning_lambda.py + silver_transform.py
+# Deployment package — bundles the data_processing modules at the zip root
+# (handler + pure transform helpers, flat imports preserved) plus the shared
+# src/etl/common/ package (edge Protocols + AWS adapters) under common/ so
+# `from common... import ...` resolves at Lambda cold start.
+#
+# fileset() keeps this future-proof: new top-level .py modules in
+# data_processing/ or common/ are picked up automatically (tests live in
+# tests/ subdirectories and are therefore never matched).
 # ---------------------------------------------------------------------------
-data "archive_file" "silver_lambda_zip" {
-  type = "zip"
-  # Include both the handler and the pure-transform module it imports.
-  source_dir  = "${path.module}/../../../src/etl/data_processing"
-  output_path = "${path.module}/silver_cleaning_lambda.zip"
-  excludes = [
-    "tests",
-    "tests/**",
-    "__pycache__",
-    "**/__pycache__/**",
-    "*.pyc",
-    "explore_bronze.py",
-    "requirements.txt",
+locals {
+  etl_root = "${path.module}/../../../src/etl"
+  # explore_bronze.py is a local exploration script, never deployed.
+  processing_files = [
+    for f in fileset("${local.etl_root}/data_processing", "*.py")
+    : f if f != "explore_bronze.py"
   ]
+  common_files = fileset("${local.etl_root}/common", "*.py")
+}
+
+data "archive_file" "silver_lambda_zip" {
+  type        = "zip"
+  output_path = "${path.module}/silver_cleaning_lambda.zip"
+
+  dynamic "source" {
+    for_each = local.processing_files
+    content {
+      content  = file("${local.etl_root}/data_processing/${source.value}")
+      filename = source.value
+    }
+  }
+
+  dynamic "source" {
+    for_each = local.common_files
+    content {
+      content  = file("${local.etl_root}/common/${source.value}")
+      filename = "common/${source.value}"
+    }
+  }
 }
 
 # ---------------------------------------------------------------------------

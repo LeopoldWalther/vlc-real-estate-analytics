@@ -32,7 +32,7 @@ tasks:
       imports keep working; run terraform validate. Also capture review M1: generate a gold
       latest.json from a fixed silver fixture and commit it as the golden-master regression fixture
       asserted by the gold tests. No behaviour change.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2.5
     depends_on: []
@@ -71,7 +71,7 @@ tasks:
       fake. Notifier (notify_failure) with SnsNotifier + fake. Each class names the pillar/pattern it
       serves in its docstring. Unit-test every adapter contract against the fakes; S3ObjectStore via
       moto.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 3
     depends_on: ["8.1"]
@@ -108,7 +108,7 @@ tasks:
       Widen the mypy hook files pattern from the single bronze file to ^src/etl/ and add required
       additional_dependencies (boto3-stubs, pandas-stubs, types-requests). Fix the resulting type
       errors in existing modules. This is the GREEN gate that keeps the new classes type-checked.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: ["8.2"]
@@ -139,7 +139,7 @@ tasks:
       Add build_collector(env) Factory; reduce lambda_handler to build -> collect -> return. CRITICAL:
       preserve the bronze response body fields consumed by FEATURE-007 ExtractSummary (sale/rent page
       counts, size, duration).
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 4
     depends_on: ["8.2"]
@@ -174,7 +174,7 @@ tasks:
       unchanged. Keep the incremental HeadObject/exists guard. Reduce silver lambda_handler to Factory
       wire-up + clean(). CRITICAL: preserve the return shape rows_written / parquet_files_written added
       in FEATURE-007 so the orchestrator summary keeps working.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2.5
     depends_on: ["8.2"]
@@ -211,7 +211,7 @@ tasks:
       that composes the strategies, depends on ObjectStore (DI), and produces the frozen schema-v1.0
       contract. Keep gold_aggregate pure helpers where they earn their keep. Reduce gold lambda_handler
       to Factory wire-up. CRITICAL: assert byte-for-byte equality against the 8.1 golden-master.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 4
     depends_on: ["8.1", "8.2"]
@@ -247,7 +247,7 @@ tasks:
       Run the entire ETL test suite, black/ruff/mypy, and terraform validate on all three lambda
       modules + dev env. Confirm the gold golden-master still matches and the FEATURE-007 orchestrator
       summary contract (bronze body fields + silver return shape) is intact. Fix any regressions.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 1
     depends_on: ["8.4", "8.5", "8.6"]
@@ -273,7 +273,7 @@ tasks:
       Add a short Design subsection to each DATA_*_LAYER.md naming the patterns and class
       responsibilities (BronzeCollector/SilverCleaner/GoldAggregator + the common edge interfaces).
       Update the Source Code Layout in README.md to show src/etl/common/ and the new class modules.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 1
     depends_on: ["8.7"]
@@ -305,7 +305,7 @@ tasks:
     description: >
       Flip the plan status to done, append the progress log entry, and confirm the success criteria
       checklist is fully ticked.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 0.5
     depends_on: ["8.8"]

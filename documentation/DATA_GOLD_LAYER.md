@@ -34,10 +34,25 @@ FEATURE-005 (static visualization web app)
 
 | File | Purpose |
 |---|---|
-| `src/etl/data_processing/gold_aggregate.py` | Pure (AWS-free) aggregation functions — all analytical logic |
-| `src/etl/data_processing/gold_aggregation_lambda.py` | AWS-edge Lambda handler — S3 read/write, env var resolution |
-| `src/etl/data_processing/tests/test_gold_aggregate.py` | Unit tests for aggregation logic |
+| `src/etl/data_processing/gold_aggregate.py` | Pure (AWS-free) aggregation helpers — analytical math, shared by both the legacy entry point and the strategies |
+| `src/etl/data_processing/gold_aggregator.py` | `GoldAggregator` + `Aggregation` strategies — orchestration and dataset composition |
+| `src/etl/data_processing/gold_aggregation_lambda.py` | Thin Lambda handler — Factory wire-up + response shaping |
+| `src/etl/data_processing/tests/test_gold_aggregate.py` | Unit tests for the pure aggregation helpers |
+| `src/etl/data_processing/tests/test_gold_aggregator.py` | Unit tests for the strategies + `GoldAggregator` (includes the golden-master gate) |
 | `src/etl/data_processing/tests/test_gold_aggregation_lambda.py` | Integration tests with moto S3 mocking |
+
+### Design
+
+Each dashboard dataset (`price_time_series_neighborhood`, `rent_vs_sale_ratio`, `boxplot_by_neighborhood`, …)
+is modelled as an **Aggregation Strategy** — a small class exposing `key` + `compute(df)` behind one
+common `Protocol` (**Open/Closed**, **Polymorphism**): a new dataset plugs in by adding a class and
+listing it in `default_populations()`, never by editing a switch or `isinstance` ladder. `GoldAggregator`
+**composes** the strategies for the `general`/`relevant` population blocks, depends only on the
+`ObjectStore` protocol (**Dependency Inversion**), and assembles the frozen schema-v1.0 document. The
+numeric implementations stay as pure functions in `gold_aggregate.py`, called unchanged by the
+strategies — the **golden-master test** (`test_gold_aggregator.py`) asserts the resulting JSON is
+byte-for-byte identical to the pre-refactor output. `gold_aggregation_lambda.py` is reduced to a
+**Factory** (`build_aggregator`) plus a thin call to `aggregate()`.
 
 ---
 

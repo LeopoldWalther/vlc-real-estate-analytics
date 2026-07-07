@@ -39,7 +39,7 @@ jobs:
         run: black --check src/etl/
 
       - name: Run MyPy
-        run: mypy src/etl/data_collection/
+        run: mypy src/etl/ --exclude='src/etl/(tests|data_collection/tests|data_processing/tests|common/tests)/'
 
   test:
     name: Run Tests

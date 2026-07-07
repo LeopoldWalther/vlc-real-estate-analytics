@@ -24,7 +24,8 @@ import pandas as pd
 import pytest
 from moto import mock_aws
 
-# Make the data_processing package importable.
+# Make the data_processing package and `common` importable.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from silver_cleaning_lambda import lambda_handler  # noqa: E402
 
@@ -437,8 +438,9 @@ class TestIncrementalGuard:
                     "SILVER_PREFIX": SILVER_PREFIX,
                 },
             ):
-                # Patch boto3.client so the handler uses our spy client.
-                with patch("silver_cleaning_lambda.boto3.client", return_value=s3_real):
+                # Patch boto3.client globally: the S3ObjectStore adapter
+                # imports boto3 lazily, so the handler picks up our spy.
+                with patch("boto3.client", return_value=s3_real):
                     lambda_handler({}, None)  # first run — writes Parquet
                     parquet_writes_after_first = [
                         k for k in put_object_calls if k.endswith(".parquet")

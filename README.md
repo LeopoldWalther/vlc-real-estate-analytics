@@ -173,15 +173,23 @@ frontend/
 └── tests/                              # Vitest suite (70 tests, no network/DOM)
 src/
 ├── etl/
+│   ├── common/
+│   │   ├── object_store.py                  # ObjectStore protocol + S3ObjectStore / InMemoryObjectStore
+│   │   ├── secrets_provider.py               # SecretsProvider protocol + SecretsManagerProvider / InMemorySecretsProvider
+│   │   ├── notifier.py                       # Notifier protocol + SnsNotifier / InMemoryNotifier
+│   │   └── tests/                            # pytest unit tests for the shared edge interfaces
 │   ├── data_collection/
-│   │   ├── idealista_listings_collector.py  # Bronze Lambda handler
+│   │   ├── idealista_listings_collector.py  # Thin Bronze Lambda handler (Factory + response shaping)
+│   │   ├── bronze_collector.py               # BronzeCollector + SearchConfig strategies + IdealistaApiClient adapter
 │   │   ├── requirements.txt                 # Runtime: requests, boto3
 │   │   └── tests/                           # pytest unit + integration
 │   ├── data_processing/
 │   │   ├── silver_transform.py              # Pure Bronze→Silver transform (no AWS)
-│   │   ├── silver_cleaning_lambda.py        # Silver Lambda handler
-│   │   ├── gold_aggregate.py                # Pure Silver→Gold aggregations (no AWS)
-│   │   ├── gold_aggregation_lambda.py       # Gold Lambda handler
+│   │   ├── silver_cleaner.py                 # SilverCleaner (list → read → clean → write)
+│   │   ├── silver_cleaning_lambda.py        # Thin Silver Lambda handler (Factory)
+│   │   ├── gold_aggregate.py                # Pure Silver→Gold aggregation helpers (no AWS)
+│   │   ├── gold_aggregator.py                # Aggregation strategies + GoldAggregator
+│   │   ├── gold_aggregation_lambda.py       # Thin Gold Lambda handler (Factory)
 │   │   ├── backfill_silver.py               # CLI: fan-out silver lambda per snapshot_date
 │   │   ├── requirements.txt                 # Runtime: boto3 (pandas via layer)
 │   │   └── tests/                           # pytest unit + integration
