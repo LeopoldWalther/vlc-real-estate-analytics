@@ -273,7 +273,7 @@ tasks:
       Add a short Design subsection to each DATA_*_LAYER.md naming the patterns and class
       responsibilities (BronzeCollector/SilverCleaner/GoldAggregator + the common edge interfaces).
       Update the Source Code Layout in README.md to show src/etl/common/ and the new class modules.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 1
     depends_on: ["8.7"]
@@ -305,7 +305,7 @@ tasks:
     description: >
       Flip the plan status to done, append the progress log entry, and confirm the success criteria
       checklist is fully ticked.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 0.5
     depends_on: ["8.8"]
