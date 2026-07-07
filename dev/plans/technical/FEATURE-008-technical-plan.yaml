@@ -174,7 +174,7 @@ tasks:
       unchanged. Keep the incremental HeadObject/exists guard. Reduce silver lambda_handler to Factory
       wire-up + clean(). CRITICAL: preserve the return shape rows_written / parquet_files_written added
       in FEATURE-007 so the orchestrator summary keeps working.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2.5
     depends_on: ["8.2"]
