@@ -33,6 +33,10 @@ module "idealista_collector" {
   secret_name_pmv = module.idealista_secrets.secret_name_pmv
   secret_arn_pmv  = module.idealista_secrets.secret_arn_pmv
   sns_topic_arn   = module.idealista_notifications.topic_arn
+
+  # CRITICAL: the pipeline_orchestrator module below owns the single weekly
+  # trigger. Disabling this prevents a double-invocation on Sunday.
+  create_schedule = false
 }
 
 module "silver_cleaner" {
@@ -44,6 +48,9 @@ module "silver_cleaner" {
   s3_bucket_arn    = module.listings_bucket.listings_bucket_arn
   sns_topic_arn    = module.idealista_notifications.topic_arn
   pandas_layer_arn = var.pandas_layer_arn
+
+  # Schedule owned by pipeline_orchestrator.
+  create_schedule = false
 }
 
 module "gold_aggregator" {
@@ -56,6 +63,30 @@ module "gold_aggregator" {
   sns_topic_arn    = module.idealista_notifications.topic_arn
   pandas_layer_arn = var.pandas_layer_arn
   ratio_min_count  = 5
+
+  # Schedule owned by pipeline_orchestrator.
+  create_schedule = false
+}
+
+# ---------------------------------------------------------------------------
+# Pipeline orchestrator — Step Functions state machine that runs
+# bronze -> silver -> gold in sequence every Sunday at 12:00 UTC.
+#
+# The three per-Lambda EventBridge schedules above are disabled
+# (create_schedule = false) so the orchestrator is the single trigger.
+# ---------------------------------------------------------------------------
+module "pipeline_orchestrator" {
+  source = "../../modules/pipeline_orchestrator"
+
+  environment         = var.environment
+  aws_region          = var.aws_region
+  bronze_function_arn = module.idealista_collector.function_arn
+  silver_function_arn = module.silver_cleaner.function_arn
+  gold_function_arn   = module.gold_aggregator.function_arn
+  sns_topic_arn       = module.idealista_notifications.topic_arn
+
+  # prod collects the full result set (all pages) on every run.
+  test_mode = false
 }
 
 # ---------------------------------------------------------------------------
