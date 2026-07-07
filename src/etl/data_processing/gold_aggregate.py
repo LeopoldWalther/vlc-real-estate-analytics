@@ -79,6 +79,34 @@ RELEVANT_FILTER_SPEC: Dict[str, Any] = {
 # ---------------------------------------------------------------------------
 
 
+def utc_now_iso() -> str:
+    """
+    Return the current UTC time as an ISO-8601 string.
+
+    Single source of the ``generated_at`` timestamp for both
+    :func:`build_aggregation_json` and ``gold_aggregator.GoldAggregator``,
+    so the golden-master test can freeze time by patching this module's
+    ``datetime`` reference once.
+    """
+    return datetime.now(tz=timezone.utc).isoformat()
+
+
+def _relevant_rows(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Relevant-population predicate: apartments matching our search.
+
+    Mirrors :data:`RELEVANT_FILTER_SPEC` exactly — shared by the pure
+    entry point and the strategy-based ``GoldAggregator``.
+    """
+    return df[
+        (df["hasLift"] == True)  # noqa: E712
+        & (df["floor"] != "1")
+        & (df["size"] > 120)
+        & (df["rooms"] >= 2)
+        & (df["bathrooms"] >= 2)
+    ]
+
+
 def apply_scope(df: pd.DataFrame) -> pd.DataFrame:
     """
     Filter a silver DataFrame to the 3 scope districts.
@@ -516,24 +544,14 @@ def build_aggregation_json(
     """
     scoped = apply_scope(silver_df)
 
-    def _relevant_filter(df: pd.DataFrame) -> pd.DataFrame:
-        """Relevant-population predicate: apartments matching our search."""
-        return df[
-            (df["hasLift"] == True)  # noqa: E712
-            & (df["floor"] != "1")
-            & (df["size"] > 120)
-            & (df["rooms"] >= 2)
-            & (df["bathrooms"] >= 2)
-        ]
-
     general_block = build_population_block(scoped, row_filter=None, min_count=min_count)
     relevant_block = build_population_block(
-        scoped, row_filter=_relevant_filter, min_count=min_count
+        scoped, row_filter=_relevant_rows, min_count=min_count
     )
 
     return {
         "schema_version": "1.0",
-        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+        "generated_at": utc_now_iso(),
         "scope_districts": SCOPE_DISTRICTS,
         "min_count": min_count,
         "relevant_filter": RELEVANT_FILTER_SPEC,

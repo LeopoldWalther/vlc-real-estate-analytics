@@ -211,7 +211,7 @@ tasks:
       that composes the strategies, depends on ObjectStore (DI), and produces the frozen schema-v1.0
       contract. Keep gold_aggregate pure helpers where they earn their keep. Reduce gold lambda_handler
       to Factory wire-up. CRITICAL: assert byte-for-byte equality against the 8.1 golden-master.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 4
     depends_on: ["8.1", "8.2"]

@@ -27,6 +27,8 @@ import pandas as pd
 import pytest
 from moto import mock_aws
 
+# Make the data_processing package and `common` importable.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from gold_aggregation_lambda import lambda_handler  # noqa: E402
 
