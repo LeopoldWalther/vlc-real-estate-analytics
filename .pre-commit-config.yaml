@@ -31,14 +31,13 @@ repos:
         files: ^src/etl/
 
   # Python type checking with mypy (production code across all of src/etl;
-  # tests are excluded because the per-Lambda tests/ packages share module
-  # names and are exercised by pytest, not the type gate)
+  # tests are excluded because they live in separate test packages per layer)
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.8.0
     hooks:
       - id: mypy
         files: ^src/etl/
-        exclude: ^src/etl/(tests/|.*/tests/)
+        exclude: ^src/etl/(tests|data_collection/tests|data_processing/tests|common/tests)/
         additional_dependencies:
           - "boto3-stubs[lambda,s3,secretsmanager]"
           - types-requests
