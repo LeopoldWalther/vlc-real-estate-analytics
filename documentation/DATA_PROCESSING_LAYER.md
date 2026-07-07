@@ -72,18 +72,32 @@ AWS-free module — can be unit-tested without mocking any services.
 | `parse_key_metadata(key)` | Extracts `operation` and `snapshot_date` from a bronze S3 key |
 | `clean(elements, snapshot_date, operation)` | Applies quality rules; returns list of cleaned row dicts |
 
-### `silver_cleaning_lambda.py` — Lambda Handler
+### `silver_cleaner.py` — SilverCleaner (orchestration, no direct AWS)
+
+**File**: [src/etl/data_processing/silver_cleaner.py](../src/etl/data_processing/silver_cleaner.py)
+
+| Class / Method | Purpose |
+|---|---|
+| `SilverCleaner(object_store, bronze_prefix, silver_prefix)` | Owns the snapshot-selection + persistence rules |
+| `SilverCleaner.clean_snapshots(target_date=None)` | List → read → clean → write; returns a `CleaningResult` |
+
+### `silver_cleaning_lambda.py` — Thin Lambda Handler
 
 **File**: [src/etl/data_processing/silver_cleaning_lambda.py](../src/etl/data_processing/silver_cleaning_lambda.py)
 
-AWS edge of the silver layer — handles S3 I/O and orchestration.
-
 | Function | Purpose |
 |---|---|
-| `lambda_handler(event, context)` | Entry point; orchestrates listing + reading + cleaning + writing |
-| `_list_snapshot_keys(s3, bucket, prefix)` | Lists all bronze keys, returns only the latest snapshot per operation |
-| `_read_elements(s3, bucket, key)` | Downloads one JSON page and extracts the `elementList` array |
-| `_write_parquet(s3, bucket, silver_prefix, operation, snapshot_date, rows)` | Converts rows to DataFrame and uploads as Parquet |
+| `lambda_handler(event, context)` | Entry point; resolves the optional `snapshot_date` override, delegates to `SilverCleaner` |
+| `build_cleaner(env)` | Factory — wires the production `SilverCleaner` from environment variables |
+
+### Design
+
+`SilverCleaner` **encapsulates** the cleaning rules (private `_list_snapshot_keys` /
+`_read_elements` / `_write_parquet` helpers) and depends only on the `ObjectStore` protocol
+(**Dependency Inversion**), so unit tests run against `InMemoryObjectStore` — no moto, no AWS. The
+genuinely pure row-level rules stay in `silver_transform.clean`, called unchanged. The Lambda handler
+is reduced to a **Factory** (`build_cleaner`) plus a thin call to `clean_snapshots()`; the incremental
+`exists()` guard and the `rows_written` / `parquet_files_written` response contract are unchanged.
 
 ### Environment Variables
 

@@ -43,16 +43,37 @@ Each file is one raw Idealista API response page (up to 50 listings).
 
 ## Source Code
 
-**File**: [src/etl/data_collection/idealista_listings_collector.py](../src/etl/data_collection/idealista_listings_collector.py)
+**Files**:
+[src/etl/data_collection/idealista_listings_collector.py](../src/etl/data_collection/idealista_listings_collector.py) (thin Lambda handler),
+[src/etl/data_collection/bronze_collector.py](../src/etl/data_collection/bronze_collector.py) (collection logic).
 
-### Key Functions
+### Key Functions / Classes
 
-| Function | Purpose |
+| Function / Class | Purpose |
 |---|---|
-| `lambda_handler(event, context)` | Entry point; reads `test_mode` from event payload |
-| `process_operation(operation, ...)` | Paginates through all API pages for one operation |
-| `get_secret(secret_name)` | Reads API credentials from Secrets Manager |
-| `send_notification(...)` | Sends SNS email on success (skipped in test_mode) |
+| `lambda_handler(event, context)` | Entry point; reads `test_mode` from event payload, delegates to `BronzeCollector` |
+| `build_collector(env)` | Factory — wires the production `BronzeCollector` from environment variables |
+| `BronzeCollector.collect(test_mode)` | Fetch → parse → persist for both operations; returns a `CollectionResult` |
+| `SearchConfig.sale()` / `SearchConfig.rent()` | Strategy variants encapsulating each operation's search URL |
+| `IdealistaApiClient` | Adapter wrapping `requests` (OAuth2 + paginated fetch) behind the `SearchApiClient` protocol |
+
+### Design
+
+`idealista_listings_collector.py` is a **thin handler**: it only builds a `BronzeCollector` (Factory
+— `build_collector`) and maps its `CollectionResult` onto the Lambda response. All collection
+behaviour lives in `bronze_collector.py`:
+
+- **Strategy** — `SearchConfig.sale()` / `SearchConfig.rent()` encapsulate the per-operation search
+  URL; new operations are added as a new classmethod, not a branch.
+- **Adapter** — `IdealistaApiClient` wraps `requests` behind the `SearchApiClient` protocol so the
+  collector never speaks the vendor SDK directly.
+- **Dependency Injection** — `BronzeCollector` takes `ObjectStore`, `SecretsProvider`, `Notifier` and
+  `SearchApiClient` via its constructor; production wiring happens once, in `build_collector`, tests
+  inject the `common` in-memory fakes instead.
+- **Template Method** — `collect()` defines the fetch → parse → persist skeleton shared by both
+  operations; `_collect_operation` fills in the per-operation steps.
+- **Single Responsibility / Custom Exceptions** — `BronzeCollector` only orchestrates; storage,
+  secrets and notifications are separate collaborators; API failures raise `IdealistaAPIError`.
 
 ### Search Parameters
 
@@ -67,6 +88,7 @@ When invoked with `{"test_mode": true}` in the event payload:
 - Suppresses SNS notification email
 
 In dev, EventBridge automatically passes `{"test_mode": true}` via the target `input` field, so the scheduled run never exceeds 2 API calls per week.
+
 
 ## Terraform Module
 
