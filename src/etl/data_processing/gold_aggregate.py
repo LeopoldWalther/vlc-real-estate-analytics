@@ -52,7 +52,7 @@ Key design decisions (see REVIEW-FEATURE-004.md for rationale)
 from __future__ import annotations
 
 from datetime import date, datetime, timezone
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, cast
 
 import pandas as pd
 
@@ -158,7 +158,8 @@ def _price_time_series_neighborhood(df: pd.DataFrame) -> List[Dict[str, Any]]:
         lambda v: v.isoformat() if isinstance(v, date) else str(v)
     )
 
-    return grp.to_dict(orient="records")
+    # Column labels are strings; cast narrows pandas' Hashable keys for mypy.
+    return cast(List[Dict[str, Any]], grp.to_dict(orient="records"))
 
 
 def _price_time_series_district(df: pd.DataFrame) -> List[Dict[str, Any]]:
@@ -203,7 +204,8 @@ def _price_time_series_district(df: pd.DataFrame) -> List[Dict[str, Any]]:
         lambda v: v.isoformat() if isinstance(v, date) else str(v)
     )
 
-    return grp.to_dict(orient="records")
+    # Column labels are strings; cast narrows pandas' Hashable keys for mypy.
+    return cast(List[Dict[str, Any]], grp.to_dict(orient="records"))
 
 
 def _rent_vs_sale_ratio(
@@ -272,17 +274,20 @@ def _rent_vs_sale_ratio(
         merged["mean_priceByArea_sale"] / merged["mean_priceByArea_rent"]
     )
 
-    return merged[
-        [
-            "district",
-            "neighborhood",
-            "mean_priceByArea_sale",
-            "mean_priceByArea_rent",
-            "mean_sales_price_by_rent_ratio",
-            "count_listings_sale",
-            "count_listings_rent",
-        ]
-    ].to_dict(orient="records")
+    return cast(
+        List[Dict[str, Any]],
+        merged[
+            [
+                "district",
+                "neighborhood",
+                "mean_priceByArea_sale",
+                "mean_priceByArea_rent",
+                "mean_sales_price_by_rent_ratio",
+                "count_listings_sale",
+                "count_listings_rent",
+            ]
+        ].to_dict(orient="records"),
+    )
 
 
 def _rent_vs_sale_ratio_time_series(
@@ -366,18 +371,21 @@ def _rent_vs_sale_ratio_time_series(
         lambda v: v.isoformat() if isinstance(v, date) else str(v)
     )
 
-    return merged[
-        [
-            "district",
-            "neighborhood",
-            "snapshot_date",
-            "mean_priceByArea_sale",
-            "mean_priceByArea_rent",
-            "mean_sales_price_by_rent_ratio",
-            "count_listings_sale",
-            "count_listings_rent",
-        ]
-    ].to_dict(orient="records")
+    return cast(
+        List[Dict[str, Any]],
+        merged[
+            [
+                "district",
+                "neighborhood",
+                "snapshot_date",
+                "mean_priceByArea_sale",
+                "mean_priceByArea_rent",
+                "mean_sales_price_by_rent_ratio",
+                "count_listings_sale",
+                "count_listings_rent",
+            ]
+        ].to_dict(orient="records"),
+    )
 
 
 def _boxplot_by_neighborhood(df: pd.DataFrame) -> List[Dict[str, Any]]:

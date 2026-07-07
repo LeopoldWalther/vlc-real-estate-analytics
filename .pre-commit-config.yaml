@@ -30,15 +30,19 @@ repos:
         args: [--fix]
         files: ^src/etl/
 
-  # Python type checking with mypy
+  # Python type checking with mypy (production code across all of src/etl;
+  # tests are excluded because the per-Lambda tests/ packages share module
+  # names and are exercised by pytest, not the type gate)
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v1.8.0
     hooks:
       - id: mypy
-        files: ^src/etl/data_collection/idealista_listings_collector\.py$
+        files: ^src/etl/
+        exclude: ^src/etl/(tests/|.*/tests/)
         additional_dependencies:
           - "boto3-stubs[lambda,s3,secretsmanager]"
           - types-requests
+          - pandas-stubs
 
   # Terraform formatting
   - repo: https://github.com/antonbabenko/pre-commit-terraform

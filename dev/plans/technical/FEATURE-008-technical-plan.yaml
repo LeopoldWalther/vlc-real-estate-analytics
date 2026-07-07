@@ -108,7 +108,7 @@ tasks:
       Widen the mypy hook files pattern from the single bronze file to ^src/etl/ and add required
       additional_dependencies (boto3-stubs, pandas-stubs, types-requests). Fix the resulting type
       errors in existing modules. This is the GREEN gate that keeps the new classes type-checked.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: ["8.2"]
