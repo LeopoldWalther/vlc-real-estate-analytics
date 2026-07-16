@@ -327,7 +327,7 @@ tasks:
       xaxis/yaxis titles (keep hovermode:'closest' as an override too, since it is scatter-specific
       behaviour, not a layout theme concern — pass it through overrides). Title stays owned by the
       renderer. formatRentVsSaleRatio output must remain byte-identical.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 0.75
     depends_on: ["9.5"]
