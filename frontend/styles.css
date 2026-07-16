@@ -1,3 +1,105 @@
+/*
+ * Design  light palette (default) and dark palette overrides.tokens
+ * Every color/spacing/radius/font value used elsewhere in this file must
+ * reference one of these custom properties; no raw hex/rgb literals are
+ * allowed outside this :root block (review requirement, task 9.1).
+ */
+:root {
+  /* Colors */
+  --color-bg: #f8f9fa;
+  --color-surface: #ffffff;
+  --color-border: #dee2e6;
+  --color-text: #212529;
+  --color-text-muted: #6c757d;
+  --color-text-heading: #495057;
+  --color-accent: #2563eb;
+  --color-accent-contrast: #ffffff;
+  --color-focus-ring: #2563eb;
+  --color-error-bg: #fdecea;
+  --color-error-border: #f5c2c0;
+  --color-error-text: #7a1f1a;
+  --color-skeleton-base: #e9ecef;
+  --color-skeleton-highlight: #f5f6f7;
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+
+  /* Radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.75rem;
+
+  /* Fonts */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-size-base: 1rem;
+  --font-size-sm: 0.875rem;
+  --font-size-lg: 1.5rem;
+  --font-weight-normal: 400;
+  --font-weight-semibold: 600;
+}
+
+/* Dark  explicit user override wins over system preference. */palette
+[data-theme="dark"] {
+  --color-bg: #14181c;
+  --color-surface: #1e2328;
+  --color-border: #343a40;
+  --color-text: #e9ecef;
+  --color-text-muted: #adb5bd;
+  --color-text-heading: #ced4da;
+  --color-accent: #60a5fa;
+  --color-accent-contrast: #0b1220;
+  --color-focus-ring: #60a5fa;
+  --color-error-bg: #3a1f1f;
+  --color-error-border: #7a3a38;
+  --color-error-text: #f8b4b0;
+  --color-skeleton-base: #2a2f34;
+  --color-skeleton-highlight: #343a40;
+}
+
+/* System dark  only applies when there is no explicit override.preference
+   [data-theme="light"] is declared after this block so it always wins the
+   cascade over the media query, even on a dark OS. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg: #14181c;
+    --color-surface: #1e2328;
+    --color-border: #343a40;
+    --color-text: #e9ecef;
+    --color-text-muted: #adb5bd;
+    --color-text-heading: #ced4da;
+    --color-accent: #60a5fa;
+    --color-accent-contrast: #0b1220;
+    --color-focus-ring: #60a5fa;
+    --color-error-bg: #3a1f1f;
+    --color-error-border: #7a3a38;
+    --color-error-text: #f8b4b0;
+    --color-skeleton-base: #2a2f34;
+    --color-skeleton-highlight: #343a40;
+  }
+}
+
+[data-theme="light"] {
+  --color-bg: #f8f9fa;
+  --color-surface: #ffffff;
+  --color-border: #dee2e6;
+  --color-text: #212529;
+  --color-text-muted: #6c757d;
+  --color-text-heading: #495057;
+  --color-accent: #2563eb;
+  --color-accent-contrast: #ffffff;
+  --color-focus-ring: #2563eb;
+  --color-error-bg: #fdecea;
+  --color-error-border: #f5c2c0;
+  --color-error-text: #7a1f1a;
+  --color-skeleton-base: #e9ecef;
+  --color-skeleton-highlight: #f5f6f7;
+}
+
 *,
 *::before,
 *::after {
@@ -7,45 +109,48 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #f8f9fa;
-  color: #212529;
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text);
   line-height: 1.5;
 }
 
 header {
-  padding: 1.5rem 2rem 1rem;
-  border-bottom: 1px solid #dee2e6;
-  background: #fff;
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  border-top: 3px solid var(--color-accent);
 }
 
 header h1 {
-  font-size: 1.5rem;
-  font-weight: 600;
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
 }
 
 header .subtitle {
-  font-size: 0.875rem;
-  color: #6c757d;
-  margin-top: 0.25rem;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin-top: var(--space-1);
 }
 
 main {
-  padding: 1.5rem 2rem;
+  padding: var(--space-5) var(--space-6);
   max-width: 1200px;
   margin: 0 auto;
 }
 
 .chart-section {
-  margin-bottom: 2rem;
+  margin-bottom: var(--space-6);
 }
 
 .chart-container {
-  background: #fff;
-  border: 1px solid #dee2e6;
-  border-radius: 0.375rem;
-  padding: 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
   min-height: 400px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
   /* Prevent Plotly SVG from breaking out of its container */
   overflow: hidden;
   width: 100%;
@@ -54,21 +159,37 @@ main {
 .toggle-bar {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  padding: 0.75rem 1rem;
-  margin-bottom: 1.5rem;
-  background: #fff;
-  border: 1px solid #dee2e6;
-  border-radius: 0.375rem;
+  gap: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 
 .toggle-label {
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: #495057;
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-heading);
 }
 
 .toggle-bar label {
-  font-size: 0.875rem;
+  font-size: var(--font-size-sm);
   cursor: pointer;
+}
+
+footer {
+  padding: var(--space-5) var(--space-6);
+  max-width: 1200px;
+  margin: 0 auto;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+footer a {
+  color: var(--color-accent);
 }

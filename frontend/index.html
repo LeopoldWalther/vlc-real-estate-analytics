@@ -4,6 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>VLC Real Estate Analytics</title>
+  <meta name="description" content="Weekly Valencia city-centre real estate market snapshot: rent and sale price trends, neighbourhood comparisons, and rent-vs-sale yield analytics.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14181c" media="(prefers-color-scheme: dark)">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="VLC Real Estate Analytics">
+  <meta property="og:description" content="Weekly Valencia city-centre real estate market snapshot: rent and sale price trends, neighbourhood comparisons, and rent-vs-sale yield analytics.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="/">
+  <meta property="og:image" content="favicon.svg">
+
+  <!-- Twitter card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="VLC Real Estate Analytics">
+  <meta name="twitter:description" content="Weekly Valencia city-centre real estate market snapshot.">
+
   <link rel="stylesheet" href="styles.css">
 
   <!-- Plotly.js v2.35.2 — vendored same-origin (no CDN). Review M3. -->
@@ -65,6 +82,11 @@
       <div id="boxplot-by-neighborhood-sale" class="chart-container"></div>
     </section>
   </main>
+
+  <footer>
+    <span id="data-updated">Data last updated: —</span>
+    <a href="https://github.com/LeopoldWalther/vlc-real-estate-analytics" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
+  </footer>
 
   <script type="module" src="app.js"></script>
 </body>
