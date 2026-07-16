@@ -78,7 +78,7 @@ tasks:
       <button id="retry-button"> per the redesign brief. Ensure all interactive elements
       (retry button, theme toggle placeholder, population toggle labels) have >=44px touch targets
       at mobile widths. No horizontal scroll at 375px/768px/1280px.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: ["9.1"]
