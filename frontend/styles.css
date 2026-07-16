@@ -1,5 +1,5 @@
 /*
- * Design  light palette (default) and dark palette overrides.tokens
+ * Design tokens: light palette (default) and dark palette overrides.
  * Every color/spacing/radius/font value used elsewhere in this file must
  * reference one of these custom properties; no raw hex/rgb literals are
  * allowed outside this :root block (review requirement, task 9.1).
@@ -43,7 +43,7 @@
   --font-weight-semibold: 600;
 }
 
-/* Dark  explicit user override wins over system preference. */palette
+/* Dark palette — explicit user override wins over system preference. */
 [data-theme="dark"] {
   --color-bg: #14181c;
   --color-surface: #1e2328;
@@ -61,7 +61,7 @@
   --color-skeleton-highlight: #343a40;
 }
 
-/* System dark  only applies when there is no explicit override.preference
+/* System dark preference — only applies when there is no explicit override.
    [data-theme="light"] is declared after this block so it always wins the
    cascade over the media query, even on a dark OS. */
 @media (prefers-color-scheme: dark) {
@@ -122,6 +122,13 @@ header {
   border-top: 3px solid var(--color-accent);
 }
 
+.header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
 header h1 {
   font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
@@ -132,6 +139,25 @@ header .subtitle {
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
   margin-top: var(--space-1);
+}
+
+/* Theme toggle — a simple icon button in the header, >=44x44px touch target. */
+#theme-toggle {
+  min-width: 44px;
+  min-height: 44px;
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: var(--font-size-lg);
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+#theme-toggle:hover {
+  border-color: var(--color-accent);
 }
 
 main {
@@ -333,4 +359,17 @@ footer a {
 
 #retry-button:hover {
   filter: brightness(0.95);
+}
+
+/* Visible keyboard-focus outline for every interactive control, using the
+   theme's focus-ring token so it stays legible in both palettes. */
+:focus-visible {
+  outline: 2px solid var(--color-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #theme-toggle {
+    transition: none;
+  }
 }
