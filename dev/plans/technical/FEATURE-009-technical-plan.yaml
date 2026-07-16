@@ -401,7 +401,7 @@ tasks:
       (keep boxmode:'group' as an override, since it is boxplot-specific chart behaviour, not a
       layout theme concern). Title stays owned by the renderer. formatBoxplot output must remain
       byte-identical.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 0.75
     depends_on: ["9.5"]
@@ -446,7 +446,7 @@ tasks:
       viewport/colorScheme and call shouldRerender(prev, next) before calling Plotly.react on every
       chart with the new context-derived layout — never on every resize tick. Persist an explicit
       theme choice (if a theme toggle exists) to localStorage and apply data-theme on <html>.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 2.5
     depends_on: ["9.2", "9.3", "9.4", "9.6", "9.7", "9.8", "9.9", "9.10"]
