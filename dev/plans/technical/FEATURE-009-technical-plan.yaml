@@ -1,0 +1,586 @@
+metadata:
+  for_feature: "FEATURE-009"
+  title: "Frontend redesign: mobile-first, professional polish"
+  created_by: "@reviewer"
+  created_at: "2026-06-17"
+  version: "1.0"
+  total_tasks: 13
+  estimated_hours: 16.5
+  risk_level: "medium"
+  critical_path: ["9.1", "9.2", "9.5", "9.6", "9.11", "9.12", "9.13"]
+  reviewed_plan: "dev/reviews/REVIEW-FEATURE-009.md"
+
+validation:
+  required_checks:
+    - "node-test"
+    - "workflow-consistency"
+  min_coverage: ">80% on new frontend/src/*.js modules"
+
+tasks:
+  - id: "9.1"
+    title: "Design tokens + brand identity + favicon + meta/OG/Twitter tags"
+    description: >
+      Add the CSS custom-property design-token layer to frontend/styles.css: :root block with
+      --color-*, --space-*, --radius-*, --font-* tokens for the light (default) palette, plus a
+      dark palette under both [data-theme="dark"] (explicit override) and
+      @media (prefers-color-scheme: dark) (system default, only when no explicit override is
+      stored — the cascade order must let [data-theme="light"] win over the media query so a user
+      who explicitly picks light on a dark-OS still gets light). Restyle the header (accent color),
+      cards (subtle shadow, rounded corners), and footer (data-updated timestamp placeholder + link
+      to the GitHub repo) using only the new tokens — no hex literals outside :root. Add
+      frontend/favicon.svg (simple brand mark, inline <svg>, no external asset). In
+      frontend/index.html add: <link rel="icon" href="favicon.svg">, <meta name="description">,
+      <meta name="theme-color"> (light + a dark variant via media attr), Open Graph
+      (og:title/og:description/og:type/og:image if trivial to inline, og:url can be a relative
+      placeholder), and Twitter card tags (twitter:card=summary). Verify lang="en" stays correct.
+      No external font or network calls anywhere (system font stack only, already the case).
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: []
+    branch: "feature/frontend-redesign/9.1-design-tokens"
+    commit_message: "feat(frontend): design tokens, dark/light palette, favicon, meta/OG tags"
+    acceptance_criteria:
+      - "GIVEN styles.css WHEN inspected THEN a :root block declares --color-*, --space-*, --radius-*, --font-* tokens and no other rule uses a raw hex/rgb literal"
+      - "GIVEN [data-theme=\"dark\"] on <html> WHEN styles.css is parsed THEN a dark-palette override block exists overriding the same token names"
+      - "GIVEN no data-theme attribute WHEN the OS prefers dark THEN @media (prefers-color-scheme: dark) applies the same dark tokens"
+      - "GIVEN index.html WHEN viewed THEN <link rel=\"icon\">, <meta name=\"description\">, <meta name=\"theme-color\">, og:title/og:description/og:type, and twitter:card tags are present"
+      - "GIVEN the network tab WHEN the page loads THEN zero requests leave the same-origin CloudFront distribution (no external fonts/CDNs)"
+      - "existing Vitest suite (npm test) stays green — no JS changed in this task"
+    allowed_files:
+      - "frontend/styles.css"
+      - "frontend/index.html"
+      - "frontend/favicon.svg"
+    forbidden_files:
+      - "frontend/app.js"
+      - "frontend/src/**"
+      - ".github/workflows/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "frontend/favicon.svg"
+    files_to_modify:
+      - "frontend/styles.css"
+      - "frontend/index.html"
+
+  - id: "9.2"
+    title: "Responsive HTML skeleton: card grid, KPI row, loading skeletons, retry button"
+    description: >
+      Restructure frontend/index.html and frontend/styles.css for mobile-first responsive layout:
+      1-column card grid by default, 2-column CSS grid at >=768px (media query on the existing
+      .chart-section wrapper, renamed/kept compatible with app.js's getElementById lookups — do
+      not change any #id used by app.js). Add a KPI row container (e.g. <section id="kpi-row"
+      class="kpi-row"> with 4-5 empty <div class="kpi-card" data-kpi="..."> placeholders) above the
+      charts, populated later by app.js (task 9.11) via summary.js. Add a per-chart loading
+      skeleton (a pulsing placeholder element, CSS-only animation respecting
+      prefers-reduced-motion) shown by default and a hidden-by-default error/retry block with a
+      <button id="retry-button"> per the redesign brief. Ensure all interactive elements
+      (retry button, theme toggle placeholder, population toggle labels) have >=44px touch targets
+      at mobile widths. No horizontal scroll at 375px/768px/1280px.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["9.1"]
+    branch: "feature/frontend-redesign/9.2-responsive-skeleton"
+    commit_message: "feat(frontend): mobile-first card grid, KPI row, loading/error skeleton markup"
+    acceptance_criteria:
+      - "GIVEN styles.css WHEN viewport width < 768px THEN chart cards render 1-per-row; WHEN width >= 768px THEN 2-per-row via CSS grid"
+      - "GIVEN index.html WHEN inspected THEN a KPI row container with data-kpi placeholders exists above the chart sections"
+      - "GIVEN index.html WHEN inspected THEN each chart-section has a loading-skeleton element and a hidden error/retry block with an id=\"retry-button\" (or per-chart retry buttons) button"
+      - "GIVEN styles.css WHEN prefers-reduced-motion: reduce THEN the skeleton pulse animation is disabled"
+      - "GIVEN any interactive control at mobile width THEN its tappable area is >= 44x44px"
+      - "manual check at 375px/768px/1280px shows no horizontal scrollbar"
+      - "existing Vitest suite stays green — no JS changed; all #ids app.js currently queries (price-time-series-rent, etc., population-toggle, relevant-label) are preserved"
+    allowed_files:
+      - "frontend/index.html"
+      - "frontend/styles.css"
+    forbidden_files:
+      - "frontend/app.js"
+      - "frontend/src/**"
+      - ".github/workflows/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/index.html"
+      - "frontend/styles.css"
+
+  - id: "9.3"
+    title: "dashboard_state.js — pure load-lifecycle + theme/viewport helpers (TDD)"
+    description: >
+      TDD, RED first. Create frontend/tests/dashboard_state.test.js covering: resolveTheme(stored,
+      systemPrefers) -> 'light'|'dark' (explicit stored value wins; otherwise follows
+      systemPrefers; invalid/absent stored value falls back to systemPrefers); resolveViewport(width)
+      -> 'mobile'|'desktop' at the 768px breakpoint (width < 768 -> 'mobile', >= 768 -> 'desktop');
+      shouldRerender(prev, next) -> true only when prev.viewport !== next.viewport or
+      prev.colorScheme !== next.colorScheme (false on any other change, e.g. identical repeated
+      values); and a load-lifecycle helper (e.g. createLoadState()/transition(state, event)) whose
+      states are loading -> ready | error, and whose retry event resets any state back to loading.
+      Then implement frontend/src/dashboard_state.js to satisfy the tests. Pure functions/factories
+      only — no DOM access, no fetch, no globalThis reference anywhere in this module.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: []
+    branch: "feature/frontend-redesign/9.3-dashboard-state"
+    commit_message: "feat(frontend): dashboard_state pure reducer (theme/viewport/lifecycle)"
+    acceptance_criteria:
+      - "RED: frontend/tests/dashboard_state.test.js is authored and fails before the implementation exists"
+      - "GREEN: resolveTheme(stored, systemPrefers) prefers a valid stored value over systemPrefers, and falls back to systemPrefers when stored is null/invalid"
+      - "GREEN: resolveViewport(width) returns 'mobile' below 768 and 'desktop' at/above 768"
+      - "GREEN: shouldRerender returns false when viewport and colorScheme are both unchanged, true when either changes"
+      - "GREEN: the lifecycle helper transitions loading->ready, loading->error, and (from any state) retry->loading"
+      - "grep confirms no 'document', 'window', or 'fetch' identifiers in frontend/src/dashboard_state.js"
+      - "coverage on frontend/src/dashboard_state.js > 80%"
+    allowed_files:
+      - "frontend/src/dashboard_state.js"
+      - "frontend/tests/dashboard_state.test.js"
+    forbidden_files:
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/src/charts/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: ["9.4", "9.5"]
+    reversible: true
+    files_to_create:
+      - "frontend/src/dashboard_state.js"
+      - "frontend/tests/dashboard_state.test.js"
+    files_to_modify: []
+
+  - id: "9.4"
+    title: "summary.js — KPI aggregation module (TDD, review H1)"
+    description: >
+      TDD, RED first. Inspect frontend/tests/fixtures/latest.sample.json's actual shape (already
+      done by the reviewer: boxplot_by_neighborhood carries {operation, count, median, ...} per
+      neighbourhood; rent_vs_sale_ratio carries {mean_priceByArea_sale, mean_priceByArea_rent,
+      mean_sales_price_by_rent_ratio, count_listings_sale, count_listings_rent}). Create
+      frontend/tests/summary.test.js covering summaryStats(data): median rent €/m²/mo and median
+      sale €/m² computed as a count-weighted aggregate across boxplot_by_neighborhood groups
+      (weight = group.count, not a naive mean-of-medians); implied gross yield % derived from
+      rent_vs_sale_ratio's mean_sales_price_by_rent_ratio (document the formula in the module
+      docstring: annual rent / sale price, i.e. (12 / ratio) * 100); total listing counts (sum of
+      count_listings_sale + count_listings_rent across rent_vs_sale_ratio groups); last-updated
+      from data.generated_at. Every returned field must be null-able (return null, never throw)
+      when population/boxplot/ratio blocks are missing or empty arrays. Also implement
+      formatKpi(value, kind) for consistent number/percentage/date formatting (kind:
+      'eur_per_m2_month' | 'eur_per_m2' | 'percent' | 'count' | 'date'), returning an em-dash
+      placeholder string for null input. Then implement frontend/src/summary.js.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: []
+    branch: "feature/frontend-redesign/9.4-summary-kpis"
+    commit_message: "feat(frontend): summary.js KPI aggregation (median rent/sale, yield, counts)"
+    acceptance_criteria:
+      - "RED: frontend/tests/summary.test.js is authored against the real fixture shape and fails before implementation"
+      - "GREEN: summaryStats(fixture.general) returns a count-weighted median rent (€/m²/mo) and median sale (€/m²)"
+      - "GREEN: summaryStats returns an implied gross yield % derived from mean_sales_price_by_rent_ratio, with the formula documented in the docstring"
+      - "GREEN: summaryStats returns total listing counts and lastUpdated from generated_at"
+      - "GREEN: summaryStats({}) and summaryStats(null) return an object with every field null, and do not throw"
+      - "GREEN: formatKpi(null, any kind) returns a placeholder string ('—') without throwing"
+      - "coverage on frontend/src/summary.js > 80%"
+    allowed_files:
+      - "frontend/src/summary.js"
+      - "frontend/tests/summary.test.js"
+    forbidden_files:
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/src/charts/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: ["9.3", "9.5"]
+    reversible: true
+    files_to_create:
+      - "frontend/src/summary.js"
+      - "frontend/tests/summary.test.js"
+    files_to_modify: []
+
+  - id: "9.5"
+    title: "chart_theme.js — buildLayout Strategy+Factory (TDD, review H2)"
+    description: >
+      TDD, RED first. Create frontend/tests/chart_theme.test.js covering
+      buildLayout({ viewport, colorScheme, overrides }): viewport='mobile' returns compact margins,
+      a horizontal bottom legend, and smaller font sizes; viewport='desktop' returns the current
+      wider margins and a vertical legend (matching today's hand-rolled defaults, so migration in
+      9.6-9.10 is behaviour-preserving); colorScheme='dark' returns a dark colorway/gridline/font
+      color set, colorScheme='light' returns the current light defaults; overrides is deep-merged
+      into the computed base layout without dropping unrelated base keys (e.g. passing only
+      { xaxis: { title: { text: 'Date' } } } must not remove yaxis/margin/legend from the result);
+      the returned object never contains a top-level 'title' key (review L1 — title ownership stays
+      with each renderer, stamped by app.js for the population label). Then implement
+      frontend/src/chart_theme.js as a factory function (no class needed — a config-producing
+      function is sufficient; this is deliberately not over-engineered into a class hierarchy).
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: []
+    branch: "feature/frontend-redesign/9.5-chart-theme-factory"
+    commit_message: "feat(frontend): chart_theme buildLayout factory (viewport x colorScheme)"
+    acceptance_criteria:
+      - "RED: frontend/tests/chart_theme.test.js is authored and fails before the implementation exists"
+      - "GREEN: buildLayout({viewport:'mobile', colorScheme:'light', overrides:{}}) returns compact margins + horizontal bottom legend + smaller fonts"
+      - "GREEN: buildLayout({viewport:'desktop', colorScheme:'light', overrides:{}}) matches today's hand-rolled margin/legend defaults (l:80,r:40,t:60,b:60-80 range; vertical legend)"
+      - "GREEN: colorScheme:'dark' vs 'light' change the colorway/gridline/font colour fields, all else equal"
+      - "GREEN: overrides are deep-merged (nested xaxis/yaxis override keys merge in without deleting sibling base keys)"
+      - "GREEN: the returned layout object never has a 'title' key regardless of overrides passed"
+      - "coverage on frontend/src/chart_theme.js > 80%"
+    allowed_files:
+      - "frontend/src/chart_theme.js"
+      - "frontend/tests/chart_theme.test.js"
+    forbidden_files:
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/src/charts/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: ["9.3", "9.4"]
+    reversible: true
+    files_to_create:
+      - "frontend/src/chart_theme.js"
+      - "frontend/tests/chart_theme.test.js"
+    files_to_modify: []
+
+  - id: "9.6"
+    title: "Migrate price_time_series.js to chart_theme.buildLayout"
+    description: >
+      Update frontend/src/charts/price_time_series.js so makeTimeSeriesRenderer's render() calls
+      buildLayout({ viewport, colorScheme, overrides }) instead of hand-rolling
+      title/xaxis/yaxis/legend/margin literals. render() gains a second parameter
+      `context = { viewport: 'desktop', colorScheme: 'light' }` (default preserves current callers
+      and existing tests unmodified). Pass only { xaxis: { title: { text: 'Date' } }, yaxis: {
+      title: { text: yAxisLabel } } } as overrides; keep title assignment
+      (`title: { text: title }`) in the renderer itself, merged on top of buildLayout's result.
+      Data-trace generation (formatSeries) is untouched — traces must remain byte-identical.
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 0.75
+    depends_on: ["9.5"]
+    branch: "feature/frontend-redesign/9.6-migrate-price-time-series"
+    commit_message: "refactor(frontend): price_time_series consumes chart_theme.buildLayout"
+    acceptance_criteria:
+      - "GIVEN default context WHEN priceTimeSeriesRenderer.render(fixture.general) runs THEN figure.data is unchanged byte-for-byte vs. pre-migration output"
+      - "GIVEN default context THEN figure.layout equals buildLayout({viewport:'desktop', colorScheme:'light', overrides:{xaxis, yaxis}}) merged with { title }"
+      - "no hand-rolled margin/legend literal remains in price_time_series.js"
+      - "frontend/tests/price_time_series.test.js is updated to import buildLayout and assert layout parity with the factory output; all prior assertions in that file still pass"
+      - "npm test stays green"
+    allowed_files:
+      - "frontend/src/charts/price_time_series.js"
+      - "frontend/tests/price_time_series.test.js"
+    forbidden_files:
+      - "frontend/src/charts/price_time_series_district.js"
+      - "frontend/src/charts/rent_vs_sale_ratio.js"
+      - "frontend/src/charts/rent_vs_sale_ratio_time_series.js"
+      - "frontend/src/charts/boxplot_by_neighborhood.js"
+      - "frontend/app.js"
+      - ".github/workflows/**"
+    can_run_parallel_with: ["9.7", "9.8", "9.9", "9.10"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/charts/price_time_series.js"
+      - "frontend/tests/price_time_series.test.js"
+
+  - id: "9.7"
+    title: "Migrate price_time_series_district.js to chart_theme.buildLayout"
+    description: >
+      Same migration as 9.6, applied to frontend/src/charts/price_time_series_district.js's
+      makeDistrictRenderer. render() gains the same `context` default parameter; overrides limited
+      to xaxis/yaxis titles; title stays owned by the renderer; formatDistrictSeries output must
+      remain byte-identical.
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 0.75
+    depends_on: ["9.5"]
+    branch: "feature/frontend-redesign/9.7-migrate-price-time-series-district"
+    commit_message: "refactor(frontend): price_time_series_district consumes chart_theme.buildLayout"
+    acceptance_criteria:
+      - "GIVEN default context WHEN priceTimeSeriesDistrictRenderer.render(fixture.general) runs THEN figure.data is byte-identical to pre-migration output"
+      - "GIVEN default context THEN figure.layout equals buildLayout(...) merged with { title }"
+      - "no hand-rolled margin/legend literal remains in price_time_series_district.js"
+      - "frontend/tests/price_time_series_district.test.js updated to assert layout parity with the factory; all prior assertions still pass"
+      - "npm test stays green"
+    allowed_files:
+      - "frontend/src/charts/price_time_series_district.js"
+      - "frontend/tests/price_time_series_district.test.js"
+    forbidden_files:
+      - "frontend/src/charts/price_time_series.js"
+      - "frontend/src/charts/rent_vs_sale_ratio.js"
+      - "frontend/src/charts/rent_vs_sale_ratio_time_series.js"
+      - "frontend/src/charts/boxplot_by_neighborhood.js"
+      - "frontend/app.js"
+      - ".github/workflows/**"
+    can_run_parallel_with: ["9.6", "9.8", "9.9", "9.10"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/charts/price_time_series_district.js"
+      - "frontend/tests/price_time_series_district.test.js"
+
+  - id: "9.8"
+    title: "Migrate rent_vs_sale_ratio.js to chart_theme.buildLayout"
+    description: >
+      Same migration pattern applied to frontend/src/charts/rent_vs_sale_ratio.js's
+      rentVsSaleRatioRenderer. render() gains the `context` default parameter; overrides limited to
+      xaxis/yaxis titles (keep hovermode:'closest' as an override too, since it is scatter-specific
+      behaviour, not a layout theme concern — pass it through overrides). Title stays owned by the
+      renderer. formatRentVsSaleRatio output must remain byte-identical.
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 0.75
+    depends_on: ["9.5"]
+    branch: "feature/frontend-redesign/9.8-migrate-rent-vs-sale-ratio"
+    commit_message: "refactor(frontend): rent_vs_sale_ratio consumes chart_theme.buildLayout"
+    acceptance_criteria:
+      - "GIVEN default context WHEN rentVsSaleRatioRenderer.render(fixture.general) runs THEN figure.data is byte-identical to pre-migration output"
+      - "GIVEN default context THEN figure.layout equals buildLayout(...) merged with { title } and retains hovermode:'closest'"
+      - "no hand-rolled margin literal remains in rent_vs_sale_ratio.js"
+      - "frontend/tests/rent_vs_sale_ratio.test.js updated to assert layout parity with the factory; all prior assertions still pass"
+      - "npm test stays green"
+    allowed_files:
+      - "frontend/src/charts/rent_vs_sale_ratio.js"
+      - "frontend/tests/rent_vs_sale_ratio.test.js"
+    forbidden_files:
+      - "frontend/src/charts/price_time_series.js"
+      - "frontend/src/charts/price_time_series_district.js"
+      - "frontend/src/charts/rent_vs_sale_ratio_time_series.js"
+      - "frontend/src/charts/boxplot_by_neighborhood.js"
+      - "frontend/app.js"
+      - ".github/workflows/**"
+    can_run_parallel_with: ["9.6", "9.7", "9.9", "9.10"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/charts/rent_vs_sale_ratio.js"
+      - "frontend/tests/rent_vs_sale_ratio.test.js"
+
+  - id: "9.9"
+    title: "Migrate rent_vs_sale_ratio_time_series.js to chart_theme.buildLayout"
+    description: >
+      Same migration pattern applied to frontend/src/charts/rent_vs_sale_ratio_time_series.js's
+      ratioTimeSeriesRenderer. render() gains the `context` default parameter; overrides limited to
+      xaxis/yaxis titles; title stays owned by the renderer. formatRatioTimeSeries output must
+      remain byte-identical.
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 0.75
+    depends_on: ["9.5"]
+    branch: "feature/frontend-redesign/9.9-migrate-rent-vs-sale-ratio-time-series"
+    commit_message: "refactor(frontend): rent_vs_sale_ratio_time_series consumes chart_theme.buildLayout"
+    acceptance_criteria:
+      - "GIVEN default context WHEN ratioTimeSeriesRenderer.render(fixture.general) runs THEN figure.data is byte-identical to pre-migration output"
+      - "GIVEN default context THEN figure.layout equals buildLayout(...) merged with { title }"
+      - "no hand-rolled margin/legend literal remains in rent_vs_sale_ratio_time_series.js"
+      - "frontend/tests/rent_vs_sale_ratio_time_series.test.js updated to assert layout parity with the factory; all prior assertions still pass"
+      - "npm test stays green"
+    allowed_files:
+      - "frontend/src/charts/rent_vs_sale_ratio_time_series.js"
+      - "frontend/tests/rent_vs_sale_ratio_time_series.test.js"
+    forbidden_files:
+      - "frontend/src/charts/price_time_series.js"
+      - "frontend/src/charts/price_time_series_district.js"
+      - "frontend/src/charts/rent_vs_sale_ratio.js"
+      - "frontend/src/charts/boxplot_by_neighborhood.js"
+      - "frontend/app.js"
+      - ".github/workflows/**"
+    can_run_parallel_with: ["9.6", "9.7", "9.8", "9.10"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/charts/rent_vs_sale_ratio_time_series.js"
+      - "frontend/tests/rent_vs_sale_ratio_time_series.test.js"
+
+  - id: "9.10"
+    title: "Migrate boxplot_by_neighborhood.js to chart_theme.buildLayout"
+    description: >
+      Same migration pattern applied to frontend/src/charts/boxplot_by_neighborhood.js's
+      makeBoxplotRenderer (and the deprecated boxplotRenderer kept for backward compatibility).
+      render() gains the `context` default parameter; overrides limited to xaxis/yaxis config
+      (keep boxmode:'group' as an override, since it is boxplot-specific chart behaviour, not a
+      layout theme concern). Title stays owned by the renderer. formatBoxplot output must remain
+      byte-identical.
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 0.75
+    depends_on: ["9.5"]
+    branch: "feature/frontend-redesign/9.10-migrate-boxplot-by-neighborhood"
+    commit_message: "refactor(frontend): boxplot_by_neighborhood consumes chart_theme.buildLayout"
+    acceptance_criteria:
+      - "GIVEN default context WHEN boxplotRentRenderer.render(fixture.general) and boxplotSaleRenderer.render(fixture.general) run THEN figure.data is byte-identical to pre-migration output for both"
+      - "GIVEN default context THEN figure.layout equals buildLayout(...) merged with { title } and retains boxmode:'group'"
+      - "no hand-rolled margin literal remains in boxplot_by_neighborhood.js"
+      - "frontend/tests/boxplot_by_neighborhood.test.js updated to assert layout parity with the factory; all prior assertions still pass"
+      - "npm test stays green"
+    allowed_files:
+      - "frontend/src/charts/boxplot_by_neighborhood.js"
+      - "frontend/tests/boxplot_by_neighborhood.test.js"
+    forbidden_files:
+      - "frontend/src/charts/price_time_series.js"
+      - "frontend/src/charts/price_time_series_district.js"
+      - "frontend/src/charts/rent_vs_sale_ratio.js"
+      - "frontend/src/charts/rent_vs_sale_ratio_time_series.js"
+      - "frontend/app.js"
+      - ".github/workflows/**"
+    can_run_parallel_with: ["9.6", "9.7", "9.8", "9.9"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/charts/boxplot_by_neighborhood.js"
+      - "frontend/tests/boxplot_by_neighborhood.test.js"
+
+  - id: "9.11"
+    title: "app.js wiring: dashboard_state, summary KPIs, responsive re-render"
+    description: >
+      Rewire frontend/app.js as a thin DOM-applying consumer of the new pure modules — no business
+      logic lives here. On load: set the loading-lifecycle state (dashboard_state) and reflect it in
+      the DOM (show skeletons); call dataSource.load(); on success transition to ready, render KPI
+      cards into the 9.2 KPI row via summary.summaryStats(data) + formatKpi, and render every chart
+      passing { viewport: resolveViewport(window.innerWidth), colorScheme: resolveTheme(localStorage
+      theme, matchMedia('(prefers-color-scheme: dark)').matches) } as context, with
+      Plotly.newPlot(container, fig.data, fig.layout, { responsive: true }). On failure transition to
+      error and show the retry block; the retry button's click handler re-triggers the loading
+      transition and reruns load(). Add a debounced (e.g. 200ms) resize listener and a
+      matchMedia('(prefers-color-scheme: dark)') change listener that recompute
+      viewport/colorScheme and call shouldRerender(prev, next) before calling Plotly.react on every
+      chart with the new context-derived layout — never on every resize tick. Persist an explicit
+      theme choice (if a theme toggle exists) to localStorage and apply data-theme on <html>.
+    status: "not_started"
+    complexity: "high"
+    estimated_hours: 2.5
+    depends_on: ["9.2", "9.3", "9.4", "9.6", "9.7", "9.8", "9.9", "9.10"]
+    branch: "feature/frontend-redesign/9.11-app-wiring"
+    commit_message: "feat(frontend): wire dashboard_state + summary KPIs + responsive chart re-render"
+    acceptance_criteria:
+      - "GIVEN dataSource.load() succeeds THEN the loading skeletons are hidden, the KPI row is populated via summary.js, and all 8 charts render with { responsive: true }"
+      - "GIVEN dataSource.load() rejects THEN the error/retry block is shown and clicking #retry-button re-triggers the load-lifecycle from loading"
+      - "GIVEN a debounced resize crossing the 768px breakpoint THEN shouldRerender returns true and Plotly.react is called with the new viewport-derived layout on every chart"
+      - "GIVEN a resize that does not cross the breakpoint THEN shouldRerender returns false and Plotly.react is NOT called"
+      - "GIVEN the OS or an explicit toggle changes color scheme THEN charts re-render with the new colorScheme layout and <html data-theme> reflects the choice"
+      - "app.js contains no aggregation math, no theme-resolution branching, and no viewport-breakpoint arithmetic — all delegated to dashboard_state.js/summary.js"
+      - "existing population-toggle behaviour (general/relevant switch) is preserved unchanged"
+      - "npm test stays green"
+    allowed_files:
+      - "frontend/app.js"
+    forbidden_files:
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/src/dashboard_state.js"
+      - "frontend/src/summary.js"
+      - "frontend/src/chart_theme.js"
+      - "frontend/src/charts/**"
+      - ".github/workflows/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/app.js"
+
+  - id: "9.12"
+    title: "UX polish: accessibility, theme toggle control, Lighthouse pass"
+    description: >
+      Add the visible theme-toggle control referenced by dashboard_state.resolveTheme (e.g. a
+      header button cycling light/dark, calling app.js's persistence logic from 9.11) — this task
+      wires the control's markup/CSS (index.html/styles.css) since 9.11 already wired the
+      behaviour. Accessibility pass: aria-live="polite" region announcing loading/ready/error state
+      changes, aria-label on the retry button and theme toggle, sufficient color contrast
+      (WCAG AA, >=4.5:1) for both palettes on body text and KPI numbers, visible :focus-visible
+      outlines using a token color, and keyboard operability of the retry button and theme toggle
+      (Tab + Enter/Space). Verify prefers-reduced-motion still disables the skeleton pulse (from
+      9.2) and now also any theme-toggle transition animation. Run a manual Lighthouse pass on dev
+      (mobile) and record the Performance/Best Practices/SEO scores in the plan's progress log.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: ["9.3", "9.11"]
+    branch: "feature/frontend-redesign/9.12-a11y-theme-toggle-polish"
+    commit_message: "feat(frontend): theme toggle control, accessibility pass, Lighthouse polish"
+    acceptance_criteria:
+      - "GIVEN index.html WHEN inspected THEN a theme-toggle control exists with an aria-label and is keyboard-focusable"
+      - "GIVEN the load-lifecycle changes state THEN an aria-live=\"polite\" region announces it (verified via DOM inspection / manual screen-reader check)"
+      - "GIVEN both light and dark palettes THEN body text and KPI numbers meet >=4.5:1 contrast (manual contrast-checker verification recorded in the PR description)"
+      - "GIVEN keyboard-only navigation THEN the retry button and theme toggle are reachable via Tab and activatable via Enter/Space"
+      - "GIVEN prefers-reduced-motion: reduce THEN skeleton pulse and theme-toggle transitions are disabled"
+      - "manual Lighthouse mobile run on dev records Performance/Best Practices/SEO scores in the FEATURE-009 plan's progress log; target >= 90 each"
+      - "npm test stays green"
+    allowed_files:
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/app.js"
+      - "dev/plans/FEATURE-009-frontend-redesign.md"
+    forbidden_files:
+      - "frontend/src/**"
+      - ".github/workflows/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/app.js"
+      - "dev/plans/FEATURE-009-frontend-redesign.md"
+
+  - id: "9.13"
+    title: "Verify and finalize: full suite, docs, status sync"
+    description: >
+      Run the full Vitest suite with coverage (npm run test:coverage) and confirm >80% on every new
+      frontend/src/*.js module and that no existing test regressed. Manually re-verify the byte-
+      identical data-trace claim for all 5 migrated chart modules against a pre-migration baseline
+      (or trust the per-task acceptance criteria already enforcing it). Update
+      documentation/FRONTEND_LAYER.md with a short section describing the new modules
+      (dashboard_state.js, summary.js, chart_theme.js) and the responsive/theming architecture.
+      Flip FEATURE-009's plan status to Done (checklist ticks in the Approach and Success criteria
+      sections of dev/plans/FEATURE-009-frontend-redesign.md), append a dated progress-log entry,
+      and update its row in dev/plans/README.md. Run `python dev/tools/validate_workflow.py` and
+      confirm it exits 0.
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 1
+    depends_on: ["9.12"]
+    branch: "feature/frontend-redesign/9.13-verify-and-finalize"
+    commit_message: "docs(frontend): finalize FEATURE-009 — docs, status sync, full-suite verification"
+    acceptance_criteria:
+      - "npm run test:coverage passes with >80% coverage on frontend/src/dashboard_state.js, summary.js, chart_theme.js"
+      - "the full existing Vitest suite (all pre-existing chart/data_source/transforms tests) passes unchanged in intent"
+      - "documentation/FRONTEND_LAYER.md documents the 3 new modules and the responsive/theming architecture"
+      - "dev/plans/FEATURE-009-frontend-redesign.md status marker and success-criteria checkboxes reflect completion, with a dated progress-log entry"
+      - "dev/plans/README.md's FEATURE-009 row status matches the technical plan's aggregated progress"
+      - "python dev/tools/validate_workflow.py exits 0"
+    allowed_files:
+      - "documentation/FRONTEND_LAYER.md"
+      - "dev/plans/FEATURE-009-frontend-redesign.md"
+      - "dev/plans/README.md"
+      - "dev/plans/technical/FEATURE-009-technical-plan.yaml"
+    forbidden_files:
+      - "frontend/**"
+      - ".github/workflows/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "documentation/FRONTEND_LAYER.md"
+      - "dev/plans/FEATURE-009-frontend-redesign.md"
+      - "dev/plans/README.md"
+
+git_workflow:
+  branch_root: "feature/frontend-redesign"
+  strategy: >
+    One branch per task off main, small atomic commits, rebase before PR. 9.1 -> 9.2 are sequential
+    (foundation). 9.3, 9.4, 9.5 are independent pure modules and can run fully in parallel with each
+    other and with 9.1/9.2. 9.6-9.10 (the 5 chart-module migrations) all depend only on 9.5 and can
+    run in parallel with each other, one commit per module per the architect's own risk mitigation
+    (migrating 5 modules at once risks breaking tests) — the suite must stay green after every
+    single one merges. 9.11 fans back in on 9.2, 9.3, 9.4 and all 5 chart migrations. 9.12 depends on
+    9.3 (theme resolution) and 9.11 (wiring already in place). 9.13 closes the loop.
+  pr_per_phase: true
+
+notes:
+  - "Review findings folded in: H1 (9.4 summary.js KPI module — was entirely absent from the architect's plan), H2 (9.5 chart_theme object-param signature with independent colorScheme axis — architect's sketch was viewport-only and positional), M1 (9.3 dedicated dashboard_state.js pure module instead of an ad hoc app.js helper), M2 (9.6-9.10 renderer render(populationBlock, context) signature so viewport/theme reach buildLayout without breaking any existing call site or test)."
+  - "Byte-identical data-trace guardrail: 9.6-9.10 must not change formatSeries/formatDistrictSeries/formatRentVsSaleRatio/formatRatioTimeSeries/formatBoxplot outputs — only the layout construction changes."
+  - "Do not over-engineer: chart_theme.js and dashboard_state.js stay factory functions / plain objects, not classes — no inheritance hierarchy is introduced anywhere in this feature."
+  - "Zero-build constraint: no task introduces a bundler, transpiler, or non-vendored dependency; all new modules are plain ES modules imported the same way data_source.js/transforms.js already are."
+  - "No AWS/CI changes: .github/workflows/deploy-frontend.yml and infrastructure/** are forbidden_files on every task — the redesign ships through the existing deploy pipeline unchanged."
