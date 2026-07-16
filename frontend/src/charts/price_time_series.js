@@ -10,6 +10,7 @@
  */
 
 import { formatSeries } from '../transforms.js';
+import { buildLayout } from '../chart_theme.js';
 
 /**
  * Factory that creates a ChartRenderer for neighbourhood price over time,
@@ -25,18 +26,26 @@ function makeTimeSeriesRenderer(id, title, operation, yAxisLabel) {
   return {
     id,
     title,
-    render(populationBlock) {
+    /**
+     * @param {object|null|undefined} populationBlock
+     * @param {{viewport?: string, colorScheme?: string}} [context] - Responsive/theme
+     *   context forwarded to chart_theme.buildLayout. Defaults preserve today's
+     *   desktop/light behaviour for existing callers/tests.
+     */
+    render(populationBlock, context = { viewport: 'desktop', colorScheme: 'light' }) {
       const records = populationBlock?.price_time_series_neighborhood ?? [];
       const traces = formatSeries(records, operation);
+      const layout = buildLayout({
+        viewport: context.viewport,
+        colorScheme: context.colorScheme,
+        overrides: {
+          xaxis: { title: { text: 'Date' } },
+          yaxis: { title: { text: yAxisLabel } },
+        },
+      });
       return {
         data: traces,
-        layout: {
-          title: { text: title },
-          xaxis: { title: { text: 'Date' }, automargin: true },
-          yaxis: { title: { text: yAxisLabel }, automargin: true },
-          legend: { orientation: 'v' },
-          margin: { l: 80, r: 40, t: 60, b: 60 },
-        },
+        layout: { ...layout, title: { text: title } },
       };
     },
   };

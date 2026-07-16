@@ -4,6 +4,7 @@ import {
   priceTimeSeriesRentRenderer,
   priceTimeSeriesSaleRenderer,
 } from '../src/charts/price_time_series.js';
+import { buildLayout } from '../src/chart_theme.js';
 import fixture from './fixtures/latest.sample.json';
 
 describe('priceTimeSeriesRenderer', () => {
@@ -44,6 +45,21 @@ describe('priceTimeSeriesRenderer', () => {
     expect(figure.layout.yaxis).toBeDefined();
   });
 
+  it('layout equals buildLayout(...) merged with { title } under the default context', () => {
+    const figure = priceTimeSeriesRenderer.render(fixture.general);
+
+    const expectedLayout = buildLayout({
+      viewport: 'desktop',
+      colorScheme: 'light',
+      overrides: {
+        xaxis: { title: { text: 'Date' } },
+        yaxis: { title: { text: 'Price per m² (€)' } },
+      },
+    });
+
+    expect(figure.layout).toEqual({ ...expectedLayout, title: { text: priceTimeSeriesRenderer.title } });
+  });
+
   it('returns empty data array for a population block missing the key — no throw', () => {
     const figure = priceTimeSeriesRenderer.render({});
 
@@ -76,6 +92,24 @@ describe('priceTimeSeriesRentRenderer', () => {
     const figure = priceTimeSeriesRentRenderer.render(fixture.general);
 
     expect(figure.layout.yaxis.title.text).toMatch(/month/);
+  });
+
+  it('no hand-rolled margin/legend literal remains — layout comes from buildLayout', () => {
+    const figure = priceTimeSeriesRentRenderer.render(fixture.general);
+
+    const expectedLayout = buildLayout({
+      viewport: 'desktop',
+      colorScheme: 'light',
+      overrides: {
+        xaxis: { title: { text: 'Date' } },
+        yaxis: { title: { text: 'Price per m² per month (€)' } },
+      },
+    });
+
+    expect(figure.layout).toEqual({
+      ...expectedLayout,
+      title: { text: priceTimeSeriesRentRenderer.title },
+    });
   });
 
   it('returns empty data for null — no throw', () => {
