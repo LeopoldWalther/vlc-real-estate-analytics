@@ -20,6 +20,7 @@ import { ratioTimeSeriesRenderer } from './src/charts/rent_vs_sale_ratio_time_se
 import { boxplotRentRenderer, boxplotSaleRenderer } from './src/charts/boxplot_by_neighborhood.js';
 import { summaryStats, formatKpi } from './src/summary.js';
 import { resolveTheme, resolveViewport, shouldRerender, createLoadState, transition } from './src/dashboard_state.js';
+import { MAX_SCOPE_SELECTION, extractDistricts, extractNeighborhoods, filterPopulationBlock, toggleScopeSelection } from './src/filters.js';
 
 const THEME_STORAGE_KEY = 'vlc-dashboard-theme';
 const RESIZE_DEBOUNCE_MS = 200;
@@ -76,6 +77,11 @@ const dataSource = new DataSource(window.CONFIG.DATA_URL);
 let activePopulation = 'general';
 let cachedData = null;
 let loadState = createLoadState();
+
+// District/neighborhood scope filters — both cap at MAX_SCOPE_SELECTION.
+// Empty array means "no restriction" on that axis (see filters.js).
+let selectedDistricts = [];
+let selectedNeighborhoods = [];
 
 // Responsive/theme context passed to every renderer's buildLayout call.
 // Reads (localStorage/matchMedia) happen once here; dashboard_state.js
@@ -159,6 +165,20 @@ function buildRelevantLabel(filter) {
 }
 
 /**
+ * Apply the current district/neighborhood scope selection to a raw
+ * population block. Pure passthrough (no clone) when nothing is selected.
+ *
+ * @param {object|null|undefined} rawBlock
+ * @returns {object|null|undefined}
+ */
+function applyScope(rawBlock) {
+  return filterPopulationBlock(rawBlock, {
+    districts: selectedDistricts,
+    neighborhoods: selectedNeighborhoods,
+  });
+}
+
+/**
  * Render the KPI headline row for a given population block.
  *
  * `generated_at` lives on the top-level payload (not inside `general`/
@@ -232,11 +252,13 @@ async function plotChart(renderer, block, context, { initial }) {
  * @param {{initial: boolean}} [options]
  */
 async function renderAllCharts(context, { initial = true } = {}) {
+  const generalScoped = applyScope(cachedData.general);
+  const activeScoped = applyScope(cachedData[activePopulation]);
   for (const renderer of GENERAL_ONLY_RENDERERS) {
-    await plotChart(renderer, cachedData.general, context, { initial });
+    await plotChart(renderer, generalScoped, context, { initial });
   }
   for (const renderer of TOGGLE_RENDERERS) {
-    await plotChart(renderer, cachedData[activePopulation], context, { initial });
+    await plotChart(renderer, activeScoped, context, { initial });
   }
 }
 
@@ -289,6 +311,116 @@ window.addEventListener('resize', () => {
   }, RESIZE_DEBOUNCE_MS);
 });
 
+/**
+ * (Re)build the checkbox list inside a scope-filter <fieldset>, replacing any
+ * previously rendered options/labels. The fieldset's <legend> (accessible
+ * name) is preserved.
+ *
+ * @param {string} axis - 'districts' or 'neighborhoods' — matches the
+ *   fieldset's [data-scope-options] attribute.
+ * @param {string[]} options - Available values for this axis.
+ * @param {string[]} selected - Currently selected values for this axis.
+ */
+function renderScopeOptions(axis, options, selected) {
+  const fieldset = document.querySelector(`[data-scope-options="${axis}"]`);
+  if (!fieldset) return;
+
+  // Remove previously rendered labels/empty-state, keep the <legend>.
+  fieldset.querySelectorAll('label, .scope-empty').forEach((el) => el.remove());
+
+  if (options.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'scope-empty';
+    empty.textContent = 'No data available';
+    fieldset.appendChild(empty);
+    return;
+  }
+
+  const atCap = selected.length >= MAX_SCOPE_SELECTION;
+  for (const value of options) {
+    const isChecked = selected.includes(value);
+    const label = document.createElement('label');
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = value;
+    checkbox.checked = isChecked;
+    checkbox.disabled = atCap && !isChecked;
+    const span = document.createElement('span');
+    span.textContent = value;
+    label.append(checkbox, span);
+    fieldset.appendChild(label);
+  }
+}
+
+/**
+ * Update a scope dropdown's summary badge to reflect its current selection
+ * count (or 'All' when nothing is selected).
+ *
+ * @param {string} axis - 'districts' or 'neighborhoods'.
+ * @param {string[]} selected
+ */
+function updateScopeBadge(axis, selected) {
+  const badge = document.querySelector(`[data-scope-count="${axis}"]`);
+  if (!badge) return;
+  badge.textContent = selected.length > 0 ? `${selected.length}/${MAX_SCOPE_SELECTION}` : 'All';
+  badge.toggleAttribute('data-active', selected.length > 0);
+}
+
+/**
+ * Rebuild both scope-filter checkbox lists and badges from the current
+ * selection state, and prune any selected neighborhoods that fall outside
+ * the districts currently selected (avoids a silently-ignored stale
+ * selection biasing the filtered data without appearing checked anywhere).
+ *
+ * District/neighborhood *options* are always derived from the unfiltered
+ * 'general' population block, so the available choices stay stable
+ * regardless of the population toggle.
+ */
+function renderScopeFilters() {
+  const districtOptions = extractDistricts(cachedData.general);
+  const neighborhoodOptions = extractNeighborhoods(cachedData.general, selectedDistricts);
+  selectedNeighborhoods = selectedNeighborhoods.filter((n) => neighborhoodOptions.includes(n));
+
+  renderScopeOptions('districts', districtOptions, selectedDistricts);
+  renderScopeOptions('neighborhoods', neighborhoodOptions, selectedNeighborhoods);
+  updateScopeBadge('districts', selectedDistricts);
+  updateScopeBadge('neighborhoods', selectedNeighborhoods);
+
+  const resetBtn = document.getElementById('scope-reset');
+  if (resetBtn) resetBtn.hidden = selectedDistricts.length === 0 && selectedNeighborhoods.length === 0;
+}
+
+/**
+ * React to a district/neighborhood scope change: rebuild the filter UI and
+ * re-render the KPI row + every chart against the newly scoped data.
+ */
+async function onScopeChange() {
+  renderScopeFilters();
+  if (!cachedData) return;
+  renderKpis(applyScope(cachedData[activePopulation]));
+  await renderAllCharts(currentContext, { initial: false });
+}
+
+// Event delegation: one listener per fieldset handles all its checkboxes,
+// including ones re-created by renderScopeOptions() on every change.
+document.querySelector('[data-scope-options="districts"]')?.addEventListener('change', (e) => {
+  if (e.target.type !== 'checkbox') return;
+  selectedDistricts = toggleScopeSelection(selectedDistricts, e.target.value);
+  onScopeChange().catch((err) => console.error('[Dashboard] Scope change failed:', err));
+});
+
+document.querySelector('[data-scope-options="neighborhoods"]')?.addEventListener('change', (e) => {
+  if (e.target.type !== 'checkbox') return;
+  selectedNeighborhoods = toggleScopeSelection(selectedNeighborhoods, e.target.value);
+  onScopeChange().catch((err) => console.error('[Dashboard] Scope change failed:', err));
+});
+
+document.getElementById('scope-reset')?.addEventListener('click', () => {
+  selectedDistricts = [];
+  selectedNeighborhoods = [];
+  onScopeChange().catch((err) => console.error('[Dashboard] Scope reset failed:', err));
+});
+
 // NOTE: no longer auto-following OS color-scheme changes — the dashboard
 // defaults to dark (DEFAULT_COLOR_SCHEME) regardless of the OS preference,
 // and only an explicit in-page toggle click (setExplicitTheme) changes it.
@@ -316,7 +448,8 @@ async function run() {
     relevantLabelEl.textContent = buildRelevantLabel(cachedData.relevant_filter);
   }
 
-  renderKpis(cachedData.general);
+  renderScopeFilters();
+  renderKpis(applyScope(cachedData.general));
   applyTheme(currentContext.colorScheme);
   await renderAllCharts(currentContext, { initial: true });
 
@@ -330,11 +463,12 @@ async function run() {
       toggleEl.dataset.wired = 'true';
       toggleEl.addEventListener('change', async (e) => {
         activePopulation = e.target.value;
+        const activeScoped = applyScope(cachedData[activePopulation]);
         // Update the KPI row immediately too, so the toggle gives visible
         // feedback even before scrolling down to the population-specific charts.
-        renderKpis(cachedData[activePopulation]);
+        renderKpis(activeScoped);
         for (const renderer of TOGGLE_RENDERERS) {
-          await plotChart(renderer, cachedData[activePopulation], currentContext, { initial: false });
+          await plotChart(renderer, activeScoped, currentContext, { initial: false });
         }
       });
     }

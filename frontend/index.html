@@ -93,6 +93,32 @@
       <label><input type="radio" name="population" value="relevant"> <span id="relevant-label">Filtered apartments</span></label>
     </div>
 
+    <!-- District/neighborhood scope filters — checkbox lists are populated by
+         app.js/filters.js once data loads. Both cap at 3 selections. -->
+    <div id="scope-filters" class="scope-filters">
+      <details id="district-filter" class="scope-dropdown">
+        <summary>
+          <span>Districts</span>
+          <span class="scope-badge" data-scope-count="districts">All</span>
+        </summary>
+        <fieldset class="scope-options" data-scope-options="districts">
+          <legend class="visually-hidden">Select up to 3 districts</legend>
+        </fieldset>
+      </details>
+
+      <details id="neighborhood-filter" class="scope-dropdown">
+        <summary>
+          <span>Neighborhoods</span>
+          <span class="scope-badge" data-scope-count="neighborhoods">All</span>
+        </summary>
+        <fieldset class="scope-options" data-scope-options="neighborhoods">
+          <legend class="visually-hidden">Select up to 3 neighborhoods</legend>
+        </fieldset>
+      </details>
+
+      <button type="button" id="scope-reset" class="scope-reset" hidden>Clear filters</button>
+    </div>
+
     <div class="chart-grid">
       <section class="chart-section">
         <div class="chart-skeleton" aria-hidden="true"></div>
