@@ -213,7 +213,7 @@ tasks:
       with each renderer, stamped by app.js for the population label). Then implement
       frontend/src/chart_theme.js as a factory function (no class needed — a config-producing
       function is sufficient; this is deliberately not over-engineered into a class hierarchy).
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: []
