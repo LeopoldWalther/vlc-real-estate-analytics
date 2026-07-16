@@ -12,6 +12,7 @@
  */
 
 import { formatBoxplot } from '../transforms.js';
+import { buildLayout } from '../chart_theme.js';
 
 /**
  * Factory for a boxplot renderer restricted to one operation.
@@ -26,20 +27,27 @@ function makeBoxplotRenderer(id, title, operation, yAxisLabel) {
   return {
     id,
     title,
-    /** @param {object|null|undefined} populationBlock */
-    render(populationBlock) {
+    /**
+     * @param {object|null|undefined} populationBlock
+     * @param {{viewport?: string, colorScheme?: string}} [context] - Responsive/theme
+     *   context forwarded to chart_theme.buildLayout. Defaults preserve today's
+     *   desktop/light behaviour for existing callers/tests.
+     */
+    render(populationBlock, context = { viewport: 'desktop', colorScheme: 'light' }) {
       const all = populationBlock?.boxplot_by_neighborhood ?? [];
       const records = all.filter((r) => r.operation === operation);
       const traces = formatBoxplot(records);
+      const layout = buildLayout({
+        viewport: context.viewport,
+        colorScheme: context.colorScheme,
+        overrides: {
+          yaxis: { title: { text: yAxisLabel } },
+          boxmode: 'group',
+        },
+      });
       return {
         data: traces,
-        layout: {
-          title: { text: this.title },
-          yaxis: { title: { text: yAxisLabel }, automargin: true },
-          xaxis: { automargin: true },
-          boxmode: 'group',
-          margin: { l: 80, r: 40, t: 60, b: 60 },
-        },
+        layout: { ...layout, title: { text: this.title } },
       };
     },
   };
@@ -63,18 +71,20 @@ export const boxplotSaleRenderer = makeBoxplotRenderer(
 export const boxplotRenderer = {
   id: 'boxplot-by-neighborhood',
   title: 'Price per m² distribution by neighbourhood',
-  render(populationBlock) {
+  render(populationBlock, context = { viewport: 'desktop', colorScheme: 'light' }) {
     const records = populationBlock?.boxplot_by_neighborhood ?? [];
     const traces = formatBoxplot(records);
+    const layout = buildLayout({
+      viewport: context.viewport,
+      colorScheme: context.colorScheme,
+      overrides: {
+        yaxis: { title: { text: 'Price per m² (€)' } },
+        boxmode: 'group',
+      },
+    });
     return {
       data: traces,
-      layout: {
-        title: { text: this.title },
-        yaxis: { title: { text: 'Price per m² (€)' }, automargin: true },
-        xaxis: { automargin: true },
-        boxmode: 'group',
-        margin: { l: 80, r: 40, t: 60, b: 60 },
-      },
+      layout: { ...layout, title: { text: this.title } },
     };
   },
 };
