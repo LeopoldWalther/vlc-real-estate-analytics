@@ -43,6 +43,39 @@
   </header>
 
   <main>
+    <!-- aria-live region announcing loading/ready/error state transitions to assistive tech -->
+    <div id="status-announcer" class="visually-hidden" aria-live="polite"></div>
+
+    <!-- Global error/retry block — shown when the single data load fails. Hidden by default. -->
+    <div id="dashboard-error" class="dashboard-error" hidden>
+      <p>We couldn't load the latest market data. Please check your connection and try again.</p>
+      <button type="button" id="retry-button" aria-label="Retry loading dashboard data">Retry</button>
+    </div>
+
+    <!-- KPI row — populated by app.js via summary.js once data loads -->
+    <section id="kpi-row" class="kpi-row" aria-label="Key market indicators">
+      <div class="kpi-card" data-kpi="median-rent">
+        <span class="kpi-label">Median rent (€/m²/mo)</span>
+        <span class="kpi-value">—</span>
+      </div>
+      <div class="kpi-card" data-kpi="median-sale">
+        <span class="kpi-label">Median sale (€/m²)</span>
+        <span class="kpi-value">—</span>
+      </div>
+      <div class="kpi-card" data-kpi="gross-yield">
+        <span class="kpi-label">Implied gross yield</span>
+        <span class="kpi-value">—</span>
+      </div>
+      <div class="kpi-card" data-kpi="listing-count">
+        <span class="kpi-label">Total listings</span>
+        <span class="kpi-value">—</span>
+      </div>
+      <div class="kpi-card" data-kpi="last-updated">
+        <span class="kpi-label">Last updated</span>
+        <span class="kpi-value">—</span>
+      </div>
+    </section>
+
     <!-- Population toggle — hidden until JS confirms 'relevant' data exists -->
     <div id="population-toggle" class="toggle-bar" style="display:none">
       <span class="toggle-label">Population:</span>
@@ -50,37 +83,47 @@
       <label><input type="radio" name="population" value="relevant"> <span id="relevant-label">Filtered apartments</span></label>
     </div>
 
-    <section class="chart-section">
-      <div id="price-time-series-rent" class="chart-container"></div>
-    </section>
+    <div class="chart-grid">
+      <section class="chart-section">
+        <div class="chart-skeleton" aria-hidden="true"></div>
+        <div id="price-time-series-rent" class="chart-container"></div>
+      </section>
 
-    <section class="chart-section">
-      <div id="price-time-series-sale" class="chart-container"></div>
-    </section>
+      <section class="chart-section">
+        <div class="chart-skeleton" aria-hidden="true"></div>
+        <div id="price-time-series-sale" class="chart-container"></div>
+      </section>
 
-    <section class="chart-section">
-      <div id="price-time-series-district-rent" class="chart-container"></div>
-    </section>
+      <section class="chart-section">
+        <div class="chart-skeleton" aria-hidden="true"></div>
+        <div id="price-time-series-district-rent" class="chart-container"></div>
+      </section>
 
-    <section class="chart-section">
-      <div id="price-time-series-district-sale" class="chart-container"></div>
-    </section>
+      <section class="chart-section">
+        <div class="chart-skeleton" aria-hidden="true"></div>
+        <div id="price-time-series-district-sale" class="chart-container"></div>
+      </section>
 
-    <section class="chart-section">
-      <div id="rent-vs-sale-ratio" class="chart-container"></div>
-    </section>
+      <section class="chart-section">
+        <div class="chart-skeleton" aria-hidden="true"></div>
+        <div id="rent-vs-sale-ratio" class="chart-container"></div>
+      </section>
 
-    <section class="chart-section">
-      <div id="rent-vs-sale-ratio-time-series" class="chart-container"></div>
-    </section>
+      <section class="chart-section">
+        <div class="chart-skeleton" aria-hidden="true"></div>
+        <div id="rent-vs-sale-ratio-time-series" class="chart-container"></div>
+      </section>
 
-    <section class="chart-section">
-      <div id="boxplot-by-neighborhood-rent" class="chart-container"></div>
-    </section>
+      <section class="chart-section">
+        <div class="chart-skeleton" aria-hidden="true"></div>
+        <div id="boxplot-by-neighborhood-rent" class="chart-container"></div>
+      </section>
 
-    <section class="chart-section">
-      <div id="boxplot-by-neighborhood-sale" class="chart-container"></div>
-    </section>
+      <section class="chart-section">
+        <div class="chart-skeleton" aria-hidden="true"></div>
+        <div id="boxplot-by-neighborhood-sale" class="chart-container"></div>
+      </section>
+    </div>
   </main>
 
   <footer>
