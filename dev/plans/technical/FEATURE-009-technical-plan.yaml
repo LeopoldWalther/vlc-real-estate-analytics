@@ -290,7 +290,7 @@ tasks:
       makeDistrictRenderer. render() gains the same `context` default parameter; overrides limited
       to xaxis/yaxis titles; title stays owned by the renderer; formatDistrictSeries output must
       remain byte-identical.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 0.75
     depends_on: ["9.5"]
