@@ -254,7 +254,7 @@ tasks:
       title: { text: yAxisLabel } } } as overrides; keep title assignment
       (`title: { text: title }`) in the renderer itself, merged on top of buildLayout's result.
       Data-trace generation (formatSeries) is untouched — traces must remain byte-identical.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 0.75
     depends_on: ["9.5"]
