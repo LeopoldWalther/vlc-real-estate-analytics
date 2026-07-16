@@ -168,7 +168,7 @@ tasks:
       formatKpi(value, kind) for consistent number/percentage/date formatting (kind:
       'eur_per_m2_month' | 'eur_per_m2' | 'percent' | 'count' | 'date'), returning an em-dash
       placeholder string for null input. Then implement frontend/src/summary.js.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: []
