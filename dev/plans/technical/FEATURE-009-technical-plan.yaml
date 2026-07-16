@@ -34,7 +34,7 @@ tasks:
       (og:title/og:description/og:type/og:image if trivial to inline, og:url can be a relative
       placeholder), and Twitter card tags (twitter:card=summary). Verify lang="en" stays correct.
       No external font or network calls anywhere (system font stack only, already the case).
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 1.5
     depends_on: []
