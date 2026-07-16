@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { rentVsSaleRatioRenderer } from '../src/charts/rent_vs_sale_ratio.js';
+import { buildLayout } from '../src/chart_theme.js';
 import fixture from './fixtures/latest.sample.json';
 
 describe('rentVsSaleRatioRenderer', () => {
@@ -29,5 +30,25 @@ describe('rentVsSaleRatioRenderer', () => {
   it('returns empty data for missing block — no throw', () => {
     expect(rentVsSaleRatioRenderer.render(null).data).toEqual([]);
     expect(rentVsSaleRatioRenderer.render({}).data).toEqual([]);
+  });
+
+  it('layout equals buildLayout(...) merged with { title } and retains hovermode:closest', () => {
+    const figure = rentVsSaleRatioRenderer.render(fixture.general);
+
+    const expectedLayout = buildLayout({
+      viewport: 'desktop',
+      colorScheme: 'light',
+      overrides: {
+        xaxis: { title: { text: 'Rent price per m² per month (€)' } },
+        yaxis: { title: { text: 'Sale price per m² (€)' } },
+        hovermode: 'closest',
+      },
+    });
+
+    expect(figure.layout).toEqual({
+      ...expectedLayout,
+      title: { text: rentVsSaleRatioRenderer.title },
+    });
+    expect(figure.layout.hovermode).toBe('closest');
   });
 });

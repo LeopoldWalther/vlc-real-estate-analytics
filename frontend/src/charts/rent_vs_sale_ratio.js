@@ -9,6 +9,7 @@
  */
 
 import { formatRentVsSaleRatio } from '../transforms.js';
+import { buildLayout } from '../chart_theme.js';
 
 /** @type {{ id: string, title: string, render: function }} */
 export const rentVsSaleRatioRenderer = {
@@ -18,21 +19,28 @@ export const rentVsSaleRatioRenderer = {
 
   /**
    * @param {object|null|undefined} populationBlock
+   * @param {{viewport?: string, colorScheme?: string}} [context] - Responsive/theme
+   *   context forwarded to chart_theme.buildLayout. Defaults preserve today's
+   *   desktop/light behaviour for existing callers/tests.
    * @returns {{ data: Array, layout: object }}
    */
-  render(populationBlock) {
+  render(populationBlock, context = { viewport: 'desktop', colorScheme: 'light' }) {
     const records = populationBlock?.rent_vs_sale_ratio ?? [];
     const traces = formatRentVsSaleRatio(records);
 
+    const layout = buildLayout({
+      viewport: context.viewport,
+      colorScheme: context.colorScheme,
+      overrides: {
+        xaxis: { title: { text: 'Rent price per m² per month (€)' } },
+        yaxis: { title: { text: 'Sale price per m² (€)' } },
+        hovermode: 'closest',
+      },
+    });
+
     return {
       data: traces,
-      layout: {
-        title: { text: this.title },
-        xaxis: { title: { text: 'Rent price per m² per month (€)' }, automargin: true },
-        yaxis: { title: { text: 'Sale price per m² (€)' }, automargin: true },
-        hovermode: 'closest',
-        margin: { l: 80, r: 40, t: 60, b: 80 },
-      },
+      layout: { ...layout, title: { text: this.title } },
     };
   },
 };
