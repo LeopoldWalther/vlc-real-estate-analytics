@@ -4,6 +4,7 @@ import {
   priceTimeSeriesDistrictRentRenderer,
   priceTimeSeriesDistrictSaleRenderer,
 } from '../src/charts/price_time_series_district.js';
+import { buildLayout } from '../src/chart_theme.js';
 import fixture from './fixtures/latest.sample.json';
 
 describe('priceTimeSeriesDistrictRenderer', () => {
@@ -30,6 +31,24 @@ describe('priceTimeSeriesDistrictRenderer', () => {
   it('returns empty data for missing block — no throw', () => {
     expect(priceTimeSeriesDistrictRenderer.render(null).data).toEqual([]);
     expect(priceTimeSeriesDistrictRenderer.render({}).data).toEqual([]);
+  });
+
+  it('layout equals buildLayout(...) merged with { title } under the default context', () => {
+    const figure = priceTimeSeriesDistrictRenderer.render(fixture.general);
+
+    const expectedLayout = buildLayout({
+      viewport: 'desktop',
+      colorScheme: 'light',
+      overrides: {
+        xaxis: { title: { text: 'Date' } },
+        yaxis: { title: { text: 'Price per m² (€)' } },
+      },
+    });
+
+    expect(figure.layout).toEqual({
+      ...expectedLayout,
+      title: { text: priceTimeSeriesDistrictRenderer.title },
+    });
   });
 });
 
