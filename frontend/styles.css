@@ -337,6 +337,14 @@ footer a {
   justify-content: space-between;
 }
 
+/* BUGFIX: an author-stylesheet `display` rule on the same element beats the
+   UA stylesheet's `[hidden] { display: none }` rule at equal specificity, so
+   without this override the error banner stayed visible permanently
+   regardless of the `hidden` attribute app.js toggles. */
+.dashboard-error[hidden] {
+  display: none;
+}
+
 /* Touch targets: every interactive control is >= 44x44px at mobile widths. */
 #retry-button,
 .toggle-bar label,
