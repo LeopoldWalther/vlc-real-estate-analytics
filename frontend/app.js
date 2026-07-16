@@ -80,9 +80,15 @@ let loadState = createLoadState();
 // Responsive/theme context passed to every renderer's buildLayout call.
 // Reads (localStorage/matchMedia) happen once here; dashboard_state.js
 // resolves what they mean.
+// DEFAULT_COLOR_SCHEME wins whenever the visitor has not made an explicit
+// choice yet (see resolveTheme) — dark is the portfolio's default look,
+// regardless of the OS/browser preference. An explicit toggle click (see
+// setExplicitTheme) always overrides this and persists across reloads.
+const DEFAULT_COLOR_SCHEME = 'dark';
+
 let currentContext = {
   viewport: resolveViewport(window.innerWidth),
-  colorScheme: resolveTheme(getStoredTheme(), systemPrefersDarkMode() ? 'dark' : 'light'),
+  colorScheme: resolveTheme(getStoredTheme(), DEFAULT_COLOR_SCHEME),
 };
 
 /**
@@ -97,13 +103,6 @@ function getStoredTheme() {
     // Storage unavailable (e.g. privacy mode) — behave as if nothing is stored.
     return null;
   }
-}
-
-/**
- * @returns {boolean} Whether the OS/browser currently prefers dark mode.
- */
-function systemPrefersDarkMode() {
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
 }
 
 /**
@@ -160,12 +159,17 @@ function buildRelevantLabel(filter) {
 }
 
 /**
- * Render the KPI headline row from the general population block.
+ * Render the KPI headline row for a given population block.
  *
- * @param {object|null|undefined} generalBlock
+ * `generated_at` lives on the top-level payload (not inside `general`/
+ * `relevant`), so it's merged in here from the module-level `cachedData`
+ * rather than expected on `populationBlock` itself.
+ *
+ * @param {object|null|undefined} populationBlock - `cachedData.general` or
+ *   `cachedData[activePopulation]`.
  */
-function renderKpis(generalBlock) {
-  const stats = summaryStats(generalBlock);
+function renderKpis(populationBlock) {
+  const stats = summaryStats({ ...populationBlock, generated_at: cachedData?.generated_at });
   for (const [kpi, format] of Object.entries(KPI_FORMATTERS)) {
     const el = document.querySelector(`.kpi-card[data-kpi="${kpi}"] .kpi-value`);
     if (el) el.textContent = format(stats);
@@ -285,12 +289,9 @@ window.addEventListener('resize', () => {
   }, RESIZE_DEBOUNCE_MS);
 });
 
-// System color-scheme change listener — only applies when the user has not
-// made an explicit choice (an explicit choice always wins, see resolveTheme).
-window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-  if (getStoredTheme()) return;
-  updateContext({ colorScheme: e.matches ? 'dark' : 'light' });
-});
+// NOTE: no longer auto-following OS color-scheme changes — the dashboard
+// defaults to dark (DEFAULT_COLOR_SCHEME) regardless of the OS preference,
+// and only an explicit in-page toggle click (setExplicitTheme) changes it.
 
 /**
  * Load the gold data once, then render the KPI row and every chart.
@@ -319,16 +320,24 @@ async function run() {
   applyTheme(currentContext.colorScheme);
   await renderAllCharts(currentContext, { initial: true });
 
-  // Show the toggle only when 'relevant' data is present.
+  // Show the toggle only when 'relevant' data is present. Wire the change
+  // listener once (a retry-triggered re-run of run() must not attach a
+  // second listener that would double-fire chart updates on every toggle).
   const toggleEl = document.getElementById('population-toggle');
   if (toggleEl && cachedData.relevant) {
     toggleEl.style.display = 'flex';
-    toggleEl.addEventListener('change', async (e) => {
-      activePopulation = e.target.value;
-      for (const renderer of TOGGLE_RENDERERS) {
-        await plotChart(renderer, cachedData[activePopulation], currentContext, { initial: false });
-      }
-    });
+    if (!toggleEl.dataset.wired) {
+      toggleEl.dataset.wired = 'true';
+      toggleEl.addEventListener('change', async (e) => {
+        activePopulation = e.target.value;
+        // Update the KPI row immediately too, so the toggle gives visible
+        // feedback even before scrolling down to the population-specific charts.
+        renderKpis(cachedData[activePopulation]);
+        for (const renderer of TOGGLE_RENDERERS) {
+          await plotChart(renderer, cachedData[activePopulation], currentContext, { initial: false });
+        }
+      });
+    }
   }
 }
 
