@@ -39,7 +39,22 @@ const DESKTOP_GEOMETRY = {
 const MOBILE_GEOMETRY = {
   margin: { l: 45, r: 20, t: 40, b: 90 },
   fontSize: 10,
-  legend: { orientation: 'h', y: -0.35, x: 0 },
+  // automargin lets Plotly grow the bottom margin to fit however many rows
+  // the wrapped horizontal legend needs (instead of clipping/overlapping the
+  // plot when it needs more than the 90px baseline); tighter tracegroupgap +
+  // a slightly smaller legend font pack more entries into each row so a
+  // dozen neighbourhoods wrap into fewer rows. Combined with app.js's
+  // simplifyLegendLabels() (which drops the redundant "operation – " prefix
+  // once a chart is already rent-only/sale-only), this keeps the visible
+  // plot area from being squeezed down to a sliver on mobile.
+  legend: {
+    orientation: 'h',
+    y: -0.25,
+    x: 0,
+    automargin: true,
+    tracegroupgap: 2,
+    font: { size: 9 },
+  },
 };
 
 /**

@@ -206,6 +206,18 @@ main {
   width: 100%;
 }
 
+/* Mobile legends wrap onto several rows (neighbourhood-per-trace charts can
+   have a dozen+ entries) — legend.automargin (chart_theme.js) borrows extra
+   bottom margin to fit them without overlapping the plot, so the container
+   itself needs more total height on narrow viewports or that borrowed
+   margin comes entirely out of the actual plot area, squeezing charts down
+   to a sliver. */
+@media (max-width: 767px) {
+  .chart-container {
+    min-height: 480px;
+  }
+}
+
 /* Filter bar: Population toggle + Districts/Neighborhoods scope filters sit
    in a single row above the KPIs, so a selection's effect on every KPI/chart
    is visible without scrolling. Wraps to stacked rows on narrow viewports. */

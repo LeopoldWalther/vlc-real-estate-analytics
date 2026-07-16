@@ -22,6 +22,12 @@ describe('buildLayout', () => {
       expect(layout.legend.y).toBeLessThan(0);
       expect(layout.font.size).toBeLessThan(12);
     });
+
+    it('enables legend.automargin so a wrapped multi-row legend never overlaps/clips the plot', () => {
+      const layout = buildLayout({ viewport: 'mobile', colorScheme: 'light', overrides: {} });
+
+      expect(layout.legend.automargin).toBe(true);
+    });
   });
 
   describe('viewport = desktop', () => {

@@ -272,6 +272,37 @@ function markChartLoaded(rendererId) {
 }
 
 /**
+ * Drop the redundant "operation – " prefix from every trace's legend name
+ * when every trace on this chart shares the same `meta.operation` value.
+ *
+ * transforms.js always names neighbourhood/district traces "rent – X" or
+ * "sale – X" so a single formatter can serve both the rent-only and
+ * sale-only renderer variants, but once split into separate rent/sale
+ * charts that prefix is identical on every entry and carries no
+ * information — it just makes every legend label ~40-50% wider than
+ * necessary. On mobile, with a dozen neighbourhoods, that extra width
+ * forced far more wrapped legend rows than needed, shrinking the actual
+ * plot area to a sliver. Renderers/transforms are left untouched (their
+ * existing tests still assert the full "operation – X" name) — this is a
+ * display-only post-processing step, consistent with the i18n title/axis
+ * override above.
+ *
+ * @param {Array<object>|undefined} traces - fig.data from a renderer's render().
+ */
+function simplifyLegendLabels(traces) {
+  if (!Array.isArray(traces) || traces.length === 0) return;
+  const operations = new Set(traces.map((trace) => trace.meta?.operation).filter(Boolean));
+  if (operations.size !== 1) return; // Mixed operations on one chart — prefix is meaningful, keep it.
+  for (const trace of traces) {
+    if (trace.meta?.neighborhood) {
+      trace.name = trace.meta.neighborhood;
+    } else if (trace.meta?.district) {
+      trace.name = trace.meta.district;
+    }
+  }
+}
+
+/**
  * Render (or re-render) a single chart into its container.
  *
  * First render uses Plotly.newPlot; subsequent calls (population toggle,
@@ -302,6 +333,8 @@ async function plotChart(renderer, block, context, { initial }) {
   if (fig.layout.yaxis?.title) {
     fig.layout.yaxis.title = { text: t(currentLocale, `charts.${renderer.id}.yaxis`) };
   }
+
+  simplifyLegendLabels(fig.data);
 
   // Stamp the active population into toggle-chart titles so users can see
   // the switch take effect even before scrolling to changed data points.
