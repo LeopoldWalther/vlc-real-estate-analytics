@@ -120,7 +120,7 @@ tasks:
       states are loading -> ready | error, and whose retry event resets any state back to loading.
       Then implement frontend/src/dashboard_state.js to satisfy the tests. Pure functions/factories
       only — no DOM access, no fetch, no globalThis reference anywhere in this module.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: []
