@@ -40,15 +40,32 @@
   <header>
     <div class="header-row">
       <div>
-        <h1>Valencia Real Estate Analytics</h1>
-        <p class="subtitle">Weekly market snapshot · Valencia city centre</p>
+        <h1 data-i18n="app.title">Valencia Real Estate Analytics</h1>
+        <p class="subtitle" data-i18n="app.subtitle">Weekly market snapshot · Valencia city centre</p>
       </div>
-      <button
-        type="button"
-        id="theme-toggle"
-        aria-label="Toggle dark mode"
-        title="Toggle dark mode"
-      >🌓</button>
+      <div class="header-controls">
+        <details id="language-menu" class="scope-dropdown lang-dropdown">
+          <summary aria-label="Change language" title="Change language" data-i18n-attr="aria-label:app.languageToggleLabel,title:app.languageToggleLabel">
+            <span aria-hidden="true">🌐</span>
+            <span class="lang-current" data-lang-current>EN</span>
+          </summary>
+          <fieldset class="scope-options lang-options">
+            <legend class="visually-hidden">Choose a language</legend>
+            <label><input type="radio" name="language" value="en" checked> English</label>
+            <label><input type="radio" name="language" value="de"> Deutsch</label>
+            <label><input type="radio" name="language" value="es"> Español</label>
+            <label><input type="radio" name="language" value="ar"> العربية</label>
+            <label><input type="radio" name="language" value="tr"> Türkçe</label>
+          </fieldset>
+        </details>
+        <button
+          type="button"
+          id="theme-toggle"
+          aria-label="Toggle dark mode"
+          title="Toggle dark mode"
+          data-i18n-attr="aria-label:app.themeToggleLabel,title:app.themeToggleLabel"
+        >🌓</button>
+      </div>
     </div>
   </header>
 
@@ -58,66 +75,71 @@
 
     <!-- Global error/retry block — shown when the single data load fails. Hidden by default. -->
     <div id="dashboard-error" class="dashboard-error" hidden>
-      <p>We couldn't load the latest market data. Please check your connection and try again.</p>
-      <button type="button" id="retry-button" aria-label="Retry loading dashboard data">Retry</button>
+      <p data-i18n="error.message">We couldn't load the latest market data. Please check your connection and try again.</p>
+      <button type="button" id="retry-button" aria-label="Retry loading dashboard data" data-i18n="error.retryButton">Retry</button>
+    </div>
+
+    <!-- Filter row: population toggle + district/neighborhood scope filters,
+         positioned above the KPI row so the whole dashboard reacts visibly
+         to a selection change without scrolling. -->
+    <div class="filter-bar">
+      <!-- Population toggle — hidden until JS confirms 'relevant' data exists -->
+      <div id="population-toggle" class="toggle-bar" style="display:none">
+        <span class="toggle-label" data-i18n="population.label">Population:</span>
+        <label><input type="radio" name="population" value="general" checked> <span data-i18n="population.all">All listings</span></label>
+        <label><input type="radio" name="population" value="relevant"> <span id="relevant-label" data-i18n="population.filteredFallback">Filtered apartments</span></label>
+      </div>
+
+      <!-- District/neighborhood scope filters — checkbox lists are populated by
+           app.js/filters.js once data loads. Both cap at 3 selections. -->
+      <div id="scope-filters" class="scope-filters">
+        <details id="district-filter" class="scope-dropdown">
+          <summary>
+            <span data-i18n="filters.districts">Districts</span>
+            <span class="scope-badge" data-scope-count="districts" data-i18n="filters.badgeAll">All</span>
+          </summary>
+          <fieldset class="scope-options" data-scope-options="districts">
+            <legend class="visually-hidden" data-i18n="filters.selectUpToDistricts">Select up to 3 districts</legend>
+          </fieldset>
+        </details>
+
+        <details id="neighborhood-filter" class="scope-dropdown">
+          <summary>
+            <span data-i18n="filters.neighborhoods">Neighborhoods</span>
+            <span class="scope-badge" data-scope-count="neighborhoods" data-i18n="filters.badgeAll">All</span>
+          </summary>
+          <fieldset class="scope-options" data-scope-options="neighborhoods">
+            <legend class="visually-hidden" data-i18n="filters.selectUpToNeighborhoods">Select up to 3 neighborhoods</legend>
+          </fieldset>
+        </details>
+
+        <button type="button" id="scope-reset" class="scope-reset" hidden data-i18n="filters.clear">Clear filters</button>
+      </div>
     </div>
 
     <!-- KPI row — populated by app.js via summary.js once data loads -->
     <section id="kpi-row" class="kpi-row" aria-label="Key market indicators">
       <div class="kpi-card" data-kpi="median-rent">
-        <span class="kpi-label">Median rent (€/m²/mo)</span>
+        <span class="kpi-label" data-i18n="kpi.medianRent">Median rent (€/m²/mo)</span>
         <span class="kpi-value">—</span>
       </div>
       <div class="kpi-card" data-kpi="median-sale">
-        <span class="kpi-label">Median sale (€/m²)</span>
+        <span class="kpi-label" data-i18n="kpi.medianSale">Median sale (€/m²)</span>
         <span class="kpi-value">—</span>
       </div>
       <div class="kpi-card" data-kpi="gross-yield">
-        <span class="kpi-label">Implied gross yield</span>
+        <span class="kpi-label" data-i18n="kpi.grossYield">Implied gross yield</span>
         <span class="kpi-value">—</span>
       </div>
       <div class="kpi-card" data-kpi="listing-count">
-        <span class="kpi-label">Total listings</span>
+        <span class="kpi-label" data-i18n="kpi.listingCount">Total listings</span>
         <span class="kpi-value">—</span>
       </div>
       <div class="kpi-card" data-kpi="last-updated">
-        <span class="kpi-label">Last updated</span>
+        <span class="kpi-label" data-i18n="kpi.lastUpdated">Last updated</span>
         <span class="kpi-value">—</span>
       </div>
     </section>
-
-    <!-- Population toggle — hidden until JS confirms 'relevant' data exists -->
-    <div id="population-toggle" class="toggle-bar" style="display:none">
-      <span class="toggle-label">Population:</span>
-      <label><input type="radio" name="population" value="general" checked> All listings</label>
-      <label><input type="radio" name="population" value="relevant"> <span id="relevant-label">Filtered apartments</span></label>
-    </div>
-
-    <!-- District/neighborhood scope filters — checkbox lists are populated by
-         app.js/filters.js once data loads. Both cap at 3 selections. -->
-    <div id="scope-filters" class="scope-filters">
-      <details id="district-filter" class="scope-dropdown">
-        <summary>
-          <span>Districts</span>
-          <span class="scope-badge" data-scope-count="districts">All</span>
-        </summary>
-        <fieldset class="scope-options" data-scope-options="districts">
-          <legend class="visually-hidden">Select up to 3 districts</legend>
-        </fieldset>
-      </details>
-
-      <details id="neighborhood-filter" class="scope-dropdown">
-        <summary>
-          <span>Neighborhoods</span>
-          <span class="scope-badge" data-scope-count="neighborhoods">All</span>
-        </summary>
-        <fieldset class="scope-options" data-scope-options="neighborhoods">
-          <legend class="visually-hidden">Select up to 3 neighborhoods</legend>
-        </fieldset>
-      </details>
-
-      <button type="button" id="scope-reset" class="scope-reset" hidden>Clear filters</button>
-    </div>
 
     <div class="chart-grid">
       <section class="chart-section">
@@ -163,8 +185,8 @@
   </main>
 
   <footer>
-    <span id="data-updated">Data last updated: —</span>
-    <a href="https://github.com/LeopoldWalther/vlc-real-estate-analytics" target="_blank" rel="noopener noreferrer">Source on GitHub</a>
+    <span id="data-updated" data-i18n="footer.dataUpdated">Data last updated: —</span>
+    <a href="https://github.com/LeopoldWalther/vlc-real-estate-analytics" target="_blank" rel="noopener noreferrer" data-i18n="footer.sourceLink">Source on GitHub</a>
   </footer>
 
   <script type="module" src="app.js"></script>

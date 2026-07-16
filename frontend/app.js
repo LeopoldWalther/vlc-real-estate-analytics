@@ -21,8 +21,10 @@ import { boxplotRentRenderer, boxplotSaleRenderer } from './src/charts/boxplot_b
 import { summaryStats, formatKpi } from './src/summary.js';
 import { resolveTheme, resolveViewport, shouldRerender, createLoadState, transition } from './src/dashboard_state.js';
 import { MAX_SCOPE_SELECTION, extractDistricts, extractNeighborhoods, filterPopulationBlock, toggleScopeSelection } from './src/filters.js';
+import { t, isRtl, resolveLocale } from './src/i18n.js';
 
 const THEME_STORAGE_KEY = 'vlc-dashboard-theme';
+const LOCALE_STORAGE_KEY = 'vlc-dashboard-locale';
 const RESIZE_DEBOUNCE_MS = 200;
 
 // Renderers that exist in both 'general' and 'relevant' populations.
@@ -46,6 +48,17 @@ const GENERAL_ONLY_RENDERERS = [
 
 const ALL_RENDERERS = [...GENERAL_ONLY_RENDERERS, ...TOGGLE_RENDERERS];
 
+// Renderer ids whose x-axis is a plain date timeline — they share the
+// generic 'charts.xaxis.date' i18n key instead of a per-renderer xaxis key
+// (see plotChart()'s title/axis translation override).
+const SHARED_DATE_XAXIS_RENDERER_IDS = new Set([
+  'price-time-series-rent',
+  'price-time-series-sale',
+  'price-time-series-district-rent',
+  'price-time-series-district-sale',
+  'rent-vs-sale-ratio-time-series',
+]);
+
 const containers = {
   'price-time-series-rent':          document.getElementById('price-time-series-rent'),
   'price-time-series-sale':          document.getElementById('price-time-series-sale'),
@@ -65,10 +78,12 @@ const KPI_FORMATTERS = {
   'last-updated': (stats) => formatKpi(stats.lastUpdated, 'date'),
 };
 
-const LOAD_STATE_MESSAGES = {
-  loading: 'Loading market data…',
-  ready: 'Market data loaded.',
-  error: 'Failed to load market data.',
+// Announcer copy keyed by load-lifecycle status; looked up via t() so it
+// tracks the active locale (see announce()/setLoadState()).
+const LOAD_STATE_MESSAGE_KEYS = {
+  loading: 'status.loading',
+  ready: 'status.ready',
+  error: 'status.error',
 };
 
 const dataSource = new DataSource(window.CONFIG.DATA_URL);
@@ -82,6 +97,24 @@ let loadState = createLoadState();
 // Empty array means "no restriction" on that axis (see filters.js).
 let selectedDistricts = [];
 let selectedNeighborhoods = [];
+
+/**
+ * Read the explicitly stored locale choice, if any.
+ *
+ * @returns {string|null} A locale code, or null if never set / unavailable.
+ */
+function getStoredLocale() {
+  try {
+    return window.localStorage.getItem(LOCALE_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+// Active UI locale — separate from currentContext because a locale change
+// always requires a full re-render (every chart title/axis label changes),
+// unlike viewport/theme changes which dashboard_state.shouldRerender filters.
+let currentLocale = resolveLocale(getStoredLocale());
 
 // Responsive/theme context passed to every renderer's buildLayout call.
 // Reads (localStorage/matchMedia) happen once here; dashboard_state.js
@@ -122,6 +155,35 @@ function applyTheme(colorScheme) {
 }
 
 /**
+ * Walk every element carrying a `data-i18n` (textContent) or
+ * `data-i18n-attr` (comma-separated `attr:key` pairs) marker and apply the
+ * active locale's translation. Also reflects the locale on <html lang>/dir
+ * so assistive tech and CSS logical properties respond correctly (Arabic
+ * is the only RTL locale — see isRtl()).
+ *
+ * @param {string} locale
+ */
+function applyTranslations(locale) {
+  document.documentElement.lang = locale;
+  document.documentElement.dir = isRtl(locale) ? 'rtl' : 'ltr';
+
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(locale, el.getAttribute('data-i18n'));
+  });
+
+  document.querySelectorAll('[data-i18n-attr]').forEach((el) => {
+    const pairs = el.getAttribute('data-i18n-attr').split(',');
+    for (const pair of pairs) {
+      const [attr, key] = pair.split(':').map((s) => s.trim());
+      if (attr && key) el.setAttribute(attr, t(locale, key));
+    }
+  });
+
+  const langCurrentEl = document.querySelector('[data-lang-current]');
+  if (langCurrentEl) langCurrentEl.textContent = locale.toUpperCase();
+}
+
+/**
  * Push a message into the aria-live region so screen readers announce
  * load-lifecycle changes.
  *
@@ -142,7 +204,8 @@ function setLoadState(nextState) {
   loadState = nextState;
   const errorEl = document.getElementById('dashboard-error');
   if (errorEl) errorEl.hidden = loadState.status !== 'error';
-  announce(LOAD_STATE_MESSAGES[loadState.status] ?? '');
+  const messageKey = LOAD_STATE_MESSAGE_KEYS[loadState.status];
+  announce(messageKey ? t(currentLocale, messageKey) : '');
 }
 
 /**
@@ -154,14 +217,16 @@ function setLoadState(nextState) {
  * @returns {string} Short filter summary.
  */
 function buildRelevantLabel(filter) {
-  if (!filter) return 'Filtered apartments';
+  if (!filter) return t(currentLocale, 'population.filteredFallback');
   const parts = [];
-  if (filter.size_gt != null) parts.push(`≥${filter.size_gt} m²`);
-  if (filter.hasLift) parts.push('lift');
-  if (filter.rooms_gte != null) parts.push(`≥${filter.rooms_gte} rooms`);
-  if (filter.bathrooms_gte != null) parts.push(`≥${filter.bathrooms_gte} baths`);
-  if (filter.floor_not != null) parts.push(`not floor ${filter.floor_not}`);
-  return parts.length > 0 ? `Flats: ${parts.join(', ')}` : 'Filtered apartments';
+  if (filter.size_gt != null) parts.push(t(currentLocale, 'population.sizeGte', { value: filter.size_gt }));
+  if (filter.hasLift) parts.push(t(currentLocale, 'population.lift'));
+  if (filter.rooms_gte != null) parts.push(t(currentLocale, 'population.roomsGte', { value: filter.rooms_gte }));
+  if (filter.bathrooms_gte != null) parts.push(t(currentLocale, 'population.bathroomsGte', { value: filter.bathrooms_gte }));
+  if (filter.floor_not != null) parts.push(t(currentLocale, 'population.floorNot', { value: filter.floor_not }));
+  return parts.length > 0
+    ? `${t(currentLocale, 'population.filteredPrefix')}: ${parts.join(', ')}`
+    : t(currentLocale, 'population.filteredFallback');
 }
 
 /**
@@ -222,13 +287,29 @@ async function plotChart(renderer, block, context, { initial }) {
   if (!container) return;
 
   const fig = renderer.render(block, context);
+
+  // Override hardcoded English title/axis text with the active locale's
+  // translation when one exists for this renderer id — renderers themselves
+  // stay untouched (see i18n.js design note), keeping their own unit tests valid.
+  const translatedTitle = t(currentLocale, `charts.${renderer.id}.title`);
+  fig.layout.title = { text: translatedTitle };
+  if (fig.layout.xaxis?.title) {
+    const xKey = SHARED_DATE_XAXIS_RENDERER_IDS.has(renderer.id)
+      ? 'charts.xaxis.date'
+      : `charts.${renderer.id}.xaxis`;
+    fig.layout.xaxis.title = { text: t(currentLocale, xKey) };
+  }
+  if (fig.layout.yaxis?.title) {
+    fig.layout.yaxis.title = { text: t(currentLocale, `charts.${renderer.id}.yaxis`) };
+  }
+
   // Stamp the active population into toggle-chart titles so users can see
   // the switch take effect even before scrolling to changed data points.
   if (TOGGLE_RENDERERS.includes(renderer)) {
     const popLabel = activePopulation === 'general'
-      ? 'All listings'
+      ? t(currentLocale, 'population.all')
       : buildRelevantLabel(cachedData?.relevant_filter);
-    fig.layout.title = { text: `${renderer.title} — ${popLabel}` };
+    fig.layout.title = { text: `${translatedTitle} — ${popLabel}` };
   }
 
   try {
@@ -295,6 +376,41 @@ function setExplicitTheme(nextTheme) {
   updateContext({ colorScheme: nextTheme });
 }
 
+/**
+ * Explicitly set the UI locale, persisting the choice so it survives
+ * reloads, then apply translations and unconditionally re-render every
+ * chart (unlike viewport/theme changes, a locale switch always changes
+ * visible text — there is no "insignificant" locale change to filter out).
+ *
+ * @param {string} nextLocale - One of SUPPORTED_LOCALES.
+ */
+function setLocale(nextLocale) {
+  currentLocale = resolveLocale(nextLocale);
+  try {
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, currentLocale);
+  } catch {
+    // Storage unavailable — the choice just won't persist across reloads.
+  }
+  applyTranslations(currentLocale);
+  if (cachedData) {
+    const relevantLabelEl = document.getElementById('relevant-label');
+    if (relevantLabelEl && cachedData.relevant_filter) {
+      relevantLabelEl.textContent = buildRelevantLabel(cachedData.relevant_filter);
+    }
+    renderScopeFilters();
+    renderKpis(applyScope(cachedData[activePopulation]));
+    renderAllCharts(currentContext, { initial: false });
+  }
+}
+
+// Language dropdown — one radio per SUPPORTED_LOCALES entry (see index.html).
+// Delegated 'change' listener handles all five without per-radio wiring.
+document.querySelector('#language-menu fieldset')?.addEventListener('change', (e) => {
+  if (e.target.name !== 'language') return;
+  setLocale(e.target.value);
+  document.getElementById('language-menu')?.removeAttribute('open');
+});
+
 // Optional theme-toggle control — markup is added by a follow-up task; wiring
 // the behaviour here means the button works the moment it exists in the DOM.
 document.getElementById('theme-toggle')?.addEventListener('click', () => {
@@ -331,7 +447,7 @@ function renderScopeOptions(axis, options, selected) {
   if (options.length === 0) {
     const empty = document.createElement('p');
     empty.className = 'scope-empty';
-    empty.textContent = 'No data available';
+    empty.textContent = t(currentLocale, 'filters.noDataAvailable');
     fieldset.appendChild(empty);
     return;
   }
@@ -362,7 +478,7 @@ function renderScopeOptions(axis, options, selected) {
 function updateScopeBadge(axis, selected) {
   const badge = document.querySelector(`[data-scope-count="${axis}"]`);
   if (!badge) return;
-  badge.textContent = selected.length > 0 ? `${selected.length}/${MAX_SCOPE_SELECTION}` : 'All';
+  badge.textContent = selected.length > 0 ? `${selected.length}/${MAX_SCOPE_SELECTION}` : t(currentLocale, 'filters.badgeAll');
   badge.toggleAttribute('data-active', selected.length > 0);
 }
 
@@ -478,6 +594,15 @@ async function run() {
 document.getElementById('retry-button')?.addEventListener('click', () => {
   run().catch((err) => console.error('[Dashboard] Retry failed:', err));
 });
+
+// Reflect the resolved starting locale (stored choice or DEFAULT_LOCALE) on
+// the DOM before the first data load, so static chrome (header, error copy,
+// KPI labels, filter labels) is never shown in the wrong language even
+// briefly while data.load() is in flight.
+document.querySelectorAll('#language-menu input[name="language"]').forEach((el) => {
+  el.checked = el.value === currentLocale;
+});
+applyTranslations(currentLocale);
 
 run().catch((err) => {
   console.error('[Dashboard] Failed to render:', err);
