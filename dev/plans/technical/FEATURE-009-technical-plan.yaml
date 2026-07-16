@@ -491,7 +491,7 @@ tasks:
       (Tab + Enter/Space). Verify prefers-reduced-motion still disables the skeleton pulse (from
       9.2) and now also any theme-toggle transition animation. Run a manual Lighthouse pass on dev
       (mobile) and record the Performance/Best Practices/SEO scores in the plan's progress log.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 1.5
     depends_on: ["9.3", "9.11"]
