@@ -1,0 +1,439 @@
+metadata:
+  for_feature: "FEATURE-009"
+  title: "Frontend redesign: clean, modern, mobile-first dashboard"
+  created_by: "@reviewer"
+  created_at: "2026-07-16"
+  version: "1.0"
+  total_tasks: 13
+  estimated_hours: 18
+  risk_level: "medium"
+  critical_path: ["9.1", "9.2", "9.4", "9.5", "9.6", "9.11", "9.12"]
+  reviewed_plan: "dev/reviews/REVIEW-FEATURE-009.md"
+
+validation:
+  required_checks:
+    - "node-test"
+    - "workflow-consistency"
+  min_coverage: ">80% on new frontend src modules"
+
+tasks:
+  - id: "9.1"
+    title: "Design tokens and base visual identity"
+    description: >
+      Rewrite the CSS foundation with custom properties for color, spacing, radius,
+      shadow, typography, and fluid type. Keep the stack zero-build and avoid
+      external font/network dependencies.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: []
+    branch: "feature/frontend-redesign/9.1-design-tokens"
+    commit_message: "style(frontend): add dashboard design tokens and visual identity"
+    acceptance_criteria:
+      - "GIVEN the dashboard CSS WHEN loaded THEN colors, spacing, radii, shadows, and type scales come from CSS custom properties"
+      - "GIVEN existing frontend tests WHEN npm test runs THEN the suite is green"
+      - "GIVEN the page at 360px width WHEN inspected manually THEN no base layout element causes horizontal scroll"
+    allowed_files:
+      - "frontend/styles.css"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/styles.css"
+
+  - id: "9.2"
+    title: "Responsive dashboard shell and chart cards"
+    description: >
+      Replace the plain stacked chart sections with semantic card markup: header,
+      KPI placeholder region, population toggle, chart grid, card headings, captions,
+      and chart bodies sized for mobile and desktop.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["9.1"]
+    branch: "feature/frontend-redesign/9.2-responsive-shell"
+    commit_message: "feat(frontend): add responsive dashboard card shell"
+    acceptance_criteria:
+      - "GIVEN 360px, 768px, and 1280px widths WHEN viewed manually THEN the dashboard has no horizontal scroll"
+      - "GIVEN chart cards WHEN viewed THEN each chart has an HTML heading outside Plotly"
+      - "GIVEN existing tests WHEN npm test runs THEN the suite is green"
+    allowed_files:
+      - "frontend/index.html"
+      - "frontend/styles.css"
+    forbidden_files:
+      - "src/etl/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/index.html"
+      - "frontend/styles.css"
+
+  - id: "9.3"
+    title: "Dashboard state, theme, and viewport helpers"
+    description: >
+      Add pure helpers for load lifecycle, theme resolution, viewport resolution,
+      and rerender decisions. Write failing Vitest coverage first, then implement.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: []
+    branch: "feature/frontend-redesign/9.3-dashboard-state"
+    commit_message: "feat(frontend): add testable dashboard state helpers"
+    acceptance_criteria:
+      - "GIVEN loading, ready, error, and retry actions WHEN reducer tests run THEN expected state transitions pass"
+      - "GIVEN stored theme and system preference inputs WHEN resolveTheme runs THEN the selected theme is deterministic"
+      - "GIVEN width changes WHEN resolveViewport and shouldRerender run THEN rerender occurs only on viewport-class changes"
+    allowed_files:
+      - "frontend/src/dashboard_state.js"
+      - "frontend/tests/dashboard_state.test.js"
+    forbidden_files:
+      - "frontend/app.js"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: ["9.4", "9.5"]
+    reversible: true
+    files_to_create:
+      - "frontend/src/dashboard_state.js"
+      - "frontend/tests/dashboard_state.test.js"
+    files_to_modify: []
+
+  - id: "9.4"
+    title: "Summary KPI computation helpers"
+    description: >
+      Add pure summaryStats and formatKpi helpers. Tests must pin formulas to the
+      existing gold fixture and cover empty/missing blocks without throwing.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: []
+    branch: "feature/frontend-redesign/9.4-summary-stats"
+    commit_message: "feat(frontend): compute dashboard KPI summary stats"
+    acceptance_criteria:
+      - "GIVEN frontend/tests/fixtures/latest.sample.json WHEN summaryStats runs THEN median rent, median sale, gross yield, counts, and lastUpdated match documented expectations"
+      - "GIVEN missing or empty population blocks WHEN summaryStats runs THEN nullable fields are returned and no exception is thrown"
+      - "GIVEN KPI values WHEN formatKpi runs THEN user-facing strings include correct units"
+    allowed_files:
+      - "frontend/src/summary.js"
+      - "frontend/tests/summary.test.js"
+      - "frontend/tests/fixtures/**"
+    forbidden_files:
+      - "frontend/app.js"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: ["9.3", "9.5"]
+    reversible: true
+    files_to_create:
+      - "frontend/src/summary.js"
+      - "frontend/tests/summary.test.js"
+    files_to_modify: []
+
+  - id: "9.5"
+    title: "Unified Plotly chart theme factory"
+    description: >
+      Add buildLayout factory with mobile/desktop viewport strategies, light/dark
+      color schemes, common typography, margins, legends, transparent backgrounds,
+      and deep-merge overrides.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: []
+    branch: "feature/frontend-redesign/9.5-chart-theme"
+    commit_message: "feat(frontend): add unified Plotly chart theme factory"
+    acceptance_criteria:
+      - "GIVEN viewport mobile WHEN buildLayout runs THEN margins, fonts, and legend placement are compact"
+      - "GIVEN viewport desktop WHEN buildLayout runs THEN margins and legend placement suit wide screens"
+      - "GIVEN colorScheme dark WHEN buildLayout runs THEN plot colors, gridlines, and fonts use dark-safe values"
+      - "GIVEN overrides WHEN buildLayout runs THEN overrides win without dropping base theme keys"
+    allowed_files:
+      - "frontend/src/chart_theme.js"
+      - "frontend/tests/chart_theme.test.js"
+    forbidden_files:
+      - "frontend/src/charts/**"
+      - "frontend/app.js"
+      - "infrastructure/**"
+    can_run_parallel_with: ["9.3", "9.4"]
+    reversible: true
+    files_to_create:
+      - "frontend/src/chart_theme.js"
+      - "frontend/tests/chart_theme.test.js"
+    files_to_modify: []
+
+  - id: "9.6"
+    title: "Migrate neighbourhood price time-series charts"
+    description: >
+      Update price_time_series renderers to consume buildLayout and remove in-chart
+      titles and duplicated layout literals while preserving axis labels and data.
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 1
+    depends_on: ["9.5"]
+    branch: "feature/frontend-redesign/9.6-theme-neighborhood-timeseries"
+    commit_message: "refactor(frontend): theme neighbourhood time-series charts"
+    acceptance_criteria:
+      - "GIVEN price time-series renderers WHEN rendered THEN layout has no title key"
+      - "GIVEN renderer tests WHEN npm test runs THEN data trace expectations remain unchanged"
+      - "GIVEN layout assertions WHEN tests run THEN axis titles are supplied through buildLayout overrides"
+    allowed_files:
+      - "frontend/src/charts/price_time_series.js"
+      - "frontend/tests/price_time_series.test.js"
+      - "frontend/src/chart_theme.js"
+    forbidden_files:
+      - "frontend/app.js"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/charts/price_time_series.js"
+      - "frontend/tests/price_time_series.test.js"
+
+  - id: "9.7"
+    title: "Migrate district price time-series charts"
+    description: >
+      Update district time-series renderers to consume buildLayout and remove
+      duplicated margin/legend/title layout literals.
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 1
+    depends_on: ["9.5"]
+    branch: "feature/frontend-redesign/9.7-theme-district-timeseries"
+    commit_message: "refactor(frontend): theme district time-series charts"
+    acceptance_criteria:
+      - "GIVEN district renderers WHEN rendered THEN layout has no title key"
+      - "GIVEN renderer tests WHEN npm test runs THEN rent and sale filtering remains unchanged"
+      - "GIVEN layout assertions WHEN tests run THEN axis titles are supplied through buildLayout overrides"
+    allowed_files:
+      - "frontend/src/charts/price_time_series_district.js"
+      - "frontend/tests/price_time_series_district.test.js"
+      - "frontend/src/chart_theme.js"
+    forbidden_files:
+      - "frontend/app.js"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/charts/price_time_series_district.js"
+      - "frontend/tests/price_time_series_district.test.js"
+
+  - id: "9.8"
+    title: "Migrate rent-vs-sale scatter chart"
+    description: >
+      Update rent_vs_sale_ratio renderer to consume buildLayout, preserving
+      hovermode and axis labels while removing the in-chart title.
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 0.75
+    depends_on: ["9.5"]
+    branch: "feature/frontend-redesign/9.8-theme-ratio-scatter"
+    commit_message: "refactor(frontend): theme rent-vs-sale scatter chart"
+    acceptance_criteria:
+      - "GIVEN rentVsSaleRatioRenderer WHEN rendered THEN layout has no title key"
+      - "GIVEN existing tests WHEN npm test runs THEN scatter x/y data remains unchanged"
+      - "GIVEN layout assertions WHEN tests run THEN hovermode and axis titles are preserved"
+    allowed_files:
+      - "frontend/src/charts/rent_vs_sale_ratio.js"
+      - "frontend/tests/rent_vs_sale_ratio.test.js"
+      - "frontend/src/chart_theme.js"
+    forbidden_files:
+      - "frontend/app.js"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/charts/rent_vs_sale_ratio.js"
+      - "frontend/tests/rent_vs_sale_ratio.test.js"
+
+  - id: "9.9"
+    title: "Migrate sale-rent ratio time-series chart"
+    description: >
+      Update ratio time-series renderer to consume buildLayout, preserving trace
+      behaviour and axis labels while removing title/margin/legend literals.
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 0.75
+    depends_on: ["9.5"]
+    branch: "feature/frontend-redesign/9.9-theme-ratio-timeseries"
+    commit_message: "refactor(frontend): theme sale-rent ratio time-series chart"
+    acceptance_criteria:
+      - "GIVEN ratioTimeSeriesRenderer WHEN rendered THEN layout has no title key"
+      - "GIVEN existing tests WHEN npm test runs THEN trace grouping remains unchanged"
+      - "GIVEN layout assertions WHEN tests run THEN axis titles come from buildLayout overrides"
+    allowed_files:
+      - "frontend/src/charts/rent_vs_sale_ratio_time_series.js"
+      - "frontend/tests/rent_vs_sale_ratio_time_series.test.js"
+      - "frontend/src/chart_theme.js"
+    forbidden_files:
+      - "frontend/app.js"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/charts/rent_vs_sale_ratio_time_series.js"
+      - "frontend/tests/rent_vs_sale_ratio_time_series.test.js"
+
+  - id: "9.10"
+    title: "Migrate neighbourhood boxplot charts"
+    description: >
+      Update boxplot renderers to consume buildLayout, preserving operation split,
+      boxmode, and axis labels while removing in-chart titles.
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 1
+    depends_on: ["9.5"]
+    branch: "feature/frontend-redesign/9.10-theme-boxplots"
+    commit_message: "refactor(frontend): theme neighbourhood boxplot charts"
+    acceptance_criteria:
+      - "GIVEN boxplot renderers WHEN rendered THEN layout has no title key"
+      - "GIVEN existing tests WHEN npm test runs THEN rent/sale filtering remains unchanged"
+      - "GIVEN layout assertions WHEN tests run THEN boxmode and axis labels are preserved"
+    allowed_files:
+      - "frontend/src/charts/boxplot_by_neighborhood.js"
+      - "frontend/tests/boxplot_by_neighborhood.test.js"
+      - "frontend/src/chart_theme.js"
+    forbidden_files:
+      - "frontend/app.js"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/charts/boxplot_by_neighborhood.js"
+      - "frontend/tests/boxplot_by_neighborhood.test.js"
+
+  - id: "9.11"
+    title: "Wire app orchestration, KPIs, theme toggle, and responsive Plotly"
+    description: >
+      Keep app.js thin while wiring summary rendering, card population badges,
+      persisted theme toggle, viewport/theme-aware rerendering, and Plotly
+      responsive config.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["9.2", "9.3", "9.4", "9.6", "9.7", "9.8", "9.9", "9.10"]
+    branch: "feature/frontend-redesign/9.11-app-orchestration"
+    commit_message: "feat(frontend): wire KPIs theme toggle and responsive chart rerendering"
+    acceptance_criteria:
+      - "GIVEN loaded data WHEN the app renders THEN KPI cards show formatted summary values"
+      - "GIVEN population toggle changes WHEN toggle charts rerender THEN card badge text updates without adding Plotly layout.title"
+      - "GIVEN theme toggle changes WHEN charts rerender THEN Plotly receives the matching colorScheme"
+      - "GIVEN Plotly newPlot/react calls WHEN invoked THEN config includes responsive: true"
+      - "GIVEN npm test WHEN run THEN all helper and chart tests remain green"
+    allowed_files:
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/src/dashboard_state.js"
+      - "frontend/src/summary.js"
+      - "frontend/src/chart_theme.js"
+    forbidden_files:
+      - "infrastructure/**"
+      - ".github/workflows/**"
+      - "src/etl/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "frontend/styles.css"
+
+  - id: "9.12"
+    title: "Loading skeleton and error retry UI"
+    description: >
+      Use dashboard_state reducer transitions to render skeleton cards while
+      loading and a friendly retry state on data fetch failure.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: ["9.3", "9.11"]
+    branch: "feature/frontend-redesign/9.12-loading-error-ui"
+    commit_message: "feat(frontend): add loading skeleton and retryable error state"
+    acceptance_criteria:
+      - "GIVEN data is loading WHEN the page opens THEN skeleton placeholders are visible"
+      - "GIVEN data fetch fails WHEN run catches the error THEN a retry button is shown"
+      - "GIVEN retry is clicked WHEN the data source succeeds THEN dashboard transitions to ready"
+      - "GIVEN npm test WHEN run THEN dashboard_state transition coverage remains green"
+    allowed_files:
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/src/dashboard_state.js"
+      - "frontend/tests/dashboard_state.test.js"
+    forbidden_files:
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/tests/dashboard_state.test.js"
+
+  - id: "9.13"
+    title: "Metadata, favicon, docs, and release checks"
+    description: >
+      Add favicon and share metadata, document the design tokens/theme factory,
+      and perform final test/manual release checks before dev then prod deploy.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["9.12"]
+    branch: "feature/frontend-redesign/9.13-metadata-docs-release"
+    commit_message: "docs(frontend): document redesign and add dashboard metadata"
+    acceptance_criteria:
+      - "GIVEN index.html WHEN inspected THEN description, Open Graph, Twitter card, favicon, lang, title, and theme-color metadata are present"
+      - "GIVEN frontend README WHEN read THEN it explains design tokens, chart_theme usage, and how to add a chart"
+      - "GIVEN frontend directory WHEN npm test runs THEN the suite is green"
+      - "GIVEN dev deploy manual check WHEN tested on mobile width and dark/light themes THEN no horizontal scroll or unreadable chart legends are observed"
+      - "GIVEN Lighthouse mobile on dev WHEN run manually THEN Performance, Best Practices, and SEO are at least 90"
+    allowed_files:
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/favicon.svg"
+      - "frontend/README.md"
+    forbidden_files:
+      - "infrastructure/**"
+      - ".github/workflows/**"
+      - "src/etl/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "frontend/favicon.svg"
+    files_to_modify:
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/README.md"
+
+git_workflow:
+  branch_root: "feature/frontend-redesign"
+  commit_strategy: "one branch and one commit per technical task unless a task requires test-first and implementation commits"
+  before_each_task:
+    - "git checkout main"
+    - "git pull --ff-only"
+    - "git checkout -b <task.branch>"
+  required_before_merge:
+    - "cd frontend && npm test"
+    - "python dev/tools/validate_workflow.py"
+  deploy_sequence:
+    - "Deploy to dev using deploy-frontend.yml workflow_dispatch"
+    - "Perform real-device/mobile-width smoke checks in light and dark mode"
+    - "Promote to prod using deploy-frontend.yml workflow_dispatch only after dev verification"
+
+notes:
+  - "Do not add React, Vue, Svelte, Tailwind, or any build step for this feature."
+  - "Do not modify AWS infrastructure or deploy workflows unless a blocker is discovered and reviewed."
+  - "Keep app.js orchestration thin; put testable logic in pure src modules."
+  - "All Plotly chart titles must live in HTML card headers, not layout.title."
+  - "Manual visual checks are required because the current frontend test stack has no browser automation."
