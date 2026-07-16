@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { ratioTimeSeriesRenderer } from '../src/charts/rent_vs_sale_ratio_time_series.js';
+import { buildLayout } from '../src/chart_theme.js';
 import fixture from './fixtures/latest.sample.json';
 
 describe('ratioTimeSeriesRenderer', () => {
@@ -25,5 +26,23 @@ describe('ratioTimeSeriesRenderer', () => {
   it('returns empty data for missing block — no throw', () => {
     expect(ratioTimeSeriesRenderer.render(null).data).toEqual([]);
     expect(ratioTimeSeriesRenderer.render({}).data).toEqual([]);
+  });
+
+  it('layout equals buildLayout(...) merged with { title } under the default context', () => {
+    const figure = ratioTimeSeriesRenderer.render(fixture.general);
+
+    const expectedLayout = buildLayout({
+      viewport: 'desktop',
+      colorScheme: 'light',
+      overrides: {
+        xaxis: { title: { text: 'Date' } },
+        yaxis: { title: { text: 'Sale/Rent ratio' } },
+      },
+    });
+
+    expect(figure.layout).toEqual({
+      ...expectedLayout,
+      title: { text: ratioTimeSeriesRenderer.title },
+    });
   });
 });
