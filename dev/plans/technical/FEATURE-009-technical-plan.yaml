@@ -536,7 +536,7 @@ tasks:
       sections of dev/plans/FEATURE-009-frontend-redesign.md), append a dated progress-log entry,
       and update its row in dev/plans/README.md. Run `python dev/tools/validate_workflow.py` and
       confirm it exits 0.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 1
     depends_on: ["9.12"]
