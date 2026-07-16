@@ -141,6 +141,30 @@ header .subtitle {
   margin-top: var(--space-1);
 }
 
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* Language dropdown reuses .scope-dropdown chrome; .lang-current shows the
+   active locale's 2-letter code so the control stays compact in the header. */
+.lang-dropdown .lang-current {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-heading);
+}
+
+.lang-dropdown .scope-options {
+  right: 0;
+  left: auto;
+  min-width: 160px;
+}
+
+.lang-options label {
+  justify-content: flex-start;
+}
+
 /* Theme toggle — a simple icon button in the header, >=44x44px touch target. */
 #theme-toggle {
   min-width: 44px;
@@ -182,15 +206,29 @@ main {
   width: 100%;
 }
 
+/* Filter bar: Population toggle + Districts/Neighborhoods scope filters sit
+   in a single row above the KPIs, so a selection's effect on every KPI/chart
+   is visible without scrolling. Wraps to stacked rows on narrow viewports. */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
 .toggle-bar {
   display: flex;
   align-items: center;
-  gap: var(--space-5);
+  gap: var(--space-4);
   padding: var(--space-3) var(--space-4);
-  margin-bottom: var(--space-5);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  /* Narrower than before now that it shares a row with the scope filters;
+     still allows its label + two radios to wrap gracefully on mobile. */
+  flex: 1 1 260px;
+  max-width: 420px;
 }
 
 .toggle-label {
@@ -210,7 +248,7 @@ main {
   flex-wrap: wrap;
   align-items: flex-start;
   gap: var(--space-3);
-  margin-bottom: var(--space-5);
+  flex: 2 1 320px;
 }
 
 .scope-dropdown {
