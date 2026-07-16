@@ -19,9 +19,12 @@ CloudFront (dual origin: assets + gold/aggregations/*)
       index.html  ←  <script type="module" src="app.js">
               │
               ▼
-          app.js (ESM entry)
+          app.js (ESM entry — thin orchestration only)
               │
               ├── DataSource.load()        ← fetch + schema_version guard
+              ├── dashboard_state.js       ← theme/viewport/rerender/lifecycle (pure)
+              ├── summary.js               ← KPI headline row aggregation (pure)
+              ├── chart_theme.js           ← buildLayout(viewport, colorScheme) (pure)
               ├── GENERAL_ONLY_RENDERERS   ← always use data.general
               └── TOGGLE_RENDERERS         ← switch between data.general / data.relevant
                        │
@@ -32,13 +35,56 @@ CloudFront (dual origin: assets + gold/aggregations/*)
 ### Rendering path
 
 1. `app.js` calls `DataSource.load()` — fetches `latest.json`, validates `schema_version == "1.0"`,
-   rejects on mismatch so a schema bump is never silently swallowed.
-2. All eight renderers are called once with the initial `data.general` population block. General-only
-   renderers always use `data.general`. Toggle renderers use the active population.
-3. If `data.relevant` is present, the population toggle is shown with a label derived from
+   rejects on mismatch so a schema bump is never silently swallowed. The load-lifecycle
+   (`dashboard_state.createLoadState` / `transition`) drives loading skeletons and the retry/error
+   block; a `retry` event resets the lifecycle to `loading` and reruns `run()`.
+2. On success, `summary.summaryStats(data.general)` computes the KPI headline row (median rent
+   €/m²/mo, median sale €/m², implied gross yield %, total listings, last updated), formatted via
+   `formatKpi` and written into the `#kpi-row` cards.
+3. All eight renderers are called once with the initial `data.general` population block and a
+   `{ viewport, colorScheme }` context resolved by `dashboard_state.resolveViewport(window.innerWidth)`
+   / `resolveTheme(storedTheme, systemPrefersDark)`. General-only renderers always use
+   `data.general`. Toggle renderers use the active population. Each renderer's `render(block, context)`
+   passes `context` straight into `chart_theme.buildLayout` so every chart shares one responsive,
+   themed layout.
+4. If `data.relevant` is present, the population toggle is shown with a label derived from
    `data.relevant_filter` (via `buildRelevantLabel`) — never hardcoded.
-4. On toggle change, `Plotly.react` (diff, not full teardown) re-renders the four toggle charts with
+5. On toggle change, `Plotly.react` (diff, not full teardown) re-renders the four toggle charts with
    the selected population and stamps the active population into the chart titles.
+6. A debounced (200 ms) `resize` listener and a `prefers-color-scheme` `change` listener recompute
+   the `{ viewport, colorScheme }` context; `dashboard_state.shouldRerender(prev, next)` gates
+   whether charts actually re-render (only on an actual viewport-bucket or color-scheme change, not
+   on every resize tick). An explicit theme choice from the header toggle button is persisted to
+   `localStorage` and always wins over the system preference.
+
+## Responsive & theming architecture (FEATURE-009)
+
+Three small, pure (DOM-free) modules carry all of the redesign's non-trivial logic so `app.js` stays
+a thin DOM-applying consumer:
+
+- **`src/chart_theme.js` — `buildLayout({ viewport, colorScheme, overrides })`** (Strategy +
+  Factory). `viewport` ('mobile'/'desktop') and `colorScheme` ('light'/'dark') are independent
+  config axes — margins/legend/font-size come from viewport geometry, colors/gridlines/colorway
+  come from the color scheme, and caller `overrides` (axis titles, `boxmode`, etc.) are deep-merged
+  on top. The returned layout never carries a `title` key — chart titles are owned by each renderer,
+  and `app.js` appends the active population label for toggle charts.
+- **`src/dashboard_state.js`** — pure helpers, no `document`/`window`/`fetch` references:
+  `resolveTheme(stored, systemPrefers)` (explicit choice wins, else system preference),
+  `resolveViewport(width)` (768 px breakpoint), `shouldRerender(prev, next)` (true only on a
+  viewport-bucket or color-scheme change), and the load lifecycle `createLoadState()` / `transition()`
+  (`loading → ready | error`, with `retry` always resetting to `loading`).
+- **`src/summary.js`** — pure `summaryStats(populationBlock)` computing a count-weighted median
+  rent/sale price, an implied gross yield (`(12 / mean_sales_price_by_rent_ratio) * 100`, weighted by
+  listing count), and total listing counts from `boxplot_by_neighborhood` /
+  `rent_vs_sale_ratio`; every field is null-able so missing/empty source arrays never throw. Plus
+  `formatKpi(value, kind)` for display formatting (`eur_per_m2_month`, `eur_per_m2`, `percent`,
+  `count`, `date`).
+
+Each of the five chart renderer modules was migrated to `chart_theme.buildLayout` one module per
+commit (a deliberate risk mitigation — the suite stayed green after every single migration) and now
+accepts an optional `render(populationBlock, context)` second parameter defaulting to
+`{ viewport: 'desktop', colorScheme: 'light' }` so every pre-existing call site/test keeps working
+unchanged.
 
 ## Chart Inventory
 
@@ -86,19 +132,32 @@ const source = new FakeDataSource(fixture);
 The schema guard throws `Error('Unsupported schema_version: ...')` on a version mismatch so a
 gold-schema bump is caught immediately instead of silently rendering broken charts.
 
+### Strategy + Factory — ChartTheme
+
+`chart_theme.buildLayout({ viewport, colorScheme, overrides })` produces the shared Plotly `layout`
+base (margins, legend, fonts, colors, gridlines) every renderer consumes, with `viewport` and
+`colorScheme` as independent, interchangeable strategies and `overrides` deep-merged on top. A new
+breakpoint or palette is a config change in one file, not an edit across five chart modules
+(Open/Closed). Deliberately a plain factory function rather than a class hierarchy — the two axes
+are independent config inputs, not polymorphic behaviours, so a config-producing function avoids
+over-engineering.
+
 ## Source Code Layout
 
 ```
 frontend/
-├── index.html                          # Single HTML page; 8 chart containers; population toggle
-├── app.js                              # Entry — wires DataSource + all renderers; toggle handler
-├── styles.css                          # Layout; .chart-container overflow:hidden
+├── index.html                          # Single HTML page; KPI row; 8 chart containers; toggle; theme button
+├── app.js                              # Entry — thin orchestration; wires DataSource + pure modules + renderers
+├── styles.css                          # Design tokens (light/dark), responsive card grid, skeletons, a11y
+├── favicon.svg                         # Inline SVG brand mark
 ├── vendor/
 │   └── plotly.min.js                   # Vendored Plotly.js v2.35.2 (same-origin, no CDN)
 ├── src/
 │   ├── data_source.js                  # DataSource (fetch + schema guard) + FakeDataSource
 │   ├── transforms.js                   # Pure formatSeries / formatRatioSeries helpers
-│   ├── dashboard.js                    # (removed — orchestration lives in app.js run())
+│   ├── chart_theme.js                  # buildLayout(viewport, colorScheme, overrides) factory
+│   ├── dashboard_state.js              # Pure theme/viewport/rerender/lifecycle helpers
+│   ├── summary.js                      # Pure summaryStats + formatKpi (KPI headline row)
 │   └── charts/
 │       ├── price_time_series.js        # Factory: priceTimeSeriesRentRenderer + SaleRenderer
 │       ├── price_time_series_district.js # Factory: district rent + sale
@@ -111,6 +170,9 @@ frontend/
     ├── data_source.test.js
     ├── transforms.test.js
     ├── transforms_additional.test.js
+    ├── chart_theme.test.js
+    ├── dashboard_state.test.js
+    ├── summary.test.js
     ├── price_time_series.test.js
     ├── price_time_series_district.test.js
     ├── rent_vs_sale_ratio.test.js
@@ -138,7 +200,7 @@ The frontend is provisioned by `infrastructure/modules/frontend/`:
 
 `deploy-frontend.yml` (workflow_dispatch, environment `dev` / `prod`):
 
-1. `npm ci` + `npm test` — all 70 Vitest tests must pass before any upload.
+1. `npm ci` + `npm test` — all 106 Vitest tests must pass before any upload.
 2. `terraform output -raw frontend_asset_bucket_name` — reads the bucket name from state.
 3. `aws s3 sync frontend/ s3://<bucket>/ --delete` — excludes `tests/`, `node_modules/`,
    `coverage/`, `*.test.js`.
@@ -177,9 +239,12 @@ npm run test:coverage
 
 Tests use [Vitest](https://vitest.dev/) with `FakeDataSource` and a local fixture
 (`tests/fixtures/latest.sample.json`). No DOM, no network, no Plotly mock at module level —
-Plotly is injected via `vi.stubGlobal` where needed. The suite runs in < 250 ms.
+Plotly is injected via `vi.stubGlobal` where needed. `app.js` itself has no dedicated unit tests
+(kept intentionally thin, DOM-only orchestration — see FEATURE-009 review finding M2) and is
+excluded from coverage; all non-trivial logic lives in the pure `src/*.js` modules, which are all
+covered. The suite runs in < 350 ms.
 
 ```bash
-# Full suite (70 tests)
+# Full suite (106 tests)
 cd frontend && npm test
 ```
