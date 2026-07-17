@@ -6,6 +6,21 @@
  */
 
 /**
+ * Choose the Plotly trace `mode` for a time-series line: plain 'lines' for
+ * two-or-more points (a clean trend line, no per-point marker clutter), but
+ * 'lines+markers' for a lone data point — a single point rendered with
+ * mode:'lines' alone is otherwise completely invisible (no line segment
+ * exists to draw), silently hiding a brand-new/sparse neighbourhood's only
+ * snapshot instead of at least showing a dot for it.
+ *
+ * @param {number} pointCount
+ * @returns {'lines'|'lines+markers'}
+ */
+function lineMode(pointCount) {
+  return pointCount <= 1 ? 'lines+markers' : 'lines';
+}
+
+/**
  * Convert a price_time_series_neighborhood records array into one Plotly
  * scatter trace per (operation, neighbourhood) pair.
  *
@@ -64,7 +79,14 @@ export function formatSeries(block, operation = null) {
     x: g.x,
     y: g.y,
     type: 'scatter',
-    mode: 'lines+markers',
+    // Plain lines (no per-point markers): with weekly snapshots over many
+    // months, markers on every point made the trend look like a string of
+    // thick dots rather than a clean trend line (see mobile-legend/marker
+    // cleanup task). formatRentVsSaleRatio's scatter chart intentionally
+    // keeps markers — that one *is* a point-per-neighbourhood plot. A
+    // single-point series still gets a marker (see lineMode()) so it isn't
+    // silently invisible.
+    mode: lineMode(g.x.length),
     meta: {
       operation: g.operation,
       neighborhood: g.neighborhood,
@@ -115,7 +137,7 @@ export function formatDistrictSeries(block, operation = null) {
     x: g.x,
     y: g.y,
     type: 'scatter',
-    mode: 'lines+markers',
+    mode: lineMode(g.x.length),
     meta: { operation: g.operation, district: g.district },
   }));
 }
@@ -190,7 +212,7 @@ export function formatRatioTimeSeries(block) {
     x: g.x,
     y: g.y,
     type: 'scatter',
-    mode: 'lines+markers',
+    mode: lineMode(g.x.length),
     meta: { neighborhood: g.neighborhood, district: g.district },
   }));
 }
