@@ -220,11 +220,14 @@ main {
 
 /* Filter bar: Population toggle + Districts/Neighborhoods scope filters sit
    in a single row above the KPIs, so a selection's effect on every KPI/chart
-   is visible without scrolling. Wraps to stacked rows on narrow viewports. */
+   is visible without scrolling. All three controls stretch to fill the row
+   evenly and share the same height (align-items: stretch), regardless of
+   whether one control's label happens to wrap onto a second line. Wraps to
+   stacked rows on narrow viewports. */
 .filter-bar {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: stretch;
   gap: var(--space-3);
   margin-bottom: var(--space-5);
 }
@@ -237,10 +240,11 @@ main {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  /* Narrower than before now that it shares a row with the scope filters;
-     still allows its label + two radios to wrap gracefully on mobile. */
-  flex: 1 1 260px;
-  max-width: 420px;
+  /* Equal share of the row alongside the two scope-filter dropdowns below
+     (.scope-filters is display:contents, so #district-filter/
+     #neighborhood-filter become direct flex children of .filter-bar with
+     the same flex-basis). */
+  flex: 1 1 240px;
 }
 
 .toggle-label {
@@ -254,20 +258,24 @@ main {
   cursor: pointer;
 }
 
-/* District/neighborhood scope filters. */
+/* District/neighborhood scope filters. display:contents removes this
+   element from the flex layout entirely so its children (the two dropdowns
+   + reset button) become direct flex items of .filter-bar, sized/aligned
+   identically to .toggle-bar rather than being squeezed into a nested
+   sub-row. */
 .scope-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--space-3);
-  flex: 2 1 320px;
+  display: contents;
 }
 
 .scope-dropdown {
   position: relative;
+  display: flex;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  /* Same flex-basis as .toggle-bar so Population/Districts/Neighborhoods
+     end up equal width, spanning the full row. */
+  flex: 1 1 240px;
 }
 
 .scope-dropdown > summary {
@@ -276,6 +284,7 @@ main {
   gap: var(--space-2);
   padding: var(--space-2) var(--space-4);
   min-height: 44px;
+  width: 100%;
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);
   color: var(--color-text-heading);

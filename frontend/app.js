@@ -27,6 +27,15 @@ const THEME_STORAGE_KEY = 'vlc-dashboard-theme';
 const LOCALE_STORAGE_KEY = 'vlc-dashboard-locale';
 const RESIZE_DEBOUNCE_MS = 200;
 
+// BUGFIX: Plotly's default hover-triggered modebar (camera/zoom/pan icons)
+// renders in a fixed position at the very top of the chart, which is the
+// same region as the chart title — on hover the icons visually overlapped
+// and obscured the (often long, translated) title text. Since this is a
+// read-only public dashboard (not an analysis tool visitors need to
+// zoom/pan/export from), the modebar is disabled outright rather than
+// fragile pixel-tuning the title position to dodge it.
+const PLOTLY_CONFIG = { responsive: true, displayModeBar: false };
+
 // Renderers that exist in both 'general' and 'relevant' populations.
 // The population toggle switches which block is passed to render().
 const TOGGLE_RENDERERS = [
@@ -347,9 +356,9 @@ async function plotChart(renderer, block, context, { initial }) {
 
   try {
     if (initial) {
-      await globalThis.Plotly.newPlot(container, fig.data, fig.layout, { responsive: true });
+      await globalThis.Plotly.newPlot(container, fig.data, fig.layout, PLOTLY_CONFIG);
     } else {
-      await globalThis.Plotly.react(container, fig.data, fig.layout, { responsive: true });
+      await globalThis.Plotly.react(container, fig.data, fig.layout, PLOTLY_CONFIG);
     }
     markChartLoaded(renderer.id);
   } catch (err) {
