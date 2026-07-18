@@ -206,9 +206,9 @@ after gold's `12:45` run, so it can report on that week's just-completed pipelin
       the full JSON shape and overall-status composition end to end.
 
 ### Phase 4 — Infrastructure
-- [ ] `infrastructure/modules/lambda_pipeline_health/` (main.tf, variables.tf, outputs.tf),
+- [x] `infrastructure/modules/lambda_pipeline_health/` (main.tf, variables.tf, outputs.tf),
       mirroring `lambda_gold/`'s structure and least-privilege IAM pattern.
-- [ ] Wire the module into `environments/dev/main.tf` first, `terraform plan`/`apply` to dev only.
+- [x] Wire the module into `environments/dev/main.tf` first, `terraform plan`/`apply` to dev only.
 - [ ] Manually invoke the dev health Lambda, download `gold/pipeline_health/latest.json`, verify
       shape and plausible statuses (dev pipeline has few real invocations yet — verify the checks
       degrade gracefully with a short history, e.g. "green with only 2 of 5 slots filled" rather

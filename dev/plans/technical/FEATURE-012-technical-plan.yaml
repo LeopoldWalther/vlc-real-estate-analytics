@@ -291,7 +291,7 @@ tasks:
       but packaging pipeline_health plus common only. Add least-privilege IAM for Logs Insights,
       CloudWatch GetMetricData, Cost Explorer, S3 PutObject to gold/pipeline_health/*, logging, and
       an independent weekly EventBridge schedule after gold.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 4
     depends_on: ["12.8"]
