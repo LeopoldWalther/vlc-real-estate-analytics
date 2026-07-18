@@ -703,6 +703,90 @@ DEFAULT_EXCLUDED_SERVICES: "tuple[str, ...]" = (
     "Amazon Route 53 Domains",
 )
 
+#: FEATURE-013 task 13.3: number of fully-completed calendar months of
+#: per-service cost history exposed alongside the month-to-date status.
+AWS_COST_HISTORY_MONTHS = 5
+
+
+class _CostExplorerMonthlyHistory:
+    """
+    Adapter around Cost Explorer's ``GetCostAndUsage`` for monthly, per-service
+    cost history (FEATURE-013, task 13.3).
+
+    Mirrors :class:`_LogsInsightsExecutionHistory`: a narrow, injectable
+    Adapter so :class:`AwsCostCheck` never constructs its own client and
+    tests can stub exactly one extra ``get_cost_and_usage`` call. Reads
+    only the last :data:`AWS_COST_HISTORY_MONTHS` **fully-completed**
+    calendar months — the current in-progress month is always excluded,
+    matching :class:`ApiQuotaCheck`'s month-boundary convention.
+    """
+
+    def __init__(
+        self,
+        cost_explorer_client: object,
+        excluded_services: "tuple[str, ...]" = DEFAULT_EXCLUDED_SERVICES,
+        months: int = AWS_COST_HISTORY_MONTHS,
+        now_fn: Any = datetime.utcnow,
+    ) -> None:
+        """
+        Args:
+            cost_explorer_client: Already-constructed boto3 ``ce`` client
+                (injected; same client :class:`AwsCostCheck` uses).
+            excluded_services: Service names filtered out of every month's
+                per-service breakdown.
+            months: Number of fully-completed calendar months to fetch.
+            now_fn: Injected clock returning the current UTC ``datetime``.
+        """
+        self._client = cost_explorer_client
+        self._excluded_services = tuple(excluded_services)
+        self._months = months
+        self._now = now_fn
+
+    def fetch(self) -> List[Dict[str, Any]]:
+        """
+        Return per-service cost history for the last N fully-completed months.
+
+        Returns:
+            Oldest-first list of ``{"month": "YYYY-MM", "services": {name:
+            amount}}`` — one entry per evaluated month, always exactly
+            :attr:`_months` long even when Cost Explorer returns fewer
+            (or empty) ``ResultsByTime`` entries for a given month.
+        """
+        now = self._now()
+        current_month_start = _month_start(now.year, now.month)
+        month_starts = [
+            _add_months(current_month_start, -offset)
+            for offset in range(self._months, 0, -1)
+        ]
+        if not month_starts:
+            return []
+
+        start = month_starts[0].date()
+        end = current_month_start.date()
+
+        response = self._client.get_cost_and_usage(  # type: ignore[attr-defined]
+            TimePeriod={"Start": start.isoformat(), "End": end.isoformat()},
+            Granularity="MONTHLY",
+            Metrics=["UnblendedCost"],
+            GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
+        )
+
+        results_by_time = response.get("ResultsByTime", [])
+        history: List[Dict[str, Any]] = []
+        for index, month_start in enumerate(month_starts):
+            services: Dict[str, float] = {}
+            if index < len(results_by_time):
+                for group in results_by_time[index].get("Groups", []):
+                    service_name = group["Keys"][0]
+                    if service_name in self._excluded_services:
+                        continue
+                    amount = float(group["Metrics"]["UnblendedCost"]["Amount"])
+                    services[service_name] = round(amount, 2)
+            history.append(
+                {"month": month_start.strftime("%Y-%m"), "services": services}
+            )
+        return history
+
 
 class AwsCostCheck:
     """
@@ -720,6 +804,7 @@ class AwsCostCheck:
         cost_explorer_client: object,
         excluded_services: "tuple[str, ...]" = DEFAULT_EXCLUDED_SERVICES,
         now_fn: Any = datetime.utcnow,
+        monthly_history: Optional[_CostExplorerMonthlyHistory] = None,
     ) -> None:
         """
         Args:
@@ -732,10 +817,19 @@ class AwsCostCheck:
                 documented domain/registrar services).
             now_fn: Injected clock returning the current UTC ``datetime``,
                 so the month-to-date window is deterministic in tests.
+            monthly_history: Optional pre-built
+                :class:`_CostExplorerMonthlyHistory` adapter (tests inject
+                one); built from *cost_explorer_client* when omitted
+                (FEATURE-013, task 13.3).
         """
         self._client = cost_explorer_client
         self._excluded_services = tuple(excluded_services)
         self._now = now_fn
+        self._monthly_history = monthly_history or _CostExplorerMonthlyHistory(
+            cost_explorer_client,
+            excluded_services=self._excluded_services,
+            now_fn=now_fn,
+        )
 
     def evaluate(self) -> HealthCheckResult:
         """Evaluate rule 4 for the current month-to-date."""
@@ -784,6 +878,7 @@ class AwsCostCheck:
                 "excluded_total_usd": round(excluded_total, 2),
                 "excluded_services": excluded_service_names,
                 "excluded_services_configured": list(self._excluded_services),
+                "monthly_cost_by_service": self._monthly_history.fetch(),
             },
         )
 
@@ -791,6 +886,7 @@ class AwsCostCheck:
 __all__: List[str] = [
     "AWS_COST_RED_THRESHOLD_USD",
     "AWS_COST_YELLOW_THRESHOLD_USD",
+    "AWS_COST_HISTORY_MONTHS",
     "API_QUOTA_EVALUATION_MONTHS",
     "API_QUOTA_MONTHLY_REQUESTS",
     "API_QUOTA_RED_THRESHOLD_REQUESTS",
