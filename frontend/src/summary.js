@@ -81,8 +81,8 @@ function totalListingCount(groups) {
  * Compute headline KPI statistics for a single population block.
  *
  * @param {object|null|undefined} data - A population block (e.g. data.general),
- *   expected to optionally carry boxplot_by_neighborhood, rent_vs_sale_ratio,
- *   and generated_at.
+ *   expected to optionally carry boxplot_by_neighborhood_last_3m (preferred),
+ *   boxplot_by_neighborhood (fallback), rent_vs_sale_ratio, and generated_at.
  * @returns {{
  *   medianRentEurPerM2Month: number|null,
  *   medianSaleEurPerM2: number|null,
@@ -92,7 +92,16 @@ function totalListingCount(groups) {
  * }}
  */
 export function summaryStats(data) {
-  const boxplot = data?.boxplot_by_neighborhood ?? [];
+  // Prefer the rolling 3-month boxplot for the median KPI tiles, falling
+  // back to the all-time field when the rolling field is absent or empty
+  // (review finding H1) — e.g. during a rollout window where the frontend
+  // has deployed before the gold JSON has been refreshed with the new
+  // field. The all-time box-and-whisker chart keeps consuming
+  // boxplot_by_neighborhood directly via its own renderer, decoupled from
+  // this KPI input selection.
+  const last3mBoxplot = data?.boxplot_by_neighborhood_last_3m;
+  const boxplot =
+    last3mBoxplot && last3mBoxplot.length > 0 ? last3mBoxplot : data?.boxplot_by_neighborhood ?? [];
   const ratioGroups = data?.rent_vs_sale_ratio ?? [];
 
   const rentGroups = boxplot.filter((g) => g.operation === 'rent');

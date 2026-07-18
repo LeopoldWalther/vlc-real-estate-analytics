@@ -116,6 +116,61 @@ describe('summaryStats', () => {
     expect(stats.totalListingCount).toBe(10 + 8);
     expect(stats.lastUpdated).toBeNull();
   });
+
+  it('prefers boxplot_by_neighborhood_last_3m over boxplot_by_neighborhood when both exist (H1)', () => {
+    const data = {
+      generated_at: '2026-02-01T00:00:00Z',
+      // All-time field has an old outlier that should be ignored once the
+      // rolling field is present.
+      boxplot_by_neighborhood: [
+        { operation: 'rent', neighborhood: 'A', count: 500, median: 999 },
+        { operation: 'sale', neighborhood: 'A', count: 500, median: 999 },
+      ],
+      boxplot_by_neighborhood_last_3m: [
+        { operation: 'rent', neighborhood: 'A', count: 10, median: 20 },
+        { operation: 'sale', neighborhood: 'A', count: 10, median: 3000 },
+      ],
+      rent_vs_sale_ratio: [],
+    };
+
+    const stats = summaryStats(data);
+
+    expect(stats.medianRentEurPerM2Month).toBe(20);
+    expect(stats.medianSaleEurPerM2).toBe(3000);
+  });
+
+  it('falls back to boxplot_by_neighborhood when boxplot_by_neighborhood_last_3m is absent (H1)', () => {
+    const data = {
+      generated_at: '2026-02-01T00:00:00Z',
+      boxplot_by_neighborhood: [
+        { operation: 'rent', neighborhood: 'A', count: 10, median: 20 },
+        { operation: 'sale', neighborhood: 'A', count: 10, median: 3000 },
+      ],
+      rent_vs_sale_ratio: [],
+    };
+
+    const stats = summaryStats(data);
+
+    expect(stats.medianRentEurPerM2Month).toBe(20);
+    expect(stats.medianSaleEurPerM2).toBe(3000);
+  });
+
+  it('falls back to boxplot_by_neighborhood when boxplot_by_neighborhood_last_3m is an empty array (H1)', () => {
+    const data = {
+      generated_at: '2026-02-01T00:00:00Z',
+      boxplot_by_neighborhood: [
+        { operation: 'rent', neighborhood: 'A', count: 10, median: 20 },
+        { operation: 'sale', neighborhood: 'A', count: 10, median: 3000 },
+      ],
+      boxplot_by_neighborhood_last_3m: [],
+      rent_vs_sale_ratio: [],
+    };
+
+    const stats = summaryStats(data);
+
+    expect(stats.medianRentEurPerM2Month).toBe(20);
+    expect(stats.medianSaleEurPerM2).toBe(3000);
+  });
 });
 
 describe('formatKpi', () => {
