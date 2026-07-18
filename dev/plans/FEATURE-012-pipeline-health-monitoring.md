@@ -217,14 +217,14 @@ after gold's `12:45` run, so it can report on that week's just-completed pipelin
       apply` (FEATURE-006/010 promotion pattern).
 
 ### Phase 5 — Frontend
-- [ ] `PipelineHealthDataSource` + tests (mirrors `data_source.test.js`).
-- [ ] `frontend/src/pipeline_health.js` + tests — pure formatting/labelling helpers.
-- [ ] Add `pipeline-health` to `tab_state.js`'s `TAB_IDS`, wire the 3rd tab panel in `index.html`
+- [x] `PipelineHealthDataSource` + tests (mirrors `data_source.test.js`).
+- [x] `frontend/src/pipeline_health.js` + tests — pure formatting/labelling helpers.
+- [x] Add `pipeline-health` to `tab_state.js`'s `TAB_IDS`, wire the 3rd tab panel in `index.html`
       + `app.js` (lazy-loaded independently of the FEATURE-011 charts — a health-JSON fetch
       failure must not affect the other two tabs).
-- [ ] Overall badge + 4 sub-light rows (status + one-line detail, e.g. "Execution success: 🟢 —
+- [x] Overall badge + 4 sub-light rows (status + one-line detail, e.g. "Execution success: 🟢 —
       gold: 5/5, silver: 5/5, bronze: 5/5") + i18n keys in all 5 locales.
-- [ ] Styles: green/yellow/red badge tokens in `styles.css`, dark/light variants.
+- [x] Styles: green/yellow/red badge tokens in `styles.css`, dark/light variants.
 
 ### Phase 6 — Docs & optional alerting
 - [ ] New `documentation/PIPELINE_HEALTH_LAYER.md` (mirrors `DATA_GOLD_LAYER.md`'s structure):
@@ -291,14 +291,14 @@ after gold's `12:45` run, so it can report on that week's just-completed pipelin
 
 ## Success criteria
 
-- [ ] "Pipeline Health" tab shows one overall traffic light + 4 sub-lights with a one-line detail
+- [x] "Pipeline Health" tab shows one overall traffic light + 4 sub-lights with a one-line detail
       each, refreshed weekly, for both dev and prod once deployed
 - [ ] All 4 ampel rules implemented exactly as specified above (with the 5-invocation-window
       assumption confirmed or adjusted in review)
 - [ ] API-quota sub-light correctly labels LVW as sale and PMV as rent
 - [ ] AWS-cost sub-light excludes Route 53/domain registrar costs
 - [ ] New Lambda deployed to dev, manually verified, then promoted to prod (separate applies)
-- [ ] Health-JSON fetch failure never breaks the Trend Analysis or Data Basis tabs
+- [x] Health-JSON fetch failure never breaks the Trend Analysis or Data Basis tabs
 - [ ] Tests pass, coverage holds >80% on new code
 - [ ] `PIPELINE_HEALTH_LAYER.md` documents the schema and the 4 rules verbatim
 - [ ] Total new AWS cost stays under $0.20/month combined (verified against actual Cost Explorer

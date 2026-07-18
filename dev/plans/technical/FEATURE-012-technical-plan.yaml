@@ -363,7 +363,7 @@ tasks:
       TDD, RED first. Add PipelineHealthDataSource, pure formatting/render helpers, tab id wiring,
       DOM panel wiring, i18n keys, and badge styles. Health JSON fetch failure must render a neutral
       not-yet-available state and must not change the Trend Analysis or Data Basis load lifecycle.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 5
     depends_on: ["12.8", "12.10"]
