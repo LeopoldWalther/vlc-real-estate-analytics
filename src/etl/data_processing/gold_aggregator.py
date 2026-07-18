@@ -37,7 +37,14 @@ from gold_aggregate import (
     _rent_vs_sale_ratio,
     _rent_vs_sale_ratio_time_series,
     apply_scope,
+    latest_by_property,
+    listing_location_grid_last_3m,
+    price_per_area_histogram,
+    rooms_distribution,
+    search_config_summary,
+    size_histogram_10sqm,
     utc_now_iso,
+    weekly_listing_volume,
 )
 
 logger = logging.getLogger()
@@ -58,6 +65,8 @@ SILVER_REQUIRED_COLS: List[str] = [
     "rooms",
     "bathrooms",
     "hasLift",
+    "latitude",
+    "longitude",
 ]
 
 
@@ -203,6 +212,109 @@ def default_populations(
     return general, relevant
 
 
+# ---------------------------------------------------------------------------
+# Data Basis strategies (FEATURE-011)
+# ---------------------------------------------------------------------------
+#
+# Unlike the general/relevant strategies above, Data Basis strategies each
+# receive the RAW, UNSCOPED combined silver history (no apply_scope, no
+# upfront _dedup) — every strategy applies exactly the dedup semantics its
+# own dataset needs (per-snapshot for the volume time-series, latest-by-
+# property for the distribution/geo datasets). This keeps general/relevant
+# assembly (apply_scope + single shared _dedup) completely untouched (H2).
+
+
+class SearchConfigDataset:
+    """Strategy: public, stable serialization of the shared search config."""
+
+    key: str = "search_config"
+
+    def compute(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Ignore *df* — the search config is a static, single-record dataset."""
+        return [search_config_summary()]
+
+
+class WeeklyListingVolume:
+    """Strategy: per-snapshot-deduped listing counts, by operation + week."""
+
+    key: str = "weekly_listing_volume"
+
+    def compute(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Dedup within each snapshot, then delegate to the pure helper."""
+        return weekly_listing_volume(_dedup(df))
+
+
+class SizeHistogram10sqm:
+    """Strategy: latest-by-property 10 m2 size histogram."""
+
+    key: str = "size_histogram_10sqm"
+
+    def compute(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Latest-by-property dedup, then delegate to the pure helper."""
+        return size_histogram_10sqm(latest_by_property(df))
+
+
+class RoomsDistribution:
+    """Strategy: latest-by-property rooms distribution."""
+
+    key: str = "rooms_distribution"
+
+    def compute(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Latest-by-property dedup, then delegate to the pure helper."""
+        return rooms_distribution(latest_by_property(df))
+
+
+class PricePerAreaHistogram:
+    """Strategy: latest-by-property price/m2 histogram (operation-specific bins)."""
+
+    key: str = "price_per_area_histogram"
+
+    def compute(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Latest-by-property dedup, then delegate to the pure helper."""
+        return price_per_area_histogram(latest_by_property(df))
+
+
+class ListingLocationGridLast3Months:
+    """Strategy: privacy-safe, rolling-window listing-location grid (H1)."""
+
+    key: str = "listing_location_grid_last_3m"
+
+    def __init__(self, window_months: int = ROLLING_KPI_WINDOW_MONTHS) -> None:
+        """
+        Args:
+            window_months: Rolling window length in calendar months.
+        """
+        self._window_months = window_months
+
+    def compute(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """
+        Delegate to the pure helper, which owns its own windowing and
+        latest-by-property dedup — never raw per-listing coordinates leave
+        this call (review H1).
+        """
+        return listing_location_grid_last_3m(df, window_months=self._window_months)
+
+
+def default_data_basis() -> Sequence[Aggregation]:
+    """
+    Build the strategy list for the additive ``data_basis`` top-level block.
+
+    Order matters for the same reason as :func:`default_populations`: the
+    golden-master test asserts byte-for-byte equality.
+
+    Returns:
+        Sequence of Data Basis strategies, in schema order.
+    """
+    return (
+        SearchConfigDataset(),
+        WeeklyListingVolume(),
+        SizeHistogram10sqm(),
+        RoomsDistribution(),
+        PricePerAreaHistogram(),
+        ListingLocationGridLast3Months(),
+    )
+
+
 @dataclass(frozen=True)
 class GoldResult:
     """
@@ -236,6 +348,7 @@ class GoldAggregator:
         min_count: int,
         general_aggregations: Optional[Sequence[Aggregation]] = None,
         relevant_aggregations: Optional[Sequence[Aggregation]] = None,
+        data_basis_aggregations: Optional[Sequence[Aggregation]] = None,
     ) -> None:
         """
         Args:
@@ -247,6 +360,8 @@ class GoldAggregator:
                 defaults to the frozen schema-v1.0 set.
             relevant_aggregations: Strategy list for the relevant population;
                 defaults to the frozen schema-v1.0 set.
+            data_basis_aggregations: Strategy list for the additive
+                ``data_basis`` block; defaults to :func:`default_data_basis`.
         """
         default_general, default_relevant = default_populations(min_count)
         self._store = object_store
@@ -262,6 +377,11 @@ class GoldAggregator:
             relevant_aggregations
             if relevant_aggregations is not None
             else default_relevant
+        )
+        self._data_basis = (
+            data_basis_aggregations
+            if data_basis_aggregations is not None
+            else default_data_basis()
         )
 
     def aggregate(self) -> GoldResult:
@@ -286,13 +406,16 @@ class GoldAggregator:
 
     def build_document(self, silver_df: pd.DataFrame) -> Dict[str, Any]:
         """
-        Assemble the frozen schema-v1.0 document from a silver DataFrame.
+        Assemble the frozen schema-v1.0 document, plus the additive
+        ``data_basis`` block, from a silver DataFrame.
 
         Args:
             silver_df: Combined silver history (all operations/snapshots).
 
         Returns:
-            Dict matching schema v1.0 exactly (key order included).
+            Dict matching schema v1.0 exactly (key order included), with one
+            additional top-level ``data_basis`` key (H2: general/relevant are
+            unaffected — same ``apply_scope``/``_dedup`` path as before).
         """
         scoped = apply_scope(silver_df)
 
@@ -304,6 +427,7 @@ class GoldAggregator:
             "relevant_filter": RELEVANT_FILTER_SPEC,
             "general": self._run_population(scoped, None, self._general),
             "relevant": self._run_population(scoped, _relevant_rows, self._relevant),
+            "data_basis": self._run_data_basis(silver_df, self._data_basis),
         }
 
     # ------------------------------------------------------------------
@@ -320,6 +444,18 @@ class GoldAggregator:
         filtered = row_filter(scoped) if row_filter is not None else scoped
         deduped = _dedup(filtered)
         return {agg.key: agg.compute(deduped) for agg in aggregations}
+
+    @staticmethod
+    def _run_data_basis(
+        silver_df: pd.DataFrame,
+        aggregations: Sequence[Aggregation],
+    ) -> Dict[str, Any]:
+        """
+        Run every Data Basis strategy against the RAW, UNSCOPED silver
+        history — no ``apply_scope``, no shared upfront dedup. Each strategy
+        owns the dedup semantics its own dataset needs (task 11.4).
+        """
+        return {agg.key: agg.compute(silver_df) for agg in aggregations}
 
     def _read_silver_history(self) -> pd.DataFrame:
         """Read and combine every silver Parquet under the prefix."""
