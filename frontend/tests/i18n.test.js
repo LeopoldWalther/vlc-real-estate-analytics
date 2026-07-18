@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { t, isRtl, resolveLocale, SUPPORTED_LOCALES, DEFAULT_LOCALE } from '../src/i18n.js';
+import { t, isRtl, resolveLocale, SUPPORTED_LOCALES, DEFAULT_LOCALE, localeKeys } from '../src/i18n.js';
 
 describe('SUPPORTED_LOCALES / DEFAULT_LOCALE', () => {
   it('supports exactly the 5 required locales', () => {
@@ -114,6 +114,74 @@ describe('isRtl', () => {
     expect(isRtl('de')).toBe(false);
     expect(isRtl('es')).toBe(false);
     expect(isRtl('tr')).toBe(false);
+  });
+});
+
+describe('locale completeness (all 5 locales must expose identical key sets)', () => {
+  it('every locale has exactly the same set of translation keys as en', () => {
+    const englishKeys = new Set(localeKeys('en'));
+    expect(englishKeys.size).toBeGreaterThan(0);
+    for (const locale of SUPPORTED_LOCALES) {
+      const keys = new Set(localeKeys(locale));
+      const missing = [...englishKeys].filter((k) => !keys.has(k));
+      const extra = [...keys].filter((k) => !englishKeys.has(k));
+      expect(missing, `${locale} is missing keys: ${missing.join(', ')}`).toEqual([]);
+      expect(extra, `${locale} has unexpected extra keys: ${extra.join(', ')}`).toEqual([]);
+    }
+  });
+
+  it('includes the new tab/search-config/data-basis-chart keys introduced by FEATURE-011', () => {
+    const requiredNewKeys = [
+      'tabs.trendAnalysis',
+      'tabs.dataBasis',
+      'dataBasis.intro',
+      'dataBasis.mapDescription',
+      'dataBasis.searchConfig.heading',
+      'dataBasis.searchConfig.radius',
+      'dataBasis.searchConfig.sizeRange',
+      'dataBasis.searchConfig.propertyType',
+      'dataBasis.searchConfig.elevator',
+      'dataBasis.searchConfig.preservation',
+      'dataBasis.searchConfig.center',
+      'dataBasis.searchConfig.yes',
+      'dataBasis.searchConfig.no',
+      'charts.weekly-listing-volume.title',
+      'charts.weekly-listing-volume.yaxis',
+      'charts.size-histogram.title',
+      'charts.size-histogram.xaxis',
+      'charts.size-histogram.yaxis',
+      'charts.rooms-distribution.title',
+      'charts.rooms-distribution.xaxis',
+      'charts.rooms-distribution.yaxis',
+      'charts.price-per-area-histogram-rent.title',
+      'charts.price-per-area-histogram-rent.xaxis',
+      'charts.price-per-area-histogram-rent.yaxis',
+      'charts.price-per-area-histogram-sale.title',
+      'charts.price-per-area-histogram-sale.xaxis',
+      'charts.price-per-area-histogram-sale.yaxis',
+      'charts.listing-location-grid-map.title',
+      'charts.listing-location-grid-map.xaxis',
+      'charts.listing-location-grid-map.yaxis',
+    ];
+    const englishKeys = new Set(localeKeys('en'));
+    for (const key of requiredNewKeys) {
+      expect(englishKeys.has(key), `en is missing required new key: ${key}`).toBe(true);
+    }
+  });
+
+  it('the map copy describes an aggregated coordinate distribution, not a street map, in every locale', () => {
+    // Locale-specific phrase fragments (not an English substring check).
+    const aggregatedPhrase = {
+      en: 'aggregat',
+      de: 'aggregiert',
+      es: 'agregad',
+      ar: 'مجمّع',
+      tr: 'toplu',
+    };
+    for (const locale of SUPPORTED_LOCALES) {
+      const value = t(locale, 'dataBasis.mapDescription');
+      expect(value.toLowerCase()).toContain(aggregatedPhrase[locale]);
+    }
   });
 });
 

@@ -75,6 +75,39 @@ const en = {
   'charts.boxplot-by-neighborhood-sale.title': 'Sale price per m² distribution by neighbourhood',
   'charts.boxplot-by-neighborhood-sale.yaxis': 'Sale price per m² (€)',
   'charts.xaxis.date': 'Date',
+
+  'tabs.trendAnalysis': 'Trend Analysis',
+  'tabs.dataBasis': 'Data Basis',
+
+  'dataBasis.intro': 'How this data was collected: search parameters, weekly collection volume, and current listing distributions across the whole collection area.',
+  'dataBasis.mapDescription': 'Aggregated coordinate distribution of recently collected listings, rounded to a privacy-safe grid — not a street-level map.',
+  'dataBasis.searchConfig.heading': 'Search parameters',
+  'dataBasis.searchConfig.radius': 'Search radius',
+  'dataBasis.searchConfig.sizeRange': 'Size range',
+  'dataBasis.searchConfig.propertyType': 'Property type',
+  'dataBasis.searchConfig.elevator': 'Elevator required',
+  'dataBasis.searchConfig.preservation': 'Preservation status',
+  'dataBasis.searchConfig.center': 'Search centre (lat, lon)',
+  'dataBasis.searchConfig.yes': 'Yes',
+  'dataBasis.searchConfig.no': 'No',
+
+  'charts.weekly-listing-volume.title': 'Weekly collected listing volume',
+  'charts.weekly-listing-volume.yaxis': 'Listings collected',
+  'charts.size-histogram.title': 'Listing size distribution (m²)',
+  'charts.size-histogram.xaxis': 'Size bin (m²)',
+  'charts.size-histogram.yaxis': 'Listings',
+  'charts.rooms-distribution.title': 'Rooms distribution',
+  'charts.rooms-distribution.xaxis': 'Rooms',
+  'charts.rooms-distribution.yaxis': 'Listings',
+  'charts.price-per-area-histogram-rent.title': 'Rent price per m² distribution',
+  'charts.price-per-area-histogram-rent.xaxis': 'Rent price per m² per month (€)',
+  'charts.price-per-area-histogram-rent.yaxis': 'Listings',
+  'charts.price-per-area-histogram-sale.title': 'Sale price per m² distribution',
+  'charts.price-per-area-histogram-sale.xaxis': 'Sale price per m² (€)',
+  'charts.price-per-area-histogram-sale.yaxis': 'Listings',
+  'charts.listing-location-grid-map.title': 'Collected listing locations (aggregated, privacy-safe)',
+  'charts.listing-location-grid-map.xaxis': 'Longitude',
+  'charts.listing-location-grid-map.yaxis': 'Latitude',
 };
 
 const de = {
@@ -135,6 +168,39 @@ const de = {
   'charts.boxplot-by-neighborhood-sale.title': 'Verteilung Kaufpreis pro m² nach Stadtviertel',
   'charts.boxplot-by-neighborhood-sale.yaxis': 'Kaufpreis pro m² (€)',
   'charts.xaxis.date': 'Datum',
+
+  'tabs.trendAnalysis': 'Trendanalyse',
+  'tabs.dataBasis': 'Datenbasis',
+
+  'dataBasis.intro': 'So wurden diese Daten erhoben: Suchparameter, wöchentliches Erhebungsvolumen und aktuelle Verteilung der Inserate im gesamten Erhebungsgebiet.',
+  'dataBasis.mapDescription': 'Aggregierte Koordinatenverteilung kürzlich erfasster Inserate, auf ein datenschutzfreundliches Raster gerundet — keine straßengenaue Karte.',
+  'dataBasis.searchConfig.heading': 'Suchparameter',
+  'dataBasis.searchConfig.radius': 'Suchradius',
+  'dataBasis.searchConfig.sizeRange': 'Größenbereich',
+  'dataBasis.searchConfig.propertyType': 'Immobilientyp',
+  'dataBasis.searchConfig.elevator': 'Aufzug erforderlich',
+  'dataBasis.searchConfig.preservation': 'Erhaltungszustand',
+  'dataBasis.searchConfig.center': 'Suchzentrum (Breite, Länge)',
+  'dataBasis.searchConfig.yes': 'Ja',
+  'dataBasis.searchConfig.no': 'Nein',
+
+  'charts.weekly-listing-volume.title': 'Wöchentliches Erhebungsvolumen',
+  'charts.weekly-listing-volume.yaxis': 'Erfasste Inserate',
+  'charts.size-histogram.title': 'Verteilung der Wohnungsgröße (m²)',
+  'charts.size-histogram.xaxis': 'Größenklasse (m²)',
+  'charts.size-histogram.yaxis': 'Inserate',
+  'charts.rooms-distribution.title': 'Verteilung der Zimmeranzahl',
+  'charts.rooms-distribution.xaxis': 'Zimmer',
+  'charts.rooms-distribution.yaxis': 'Inserate',
+  'charts.price-per-area-histogram-rent.title': 'Verteilung Mietpreis pro m²',
+  'charts.price-per-area-histogram-rent.xaxis': 'Mietpreis pro m² und Monat (€)',
+  'charts.price-per-area-histogram-rent.yaxis': 'Inserate',
+  'charts.price-per-area-histogram-sale.title': 'Verteilung Kaufpreis pro m²',
+  'charts.price-per-area-histogram-sale.xaxis': 'Kaufpreis pro m² (€)',
+  'charts.price-per-area-histogram-sale.yaxis': 'Inserate',
+  'charts.listing-location-grid-map.title': 'Standorte erfasster Inserate (aggregiert, datenschutzfreundlich)',
+  'charts.listing-location-grid-map.xaxis': 'Längengrad',
+  'charts.listing-location-grid-map.yaxis': 'Breitengrad',
 };
 
 const es = {
@@ -195,6 +261,39 @@ const es = {
   'charts.boxplot-by-neighborhood-sale.title': 'Distribución del precio de venta por m² por barrio',
   'charts.boxplot-by-neighborhood-sale.yaxis': 'Precio de venta por m² (€)',
   'charts.xaxis.date': 'Fecha',
+
+  'tabs.trendAnalysis': 'Análisis de tendencias',
+  'tabs.dataBasis': 'Base de datos',
+
+  'dataBasis.intro': 'Cómo se recopilaron estos datos: parámetros de búsqueda, volumen de recopilación semanal y distribuciones actuales de los anuncios en toda la zona de recopilación.',
+  'dataBasis.mapDescription': 'Distribución agregada de coordenadas de los anuncios recopilados recientemente, redondeada a una cuadrícula que preserva la privacidad — no es un mapa a nivel de calle.',
+  'dataBasis.searchConfig.heading': 'Parámetros de búsqueda',
+  'dataBasis.searchConfig.radius': 'Radio de búsqueda',
+  'dataBasis.searchConfig.sizeRange': 'Rango de tamaño',
+  'dataBasis.searchConfig.propertyType': 'Tipo de propiedad',
+  'dataBasis.searchConfig.elevator': 'Ascensor requerido',
+  'dataBasis.searchConfig.preservation': 'Estado de conservación',
+  'dataBasis.searchConfig.center': 'Centro de búsqueda (lat, lon)',
+  'dataBasis.searchConfig.yes': 'Sí',
+  'dataBasis.searchConfig.no': 'No',
+
+  'charts.weekly-listing-volume.title': 'Volumen semanal de anuncios recopilados',
+  'charts.weekly-listing-volume.yaxis': 'Anuncios recopilados',
+  'charts.size-histogram.title': 'Distribución del tamaño de los anuncios (m²)',
+  'charts.size-histogram.xaxis': 'Rango de tamaño (m²)',
+  'charts.size-histogram.yaxis': 'Anuncios',
+  'charts.rooms-distribution.title': 'Distribución de habitaciones',
+  'charts.rooms-distribution.xaxis': 'Habitaciones',
+  'charts.rooms-distribution.yaxis': 'Anuncios',
+  'charts.price-per-area-histogram-rent.title': 'Distribución del precio de alquiler por m²',
+  'charts.price-per-area-histogram-rent.xaxis': 'Precio de alquiler por m² al mes (€)',
+  'charts.price-per-area-histogram-rent.yaxis': 'Anuncios',
+  'charts.price-per-area-histogram-sale.title': 'Distribución del precio de venta por m²',
+  'charts.price-per-area-histogram-sale.xaxis': 'Precio de venta por m² (€)',
+  'charts.price-per-area-histogram-sale.yaxis': 'Anuncios',
+  'charts.listing-location-grid-map.title': 'Ubicaciones de los anuncios recopilados (agregado, privacidad garantizada)',
+  'charts.listing-location-grid-map.xaxis': 'Longitud',
+  'charts.listing-location-grid-map.yaxis': 'Latitud',
 };
 
 const ar = {
@@ -255,6 +354,39 @@ const ar = {
   'charts.boxplot-by-neighborhood-sale.title': 'توزيع سعر البيع لكل م² حسب الحي',
   'charts.boxplot-by-neighborhood-sale.yaxis': 'سعر البيع لكل م² (€)',
   'charts.xaxis.date': 'التاريخ',
+
+  'tabs.trendAnalysis': 'تحليل الاتجاهات',
+  'tabs.dataBasis': 'قاعدة البيانات',
+
+  'dataBasis.intro': 'كيف تم جمع هذه البيانات: معايير البحث، حجم الجمع الأسبوعي، وتوزيعات الإعلانات الحالية في منطقة الجمع بأكملها.',
+  'dataBasis.mapDescription': 'توزيع إحداثيات مجمّع للإعلانات التي تم جمعها مؤخرًا، مقرب إلى شبكة تحافظ على الخصوصية — وليس خريطة على مستوى الشارع.',
+  'dataBasis.searchConfig.heading': 'معايير البحث',
+  'dataBasis.searchConfig.radius': 'نطاق البحث',
+  'dataBasis.searchConfig.sizeRange': 'نطاق المساحة',
+  'dataBasis.searchConfig.propertyType': 'نوع العقار',
+  'dataBasis.searchConfig.elevator': 'مصعد مطلوب',
+  'dataBasis.searchConfig.preservation': 'حالة الصيانة',
+  'dataBasis.searchConfig.center': 'مركز البحث (خط العرض، خط الطول)',
+  'dataBasis.searchConfig.yes': 'نعم',
+  'dataBasis.searchConfig.no': 'لا',
+
+  'charts.weekly-listing-volume.title': 'حجم الإعلانات المجمّعة أسبوعيًا',
+  'charts.weekly-listing-volume.yaxis': 'الإعلانات المجمّعة',
+  'charts.size-histogram.title': 'توزيع مساحة الإعلانات (م²)',
+  'charts.size-histogram.xaxis': 'فئة المساحة (م²)',
+  'charts.size-histogram.yaxis': 'الإعلانات',
+  'charts.rooms-distribution.title': 'توزيع عدد الغرف',
+  'charts.rooms-distribution.xaxis': 'الغرف',
+  'charts.rooms-distribution.yaxis': 'الإعلانات',
+  'charts.price-per-area-histogram-rent.title': 'توزيع سعر الإيجار لكل م²',
+  'charts.price-per-area-histogram-rent.xaxis': 'سعر الإيجار لكل م² شهريًا (€)',
+  'charts.price-per-area-histogram-rent.yaxis': 'الإعلانات',
+  'charts.price-per-area-histogram-sale.title': 'توزيع سعر البيع لكل م²',
+  'charts.price-per-area-histogram-sale.xaxis': 'سعر البيع لكل م² (€)',
+  'charts.price-per-area-histogram-sale.yaxis': 'الإعلانات',
+  'charts.listing-location-grid-map.title': 'مواقع الإعلانات المجمّعة (مجمّعة وآمنة للخصوصية)',
+  'charts.listing-location-grid-map.xaxis': 'خط الطول',
+  'charts.listing-location-grid-map.yaxis': 'خط العرض',
 };
 
 const tr = {
@@ -315,6 +447,39 @@ const tr = {
   'charts.boxplot-by-neighborhood-sale.title': 'Mahalleye göre m² başına satış fiyatı dağılımı',
   'charts.boxplot-by-neighborhood-sale.yaxis': 'm² başına satış fiyatı (€)',
   'charts.xaxis.date': 'Tarih',
+
+  'tabs.trendAnalysis': 'Trend Analizi',
+  'tabs.dataBasis': 'Veri Tabanı',
+
+  'dataBasis.intro': 'Bu veriler nasıl toplandı: arama parametreleri, haftalık toplama hacmi ve toplama alanının tamamındaki güncel ilan dağılımları.',
+  'dataBasis.mapDescription': 'Son toplanan ilanların, gizliliği koruyan bir ızgaraya yuvarlanmış toplu koordinat dağılımı — sokak düzeyinde bir harita değildir.',
+  'dataBasis.searchConfig.heading': 'Arama parametreleri',
+  'dataBasis.searchConfig.radius': 'Arama yarıçapı',
+  'dataBasis.searchConfig.sizeRange': 'Büyüklük aralığı',
+  'dataBasis.searchConfig.propertyType': 'Emlak türü',
+  'dataBasis.searchConfig.elevator': 'Asansör gerekli',
+  'dataBasis.searchConfig.preservation': 'Bakım durumu',
+  'dataBasis.searchConfig.center': 'Arama merkezi (enlem, boylam)',
+  'dataBasis.searchConfig.yes': 'Evet',
+  'dataBasis.searchConfig.no': 'Hayır',
+
+  'charts.weekly-listing-volume.title': 'Haftalık toplanan ilan hacmi',
+  'charts.weekly-listing-volume.yaxis': 'Toplanan ilanlar',
+  'charts.size-histogram.title': 'İlan büyüklüğü dağılımı (m²)',
+  'charts.size-histogram.xaxis': 'Büyüklük aralığı (m²)',
+  'charts.size-histogram.yaxis': 'İlanlar',
+  'charts.rooms-distribution.title': 'Oda sayısı dağılımı',
+  'charts.rooms-distribution.xaxis': 'Odalar',
+  'charts.rooms-distribution.yaxis': 'İlanlar',
+  'charts.price-per-area-histogram-rent.title': 'm² başına kira fiyatı dağılımı',
+  'charts.price-per-area-histogram-rent.xaxis': 'm² başına aylık kira fiyatı (€)',
+  'charts.price-per-area-histogram-rent.yaxis': 'İlanlar',
+  'charts.price-per-area-histogram-sale.title': 'm² başına satış fiyatı dağılımı',
+  'charts.price-per-area-histogram-sale.xaxis': 'm² başına satış fiyatı (€)',
+  'charts.price-per-area-histogram-sale.yaxis': 'İlanlar',
+  'charts.listing-location-grid-map.title': 'Toplanan ilan konumları (toplu, gizliliği koruyan)',
+  'charts.listing-location-grid-map.xaxis': 'Boylam',
+  'charts.listing-location-grid-map.yaxis': 'Enlem',
 };
 
 const TRANSLATIONS = { en, de, es, ar, tr };
@@ -356,4 +521,19 @@ export function isRtl(locale) {
  */
 export function resolveLocale(locale) {
   return SUPPORTED_LOCALES.includes(locale) ? locale : DEFAULT_LOCALE;
+}
+
+/**
+ * List every translation key defined for a locale (falls back to the
+ * English dictionary's keys for an unsupported locale, mirroring t()'s own
+ * fallback behaviour). Exists so tests (and any future tooling) can assert
+ * locale-completeness without reaching into this module's private
+ * TRANSLATIONS map.
+ *
+ * @param {string} locale
+ * @returns {string[]}
+ */
+export function localeKeys(locale) {
+  const dict = TRANSLATIONS[locale] ?? TRANSLATIONS[DEFAULT_LOCALE];
+  return Object.keys(dict);
 }

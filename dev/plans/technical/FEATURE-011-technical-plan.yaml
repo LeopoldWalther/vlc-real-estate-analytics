@@ -311,7 +311,7 @@ tasks:
     description: >
       Add a pure search_config frontend formatter and i18n keys for tab labels, Data Basis copy, and
       all new chart titles/axes in English, German, Spanish, Arabic, and Turkish.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: ["11.4", "11.7"]
