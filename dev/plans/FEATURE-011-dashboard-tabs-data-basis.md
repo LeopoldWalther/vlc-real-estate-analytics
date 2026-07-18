@@ -177,7 +177,7 @@ basemap, no tiles, no external call:
       master fixture; assert the existing `general`/`relevant` blocks stay byte-for-byte unchanged.
 
 ### Phase 3 — Frontend: tab navigation infrastructure
-- [ ] `frontend/src/tab_state.js` + `frontend/tests/tab_state.test.js` — `TAB_IDS`,
+- [x] `frontend/src/tab_state.js` + `frontend/tests/tab_state.test.js` — `TAB_IDS`,
       `resolveActiveTab()`, `buildTabHash()`, fully pure, no DOM.
 - [ ] `index.html`: add `<nav role="tablist">` with 2 buttons (`role="tab"`,
       `aria-selected`, `aria-controls`), wrap the existing `<main>` content in

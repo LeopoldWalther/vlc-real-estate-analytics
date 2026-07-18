@@ -192,7 +192,7 @@ tasks:
     description: >
       TDD, RED first. Add tab_state.js with pure helpers for valid tab ids, hash resolution, and hash
       creation. No DOM, window, document, Plotly, or fetch references are allowed in this module.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 1.5
     depends_on: []
