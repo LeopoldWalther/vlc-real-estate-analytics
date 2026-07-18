@@ -1,0 +1,406 @@
+metadata:
+  for_feature: "FEATURE-013"
+  title: "Pipeline Health tab — detailed views & history"
+  created_by: "@reviewer"
+  created_at: "2026-07-18"
+  version: "1.0"
+  total_tasks: 14
+  estimated_hours: 35
+  risk_level: "medium"
+  critical_path: ["13.1", "13.2", "13.4", "13.5", "13.6", "13.12", "13.14"]
+  reviewed_plan: "dev/reviews/REVIEW-FEATURE-013.md"
+
+validation:
+  required_checks:
+    - "python-lint-and-test"
+    - "node-test"
+    - "terraform-validate"
+    - "workflow-consistency"
+  min_coverage: ">80% on new Python and frontend modules"
+
+tasks:
+  - id: "13.1"
+    title: "Normalize FEATURE-013 workflow numbering"
+    description: "Update plan/registry references so this work is consistently FEATURE-013, not FEATURE-014. Remove or supersede the wrong-numbered FEATURE-014 technical plan for this exact feature."
+    status: "done"
+    complexity: "small"
+    estimated_hours: 0.5
+    depends_on: []
+    branch: "feature/pipeline-health-detail-views/13.1-workflow-numbering"
+    commit_message: "docs(workflow): normalize pipeline health detail views as FEATURE-013"
+    acceptance_criteria:
+      - "FEATURE-013 plan header and reviewer/technical-plan references use FEATURE-013"
+      - "dev/plans/README.md registers this feature as FEATURE-013 and dependency graph points F012 -> F013"
+      - "No unrelated idealista scraper files are changed"
+    allowed_files:
+      - "dev/plans/FEATURE-013-pipeline-health-detail-views.md"
+      - "dev/plans/README.md"
+      - "dev/plans/technical/FEATURE-014-technical-plan.yaml"
+    forbidden_files:
+      - "src/**"
+      - "frontend/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "dev/plans/FEATURE-013-pipeline-health-detail-views.md"
+      - "dev/plans/README.md"
+
+  - id: "13.2"
+    title: "Expose per-invocation execution history"
+    description: "Add timestamp parsing to invocation records, include recent_invocations in execution success and duration details, and bump backend schema to 1.1."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 3
+    depends_on: ["13.1"]
+    branch: "feature/pipeline-health-detail-views/13.2-execution-history"
+    commit_message: "feat(health): expose pipeline execution invocation history"
+    acceptance_criteria:
+      - "RED: tests fail before timestamp/recent_invocations support exists"
+      - "GREEN: recent_invocations is newest-first and bounded by EXECUTION_HISTORY_WINDOW"
+      - "GREEN: timestamps serialize as ISO-8601"
+      - "GREEN: existing aggregate fields and statuses are unchanged"
+      - "GREEN: SCHEMA_VERSION is 1.1"
+    allowed_files:
+      - "src/etl/pipeline_health/health_checks.py"
+      - "src/etl/pipeline_health/pipeline_health_aggregator.py"
+      - "src/etl/pipeline_health/tests/**"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["13.3"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/pipeline_health/health_checks.py"
+      - "src/etl/pipeline_health/pipeline_health_aggregator.py"
+
+  - id: "13.3"
+    title: "Add AWS cost monthly service history"
+    description: "Add a narrow Cost Explorer monthly-history adapter and inject it into AwsCostCheck without changing current month-to-date status behavior."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 3
+    depends_on: ["13.1"]
+    branch: "feature/pipeline-health-detail-views/13.3-cost-history"
+    commit_message: "feat(health): add monthly AWS cost service history"
+    acceptance_criteria:
+      - "RED: tests fail before monthly_cost_by_service exists"
+      - "GREEN: history covers exactly the last 5 fully completed months, oldest-first"
+      - "GREEN: excluded services are filtered"
+      - "GREEN: empty, partial, and multi-service responses are handled"
+      - "GREEN: existing AWS cost status totals remain unchanged"
+    allowed_files:
+      - "src/etl/pipeline_health/health_checks.py"
+      - "src/etl/pipeline_health/tests/**"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["13.2"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/pipeline_health/health_checks.py"
+
+  - id: "13.4"
+    title: "Wire backend schema v1.1 and frontend schema compatibility"
+    description: "Wire the cost-history adapter in the Lambda factory, extend aggregator integration tests, and make the frontend data source accept both schema 1.0 and 1.1 during rollout."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["13.2", "13.3"]
+    branch: "feature/pipeline-health-detail-views/13.4-wire-schema"
+    commit_message: "feat(health): wire pipeline health v1.1 schema compatibility"
+    acceptance_criteria:
+      - "GREEN: aggregate output declares schema_version 1.1 with new fields"
+      - "GREEN: PipelineHealthDataSource accepts 1.0 and 1.1"
+      - "GREEN: unsupported schema versions still degrade through loadOrUnavailable"
+    allowed_files:
+      - "src/etl/pipeline_health/pipeline_health_lambda.py"
+      - "src/etl/pipeline_health/tests/**"
+      - "frontend/src/pipeline_health_data_source.js"
+      - "frontend/tests/pipeline_health_data_source.test.js"
+    forbidden_files:
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/pipeline_health/pipeline_health_lambda.py"
+      - "frontend/src/pipeline_health_data_source.js"
+
+  - id: "13.5"
+    title: "Add i18n keys for details UI"
+    description: "Add all section titles, threshold captions, diagram labels, and unknown-status labels for en/de/es/ar/tr."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["13.4"]
+    branch: "feature/pipeline-health-detail-views/13.5-i18n"
+    commit_message: "feat(i18n): add pipeline health detail translations"
+    acceptance_criteria:
+      - "GREEN: every new key resolves in all five locales"
+      - "GREEN: English threshold text matches backend rule constants"
+      - "GREEN: long/RTL captions are represented in tests or fixtures"
+    allowed_files:
+      - "frontend/src/i18n.js"
+      - "frontend/tests/i18n.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/i18n.js"
+
+  - id: "13.6"
+    title: "Add pure chart-data and threshold helpers"
+    description: "Extend pipeline_health.js with null-safe series builders and thresholdRuleText using i18n keys."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 3
+    depends_on: ["13.5"]
+    branch: "feature/pipeline-health-detail-views/13.6-helpers"
+    commit_message: "feat(pipeline-health): add detail chart data helpers"
+    acceptance_criteria:
+      - "GREEN: helpers never throw on null, v1.0, partial, or malformed input"
+      - "GREEN: helpers return expected shapes for v1.1 fixtures"
+      - "GREEN: thresholdRuleText returns localized strings"
+    allowed_files:
+      - "frontend/src/pipeline_health.js"
+      - "frontend/tests/pipeline_health.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/pipeline_health.js"
+
+  - id: "13.7"
+    title: "Execution success chart renderer"
+    description: "Add a Plotly scatter/dot history chart for recent invocation success per function."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2.5
+    depends_on: ["13.6"]
+    branch: "feature/pipeline-health-detail-views/13.7-success-chart"
+    commit_message: "feat(charts): add pipeline execution success chart"
+    acceptance_criteria:
+      - "GREEN: null/empty input returns valid empty figure"
+      - "GREEN: well-formed input creates one trace per function"
+      - "GREEN: marker colors match invocation success/failure"
+    allowed_files:
+      - "frontend/src/charts/pipeline_execution_success_chart.js"
+      - "frontend/tests/charts/pipeline_execution_success_chart.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["13.8", "13.9", "13.10"]
+    reversible: true
+    files_to_create:
+      - "frontend/src/charts/pipeline_execution_success_chart.js"
+      - "frontend/tests/charts/pipeline_execution_success_chart.test.js"
+    files_to_modify: []
+
+  - id: "13.8"
+    title: "Execution duration chart renderer"
+    description: "Add grouped duration bar chart with 5-minute and 10-minute threshold reference lines."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2.5
+    depends_on: ["13.6"]
+    branch: "feature/pipeline-health-detail-views/13.8-duration-chart"
+    commit_message: "feat(charts): add pipeline execution duration chart"
+    acceptance_criteria:
+      - "GREEN: null/empty input returns valid empty figure"
+      - "GREEN: bars match duration_seconds values"
+      - "GREEN: threshold shapes exist at 300s and 600s"
+    allowed_files:
+      - "frontend/src/charts/pipeline_execution_duration_chart.js"
+      - "frontend/tests/charts/pipeline_execution_duration_chart.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["13.7", "13.9", "13.10"]
+    reversible: true
+    files_to_create:
+      - "frontend/src/charts/pipeline_execution_duration_chart.js"
+      - "frontend/tests/charts/pipeline_execution_duration_chart.test.js"
+    files_to_modify: []
+
+  - id: "13.9"
+    title: "API quota chart renderer"
+    description: "Add grouped LVW/PMV monthly request chart using existing API quota history."
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 2
+    depends_on: ["13.6"]
+    branch: "feature/pipeline-health-detail-views/13.9-api-quota-chart"
+    commit_message: "feat(charts): add pipeline API quota chart"
+    acceptance_criteria:
+      - "GREEN: null/empty input returns valid empty figure"
+      - "GREEN: LVW and PMV traces render over available months"
+      - "GREEN: quota/threshold reference shapes render correctly"
+    allowed_files:
+      - "frontend/src/charts/pipeline_api_quota_chart.js"
+      - "frontend/tests/charts/pipeline_api_quota_chart.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["13.7", "13.8", "13.10"]
+    reversible: true
+    files_to_create:
+      - "frontend/src/charts/pipeline_api_quota_chart.js"
+      - "frontend/tests/charts/pipeline_api_quota_chart.test.js"
+    files_to_modify: []
+
+  - id: "13.10"
+    title: "AWS cost chart renderer"
+    description: "Add stacked monthly AWS cost chart by service."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2.5
+    depends_on: ["13.6"]
+    branch: "feature/pipeline-health-detail-views/13.10-cost-chart"
+    commit_message: "feat(charts): add pipeline AWS cost chart"
+    acceptance_criteria:
+      - "GREEN: null/empty input returns valid empty figure"
+      - "GREEN: one stacked trace per service is produced"
+      - "GREEN: month totals match fixture data"
+    allowed_files:
+      - "frontend/src/charts/pipeline_aws_cost_chart.js"
+      - "frontend/tests/charts/pipeline_aws_cost_chart.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["13.7", "13.8", "13.9"]
+    reversible: true
+    files_to_create:
+      - "frontend/src/charts/pipeline_aws_cost_chart.js"
+      - "frontend/tests/charts/pipeline_aws_cost_chart.test.js"
+    files_to_modify: []
+
+  - id: "13.11"
+    title: "Medallion pipeline diagram"
+    description: "Add pure model builder and SVG renderer for bronze/silver/gold plus observer pipeline-health node."
+    status: "not_started"
+    complexity: "large"
+    estimated_hours: 3
+    depends_on: ["13.5", "13.6"]
+    branch: "feature/pipeline-health-detail-views/13.11-diagram"
+    commit_message: "feat(pipeline-health): add Medallion pipeline diagram"
+    acceptance_criteria:
+      - "GREEN: well-formed input creates 4 nodes and expected edges"
+      - "GREEN: missing or renamed functions fall back to unknown status"
+      - "GREEN: null input produces a valid all-unknown model"
+    allowed_files:
+      - "frontend/src/pipeline_health_diagram.js"
+      - "frontend/tests/pipeline_health_diagram.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "frontend/src/pipeline_health_diagram.js"
+      - "frontend/tests/pipeline_health_diagram.test.js"
+    files_to_modify: []
+
+  - id: "13.12"
+    title: "Wire detail views into Pipeline Health tab"
+    description: "Extend markup and app wiring to mount diagram, charts, and threshold captions without breaking existing summary rows."
+    status: "not_started"
+    complexity: "large"
+    estimated_hours: 3.5
+    depends_on: ["13.7", "13.8", "13.9", "13.10", "13.11"]
+    branch: "feature/pipeline-health-detail-views/13.12-wire-tab"
+    commit_message: "feat(frontend): wire pipeline health detail views"
+    acceptance_criteria:
+      - "GREEN: tab activation mounts diagram and four charts for v1.1 fixture"
+      - "GREEN: v1.0 fixture keeps existing summary and renders empty/neutral detail sections"
+      - "GREEN: null document renders unavailable state and does not call Plotly on missing data"
+      - "GREEN: locale/theme changes re-render labels and chart theme without refetching"
+    allowed_files:
+      - "frontend/index.html"
+      - "frontend/src/app.js"
+      - "frontend/tests/app.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/index.html"
+      - "frontend/src/app.js"
+
+  - id: "13.13"
+    title: "Style diagram, chart sections, captions, mobile and RTL layout"
+    description: "Add CSS for detail sections using existing theme/status tokens and verify mobile/RTL behavior."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2.5
+    depends_on: ["13.12"]
+    branch: "feature/pipeline-health-detail-views/13.13-styles"
+    commit_message: "style(pipeline-health): style detail views and responsive layout"
+    acceptance_criteria:
+      - "GREEN: light/dark themes use existing status tokens"
+      - "GREEN: common mobile widths avoid horizontal overflow"
+      - "GREEN: long localized captions wrap cleanly, including RTL Arabic"
+    allowed_files:
+      - "frontend/styles.css"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/styles.css"
+
+  - id: "13.14"
+    title: "Docs, validation, and deployment readiness"
+    description: "Document schema v1.1 and UI changes; run required checks; deploy dev first, verify real JSON/UI, then promote to prod."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 3
+    depends_on: ["13.13"]
+    branch: "feature/pipeline-health-detail-views/13.14-docs-verify"
+    commit_message: "docs: document pipeline health detail views and deployment verification"
+    acceptance_criteria:
+      - "GREEN: PIPELINE_HEALTH_LAYER.md documents v1.1 fields and UI"
+      - "GREEN: python-lint-and-test, node-test, terraform-validate, and workflow-consistency pass"
+      - "GREEN: dev latest.json has schema_version 1.1 and well-formed new fields after manual invoke"
+      - "GREEN: dev frontend renders diagram, charts, and captions before prod promotion"
+      - "GREEN: prod promotion is performed only after dev verification"
+    allowed_files:
+      - "documentation/PIPELINE_HEALTH_LAYER.md"
+    forbidden_files:
+      - "src/**"
+      - "frontend/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: false
+    files_to_create: []
+    files_to_modify:
+      - "documentation/PIPELINE_HEALTH_LAYER.md"
+
+git_workflow:
+  branch_root: "feature/pipeline-health-detail-views"
+  commit_style: "One commit per task using the task commit_message"
+  merge_strategy: "Sequential on critical path; parallel chart branches may merge after helper task"
+  pre_pr_checks:
+    - "python-lint-and-test"
+    - "node-test"
+    - "terraform-validate"
+    - "workflow-consistency"
+
+notes:
+  - "Treat existing FEATURE-014 technical plan as wrong-numbered architect input for this FEATURE-013 only."
+  - "Do not touch unrelated idealista-web-scraper placeholder files."
+  - "No new AWS resources or IAM actions are expected; Cost Explorer already uses ce:GetCostAndUsage."
+  - "Frontend must tolerate schema 1.0 during rollout and degrade missing detail fields gracefully."
