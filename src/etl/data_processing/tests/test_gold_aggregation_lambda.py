@@ -234,6 +234,7 @@ class TestLambdaHappyPath:
             "rooms_distribution",
             "price_per_area_histogram",
             "listing_location_grid_last_3m",
+            "listing_locations_last_3m",
         }
         # search_config is a static single-record dataset even with minimal
         # fixture data.

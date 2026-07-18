@@ -763,6 +763,70 @@ def listing_location_grid_last_3m(
     )
 
 
+def listing_locations_last_3m(
+    df: pd.DataFrame,
+    window_months: int = ROLLING_KPI_WINDOW_MONTHS,
+) -> List[Dict[str, Any]]:
+    """
+    Raw (unrounded, un-aggregated) per-listing coordinates for the last
+    ``window_months`` months, one record per currently-listed property.
+
+    Unlike :func:`listing_location_grid_last_3m`, this emits exact
+    ``latitude``/``longitude`` per listing (operator decision: the map
+    should render individual points on a real street map, precise location
+    disclosure is acceptable for this project). Still excludes
+    ``propertyCode`` and price so no per-listing financial/identity data
+    leaks, and still reuses :func:`_rolling_window_start` and
+    :func:`latest_by_property` so the windowing/dedup logic matches every
+    other Data Basis dataset exactly.
+
+    Args:
+        df: Listings DataFrame (any scope — Data Basis is unscoped), with
+            ``latitude``/``longitude`` columns.
+        window_months: Rolling window length in calendar months. Defaults to
+            :data:`ROLLING_KPI_WINDOW_MONTHS`.
+
+    Returns:
+        List of record dicts with EXACTLY these keys: operation, district,
+        neighborhood, latitude, longitude. Empty list when input is empty,
+        has no geo columns, has no parseable snapshot dates, or no rows
+        fall inside the window.
+    """
+    if df.empty:
+        return []
+    if not {"latitude", "longitude"}.issubset(df.columns):
+        return []
+
+    window_start = _rolling_window_start(df, window_months)
+    if window_start is None:
+        return []
+
+    parsed_dates = pd.to_datetime(df["snapshot_date"], errors="coerce")
+    windowed = df[parsed_dates >= window_start]
+    if windowed.empty:
+        return []
+
+    latest = latest_by_property(windowed)
+    working = latest.dropna(subset=["latitude", "longitude"]).copy()
+    if working.empty:
+        return []
+
+    working = working.sort_values(["operation", "district", "neighborhood"])
+
+    return cast(
+        List[Dict[str, Any]],
+        working[
+            [
+                "operation",
+                "district",
+                "neighborhood",
+                "latitude",
+                "longitude",
+            ]
+        ].to_dict(orient="records"),
+    )
+
+
 def size_histogram_10sqm(
     df: pd.DataFrame, bin_width_m2: int = _SIZE_HISTOGRAM_BIN_WIDTH_M2
 ) -> List[Dict[str, Any]]:

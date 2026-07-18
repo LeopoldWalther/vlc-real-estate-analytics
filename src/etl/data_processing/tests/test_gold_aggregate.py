@@ -31,6 +31,7 @@ from gold_aggregate import (  # noqa: E402
     build_population_block,
     latest_by_property,
     listing_location_grid_last_3m,
+    listing_locations_last_3m,
     price_per_area_histogram,
     rooms_distribution,
     search_config_summary,
@@ -1159,3 +1160,102 @@ class TestListingLocationGridLast3Months:
         rows = [_make_listing()]
         df = _df(rows).drop(columns=["latitude", "longitude"])
         assert listing_location_grid_last_3m(df) == []
+
+
+class TestListingLocationsLast3Months:
+    """
+    listing_locations_last_3m emits one raw (unrounded) coordinate record per
+    currently-listed property, for the real-map rendering (operator decision
+    2026-07-18: precise per-listing location disclosure is acceptable for
+    this project — unlike listing_location_grid_last_3m, coordinates are
+    NOT rounded/aggregated here).
+    """
+
+    def test_only_documented_fields_are_emitted(self) -> None:
+        """No propertyCode/address/price ever leaves this function."""
+        rows = [
+            _make_listing(
+                propertyCode="P1",
+                latitude=39.469077,
+                longitude=-0.3799074,
+                snapshot_date=date(2023, 4, 9),
+            ),
+        ]
+        result = listing_locations_last_3m(_df(rows))
+        assert result
+        allowed_keys = {
+            "operation",
+            "district",
+            "neighborhood",
+            "latitude",
+            "longitude",
+        }
+        for record in result:
+            assert set(record.keys()) == allowed_keys
+            assert not _FORBIDDEN_GEO_FIELDS & set(record.keys())
+
+    def test_coordinates_are_not_rounded(self) -> None:
+        """Unlike the grid variant, exact input coordinates pass through."""
+        rows = [
+            _make_listing(
+                propertyCode="P1",
+                latitude=39.4690771234,
+                longitude=-0.3799074321,
+                snapshot_date=date(2023, 4, 9),
+            ),
+        ]
+        result = listing_locations_last_3m(_df(rows))
+        assert result[0]["latitude"] == 39.4690771234
+        assert result[0]["longitude"] == -0.3799074321
+
+    def test_one_record_per_currently_listed_property(self) -> None:
+        """Multiple snapshots of the same property collapse to one point."""
+        rows = [
+            _make_listing(
+                propertyCode="P1",
+                latitude=39.469077,
+                longitude=-0.3799074,
+                snapshot_date=date(2023, 4, 9),
+            ),
+            _make_listing(
+                propertyCode="P1",
+                latitude=39.469077,
+                longitude=-0.3799074,
+                snapshot_date=date(2023, 4, 16),
+            ),
+            _make_listing(
+                propertyCode="P2",
+                latitude=39.5,
+                longitude=-0.5,
+                snapshot_date=date(2023, 4, 16),
+            ),
+        ]
+        result = listing_locations_last_3m(_df(rows))
+        assert len(result) == 2
+
+    def test_excludes_rows_older_than_the_rolling_window(self) -> None:
+        rows = [
+            _make_listing(
+                propertyCode="RECENT",
+                snapshot_date=date(2023, 4, 9),
+                latitude=39.469077,
+                longitude=-0.3799074,
+            ),
+            _make_listing(
+                propertyCode="OLD",
+                snapshot_date=date(2022, 1, 1),
+                latitude=39.5,
+                longitude=-0.5,
+            ),
+        ]
+        result = listing_locations_last_3m(_df(rows))
+        assert len(result) == 1
+        assert result[0]["latitude"] == 39.469077
+
+    def test_empty_input_returns_empty_list(self) -> None:
+        assert listing_locations_last_3m(pd.DataFrame(columns=_GEO_BASE_COLS)) == []
+
+    def test_missing_geo_columns_returns_empty_list(self) -> None:
+        rows = [_make_listing()]
+        df = _df(rows).drop(columns=["latitude", "longitude"])
+        assert listing_locations_last_3m(df) == []

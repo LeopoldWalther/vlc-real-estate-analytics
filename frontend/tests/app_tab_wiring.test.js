@@ -230,7 +230,7 @@ function buildFakeDocument() {
     'boxplot-by-neighborhood-rent', 'boxplot-by-neighborhood-sale',
     'weekly-listing-volume', 'size-histogram', 'rooms-distribution',
     'price-per-area-histogram-rent', 'price-per-area-histogram-sale',
-    'listing-location-grid-map',
+    'listing-locations-map',
   ];
   const chartContainers = {};
   for (const id of chartIds) {
@@ -312,7 +312,7 @@ function buildFixture() {
       size_histogram_10sqm: [{ operation: 'sale', bin_start_m2: 100, bin_end_m2: 110, count_listings: 5 }],
       rooms_distribution: [{ operation: 'sale', rooms: 2, count_listings: 5 }],
       price_per_area_histogram: [{ operation: 'sale', bin_start_price_m2: 2250, bin_end_price_m2: 2500, count_listings: 5 }],
-      listing_location_grid_last_3m: [{ operation: 'sale', district: 'Extramurs', neighborhood: 'La Petxina', latitude: 39.474, longitude: -0.39, count_listings: 7 }],
+      listing_locations_last_3m: [{ operation: 'sale', district: 'Extramurs', neighborhood: 'La Petxina', latitude: 39.474, longitude: -0.39 }],
     },
   };
 }
@@ -325,7 +325,7 @@ let plotlyResize;
 const DATA_BASIS_CONTAINER_IDS = [
   'weekly-listing-volume', 'size-histogram', 'rooms-distribution',
   'price-per-area-histogram-rent', 'price-per-area-histogram-sale',
-  'listing-location-grid-map',
+  'listing-locations-map',
 ];
 
 beforeAll(async () => {
@@ -383,7 +383,7 @@ describe('app.js tab wiring (task 11.10)', () => {
   it('does not render any Data Basis chart before its panel has ever been visible', () => {
     const dataBasisCalls = plotlyNewPlot.mock.calls.filter(([container]) =>
       container === harness.chartContainers['weekly-listing-volume'] ||
-      container === harness.chartContainers['listing-location-grid-map'],
+      container === harness.chartContainers['listing-locations-map'],
     );
     expect(dataBasisCalls).toHaveLength(0);
   });
@@ -406,7 +406,7 @@ describe('app.js tab wiring (task 11.10)', () => {
       expect.anything(),
     );
     expect(plotlyNewPlot).toHaveBeenCalledWith(
-      harness.chartContainers['listing-location-grid-map'],
+      harness.chartContainers['listing-locations-map'],
       expect.anything(),
       expect.anything(),
       expect.anything(),
@@ -418,7 +418,7 @@ describe('app.js tab wiring (task 11.10)', () => {
     harness.tabTrendAnalysis.dispatchEvent({ type: 'click' });
     harness.tabDataBasis.dispatchEvent({ type: 'click' });
     expect(plotlyResize).toHaveBeenCalledWith(harness.chartContainers['weekly-listing-volume']);
-    expect(plotlyResize).toHaveBeenCalledWith(harness.chartContainers['listing-location-grid-map']);
+    expect(plotlyResize).toHaveBeenCalledWith(harness.chartContainers['listing-locations-map']);
     expect(plotlyNewPlot.mock.calls.length).toBe(newPlotCallsBefore);
   });
 
