@@ -183,9 +183,9 @@ basemap, no tiles, no external call:
       `aria-selected`, `aria-controls`), wrap the existing `<main>` content in
       `<section role="tabpanel" id="panel-trend-analysis">`, add an empty
       `<section role="tabpanel" id="panel-data-basis" hidden>`.
-- [ ] Rename the existing view's user-facing label to **"Trend Analysis"**
+- [x] Rename the existing view's user-facing label to **"Trend Analysis"**
       (`app.title`/new `tabs.trendAnalysis` i18n key) in all 5 locales.
-- [ ] `app.js`: wire tab clicks + `hashchange`, toggle `hidden`/`aria-selected`, call each tab's
+- [x] `app.js`: wire tab clicks + `hashchange`, toggle `hidden`/`aria-selected`, call each tab's
       lazy-render callback once, call `Plotly.Plots.resize()` on re-activation.
 - [x] `styles.css`: tab bar styling, mobile-first (horizontal scroll on narrow viewports, ≥44px
       touch targets per existing convention), dark/light tokens reused from FEATURE-009.
@@ -195,7 +195,7 @@ basemap, no tiles, no external call:
       `buildLayout()`, trace shape from fixture data), mirroring `price_time_series.test.js`.
 - [x] `frontend/src/search_config.js` + tests — pure formatting of `data_basis.search_config`.
 - [x] Extend `frontend/tests/fixtures/latest.sample.json` with a `data_basis` block.
-- [ ] Wire the 6 new sections (5 charts + search-config panel) into `panel-data-basis`,
+- [x] Wire the 6 new sections (5 charts + search-config panel) into `panel-data-basis`,
       lazy-rendered on first tab activation.
 
 ### Phase 5 — i18n, accessibility, responsiveness

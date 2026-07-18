@@ -348,7 +348,7 @@ tasks:
       Wire tab clicks/hashchange, lazy render the Data Basis tab once data is loaded and the panel is
       visible, render the search-config panel, and resize Plotly charts when reactivating tabs. Keep
       app.js as DOM/fetch orchestration only; reuse pure helpers and renderers.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 3
     depends_on: ["11.7", "11.8", "11.9"]
