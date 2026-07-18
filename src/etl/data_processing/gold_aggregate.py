@@ -64,6 +64,11 @@ SCOPE_DISTRICTS: List[str] = ["Extramurs", "Ciutat Vella", "L'Eixample"]
 
 _DEFAULT_MIN_COUNT: int = 5
 
+# Single named constant for the rolling KPI window length (FEATURE-010).
+# The rolling window is relative to max(snapshot_date) in the scoped/deduped
+# data, not wall-clock now — see _rolling_window_start().
+ROLLING_KPI_WINDOW_MONTHS: int = 3
+
 # The "apartments like ours" predicate, echoed into the JSON contract.
 RELEVANT_FILTER_SPEC: Dict[str, Any] = {
     "hasLift": True,
@@ -89,6 +94,39 @@ def utc_now_iso() -> str:
     ``datetime`` reference once.
     """
     return datetime.now(tz=timezone.utc).isoformat()
+
+
+def _rolling_window_start(
+    df: pd.DataFrame, window_months: int = ROLLING_KPI_WINDOW_MONTHS
+) -> Optional[pd.Timestamp]:
+    """
+    Compute the inclusive start of a rolling calendar-month window.
+
+    The window is anchored to ``max(snapshot_date)`` within ``df`` — never to
+    wall-clock "now" — so backfills and delayed collection runs remain
+    deterministic. ``snapshot_date`` values are normalised with
+    ``pd.to_datetime(..., errors="coerce")`` so ISO strings, ``datetime.date``,
+    and pandas ``Timestamp`` inputs all produce the same window start (M2).
+
+    Args:
+        df: DataFrame with a ``snapshot_date`` column (any date-like dtype).
+        window_months: Number of calendar months to look back. Defaults to
+            :data:`ROLLING_KPI_WINDOW_MONTHS`.
+
+    Returns:
+        The inclusive window start as a ``pd.Timestamp``, or ``None`` when
+        ``df`` is empty or contains no parseable ``snapshot_date`` values.
+    """
+    if df.empty or "snapshot_date" not in df.columns:
+        return None
+
+    parsed = pd.to_datetime(df["snapshot_date"], errors="coerce")
+    parsed = parsed.dropna()
+    if parsed.empty:
+        return None
+
+    max_date = parsed.max()
+    return cast(pd.Timestamp, max_date - pd.DateOffset(months=window_months))
 
 
 def _relevant_rows(df: pd.DataFrame) -> pd.DataFrame:
@@ -416,16 +454,22 @@ def _rent_vs_sale_ratio_time_series(
     )
 
 
-def _boxplot_by_neighborhood(df: pd.DataFrame) -> List[Dict[str, Any]]:
+def _boxplot_summary(df: pd.DataFrame, min_count: int = 1) -> List[Dict[str, Any]]:
     """
-    Compute a 5-number summary of priceByArea per (operation, district, neighborhood).
+    Shared core: 5-number ``priceByArea`` summary per (operation, district,
+    neighborhood) group, with an optional minimum-count stability guard.
 
-    The summary is computed over the full history (all snapshots combined).
-    Plotly box traces can render directly from quartile values, so raw rows
-    are never shipped. This keeps latest.json small and the chart fast.
+    Both the all-time :func:`_boxplot_by_neighborhood` and the rolling
+    :func:`_boxplot_by_neighborhood_last_months` delegate to this single
+    implementation so the quantile/groupby math is never duplicated (M3).
 
     Args:
-        df: Deduped, scoped listings DataFrame.
+        df: Deduped, scoped (and, for the windowed caller, already
+            date-filtered) listings DataFrame.
+        min_count: Minimum number of listings a group must have (after
+            dropping NaN prices) to be included. Default 1 (no filtering) —
+            the all-time boxplot passes through every non-empty group;
+            callers that need stability filtering pass a higher threshold.
 
     Returns:
         List of record dicts. Keys: operation, district, neighborhood, count,
@@ -439,7 +483,7 @@ def _boxplot_by_neighborhood(df: pd.DataFrame) -> List[Dict[str, Any]]:
         ["operation", "district", "neighborhood"]
     ):
         prices = group["priceByArea"].dropna()
-        if prices.empty:
+        if prices.empty or len(prices) < min_count:
             continue
         records.append(
             {
@@ -456,6 +500,68 @@ def _boxplot_by_neighborhood(df: pd.DataFrame) -> List[Dict[str, Any]]:
         )
 
     return records
+
+
+def _boxplot_by_neighborhood(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """
+    Compute a 5-number summary of priceByArea per (operation, district, neighborhood).
+
+    The summary is computed over the full history (all snapshots combined).
+    Plotly box traces can render directly from quartile values, so raw rows
+    are never shipped. This keeps latest.json small and the chart fast.
+
+    This all-time dataset is intentionally NOT filtered by ``min_count`` —
+    every group with at least one listing is included, preserving the
+    original schema-v1.0 semantics.
+
+    Args:
+        df: Deduped, scoped listings DataFrame.
+
+    Returns:
+        List of record dicts. Keys: operation, district, neighborhood, count,
+        min, q1, median, q3, max. Empty list when input is empty.
+    """
+    return _boxplot_summary(df, min_count=1)
+
+
+def _boxplot_by_neighborhood_last_months(
+    df: pd.DataFrame,
+    window_months: int = ROLLING_KPI_WINDOW_MONTHS,
+    min_count: int = _DEFAULT_MIN_COUNT,
+) -> List[Dict[str, Any]]:
+    """
+    Compute the rolling-window 5-number priceByArea summary per neighborhood.
+
+    Filters to rows with ``snapshot_date >= window_start`` (inclusive), where
+    ``window_start`` is anchored to ``max(snapshot_date)`` in ``df`` — never
+    wall-clock now (see :func:`_rolling_window_start`) — then delegates to the
+    shared :func:`_boxplot_summary` core so quantile math is not duplicated
+    (M3). The existing ``min_count`` stability guard is applied inside the
+    window so sparse recent groups are excluded (H2).
+
+    Args:
+        df: Deduped, scoped listings DataFrame.
+        window_months: Rolling window length in calendar months. Defaults to
+            :data:`ROLLING_KPI_WINDOW_MONTHS`.
+        min_count: Minimum listings a group must have inside the window to be
+            included. Default 5 (:data:`_DEFAULT_MIN_COUNT`).
+
+    Returns:
+        List of record dicts with the same keys/shape as
+        :func:`_boxplot_by_neighborhood`. Empty list when there is no data,
+        no parseable ``snapshot_date``, or no group meets ``min_count``.
+    """
+    if df.empty:
+        return []
+
+    window_start = _rolling_window_start(df, window_months)
+    if window_start is None:
+        return []
+
+    parsed_dates = pd.to_datetime(df["snapshot_date"], errors="coerce")
+    windowed = df[parsed_dates >= window_start]
+
+    return _boxplot_summary(windowed, min_count=min_count)
 
 
 # ---------------------------------------------------------------------------
@@ -511,6 +617,9 @@ def build_population_block(
         deduped, min_count=min_count
     )
     block["boxplot_by_neighborhood"] = _boxplot_by_neighborhood(deduped)
+    block["boxplot_by_neighborhood_last_3m"] = _boxplot_by_neighborhood_last_months(
+        deduped, min_count=min_count
+    )
 
     return block
 

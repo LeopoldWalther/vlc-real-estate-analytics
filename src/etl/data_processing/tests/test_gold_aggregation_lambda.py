@@ -197,6 +197,22 @@ class TestLambdaHappyPath:
         assert payload["schema_version"] == "1.0"
         assert "general" in payload and "relevant" in payload
 
+    def test_lambda_output_includes_rolling_boxplot_field(
+        self, s3_with_silver: Any
+    ) -> None:
+        """
+        latest.json must include boxplot_by_neighborhood_last_3m in both
+        population blocks (FEATURE-010 additive schema field).
+        """
+        lambda_handler({}, None)
+
+        payload = _read_latest_json(s3_with_silver, BUCKET)
+        assert "boxplot_by_neighborhood_last_3m" in payload["general"]
+        assert "boxplot_by_neighborhood_last_3m" in payload["relevant"]
+        # The all-time field must still be present and untouched.
+        assert "boxplot_by_neighborhood" in payload["general"]
+        assert "boxplot_by_neighborhood" in payload["relevant"]
+
 
 # ---------------------------------------------------------------------------
 # Test: empty silver history

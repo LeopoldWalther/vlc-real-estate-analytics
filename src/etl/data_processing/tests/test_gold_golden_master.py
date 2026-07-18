@@ -143,16 +143,20 @@ class TestGoldGoldenMaster:
             "rent_vs_sale_ratio",
             "rent_vs_sale_ratio_time_series",
             "boxplot_by_neighborhood",
+            "boxplot_by_neighborhood_last_3m",
         }
         assert set(payload["relevant"].keys()) == {
             "rent_vs_sale_ratio",
             "rent_vs_sale_ratio_time_series",
             "boxplot_by_neighborhood",
+            "boxplot_by_neighborhood_last_3m",
         }
         # Non-trivial content: the fixture must exercise every dataset.
         assert payload["general"]["price_time_series_neighborhood"]
         assert payload["general"]["rent_vs_sale_ratio"]
         assert payload["relevant"]["rent_vs_sale_ratio"]
+        assert payload["general"]["boxplot_by_neighborhood_last_3m"]
+        assert payload["relevant"]["boxplot_by_neighborhood_last_3m"]
 
 
 # ---------------------------------------------------------------------------

@@ -83,11 +83,13 @@ All aggregations are computed for **two symmetric populations**:
 - `rent_vs_sale_ratio` — full-history ratio `mean_priceByArea_sale / mean_priceByArea_rent` per neighborhood
 - `rent_vs_sale_ratio_time_series` — same ratio computed per `snapshot_date`
 - `boxplot_by_neighborhood` — 5-number summary (min/q1/median/q3/max + count) per `(operation, neighborhood)` over full history
+- `boxplot_by_neighborhood_last_3m` — rolling 3-month 5-number summary per `(operation, neighborhood)` (see [Rolling 3-Month KPI Boxplot](#rolling-3-month-kpi-boxplot) below)
 
 **`relevant` population:**
 - `rent_vs_sale_ratio`
 - `rent_vs_sale_ratio_time_series`
 - `boxplot_by_neighborhood`
+- `boxplot_by_neighborhood_last_3m`
 
 ### Deduplication
 
@@ -96,6 +98,18 @@ Dedup is applied **only within** `(operation, snapshot_date, propertyCode)` — 
 ### Ratio Min-Count
 
 Neighborhoods where either the sale or rent side has fewer than `min_count` listings (default: **5**) are excluded from ratio datasets. Configurable via the `RATIO_MIN_COUNT` Lambda environment variable.
+
+### Rolling 3-Month KPI Boxplot
+
+`boxplot_by_neighborhood_last_3m` (FEATURE-010) is an **additive** sibling of the frozen, all-time `boxplot_by_neighborhood` field. It exists so the dashboard's median rent/sale KPI tiles reflect *current* market conditions instead of the full multi-year history.
+
+- **Constant:** `ROLLING_KPI_WINDOW_MONTHS = 3` in `gold_aggregate.py` is the single named source of the window length — no literal `3`/`90-day` window is duplicated elsewhere in the aggregation logic.
+- **Window anchor:** the window is relative to `max(snapshot_date)` in the scoped/deduped silver data for that population — **never wall-clock "now"** — so backfills and delayed collection runs stay deterministic.
+- **Inclusive lower boundary:** a row is in-window when `snapshot_date >= max(snapshot_date) - 3 calendar months`. A listing snapshotted exactly on the boundary date is included.
+- **`min_count` applies inside the window:** the same stability guard used for ratio datasets (default **5**, configurable via `RATIO_MIN_COUNT`) is applied to `(operation, district, neighborhood)` groups computed *within* the rolling window. Sparse recent groups (fewer than `min_count` listings in the last 3 months) are excluded from `boxplot_by_neighborhood_last_3m`, even though the same group may still appear in the all-time `boxplot_by_neighborhood` (which is never filtered by `min_count`).
+- **Short history:** when fewer than 3 months of history exist, the window naturally includes every available row; the same `min_count` rule still applies, so a neighborhood with too few total listings is excluded just as it would be with a longer history.
+- **Shared math, no duplication:** both `boxplot_by_neighborhood` and `boxplot_by_neighborhood_last_3m` delegate to the same private quantile/groupby helper in `gold_aggregate.py` — the rolling variant only pre-filters rows by date and passes a `min_count` threshold. This avoids two independently-maintained boxplot implementations.
+- **`boxplot_by_neighborhood` remains all-time and unfiltered by `min_count`** — its meaning is unchanged from schema-v1.0. The rolling field is purely additive; existing consumers of `boxplot_by_neighborhood` (e.g. the all-time box-and-whisker chart) are unaffected.
 
 ---
 
@@ -185,11 +199,25 @@ This schema is **frozen**. FEATURE-005 depends on this exact shape. Do not chang
       "q3": 2750.0,
       "max": 4200.0
     }
+  ],
+  "boxplot_by_neighborhood_last_3m": [
+    {
+      "operation": "sale",
+      "district": "Extramurs",
+      "neighborhood": "Patraix",
+      "count": 28,
+      "min": 2200.0,
+      "q1": 2350.0,
+      "median": 2480.0,
+      "q3": 2650.0,
+      "max": 3100.0
+    }
   ]
 }
 ```
 
 > The `relevant` block omits `price_time_series_neighborhood` and `price_time_series_district`.
+> `boxplot_by_neighborhood_last_3m` is additive (schema still v1.0): it has the identical record shape as `boxplot_by_neighborhood` but is scoped to the last `ROLLING_KPI_WINDOW_MONTHS` (3) calendar months relative to `max(snapshot_date)`, with `min_count` applied inside the window. See [Rolling 3-Month KPI Boxplot](#rolling-3-month-kpi-boxplot).
 
 ### Key Design Decisions
 

@@ -21,6 +21,10 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from gold_aggregate import (  # noqa: E402
+    ROLLING_KPI_WINDOW_MONTHS,
+    _boxplot_by_neighborhood,
+    _boxplot_by_neighborhood_last_months,
+    _rolling_window_start,
     apply_scope,
     build_aggregation_json,
     build_population_block,
@@ -612,3 +616,215 @@ class TestBuildAggregationJson:
         result = build_aggregation_json(_df(rows))
         assert result["relevant"]["rent_vs_sale_ratio"] == []
         assert result["relevant"]["boxplot_by_neighborhood"] == []
+
+
+# ---------------------------------------------------------------------------
+# _rolling_window_start — rolling KPI window helper (FEATURE-010)
+# ---------------------------------------------------------------------------
+
+
+class TestRollingWindowStart:
+    """Tests for the pure rolling-window start helper."""
+
+    def test_rolling_kpi_window_months_is_three(self) -> None:
+        """The single named window-length constant must be 3 months."""
+        assert ROLLING_KPI_WINDOW_MONTHS == 3
+
+    def test_returns_max_minus_three_months_for_long_history(self) -> None:
+        """GIVEN >3 months of history, returns max(snapshot_date) - 3 months."""
+        df = pd.DataFrame(
+            {
+                "snapshot_date": [
+                    date(2023, 1, 1),
+                    date(2023, 2, 1),
+                    date(2023, 3, 1),
+                    date(2023, 4, 9),
+                ]
+            }
+        )
+        start = _rolling_window_start(df, ROLLING_KPI_WINDOW_MONTHS)
+        expected = pd.Timestamp(date(2023, 4, 9)) - pd.DateOffset(months=3)
+        assert start == expected
+
+    def test_short_history_returns_start_before_all_rows(self) -> None:
+        """GIVEN only 2 weeks of history, the returned start includes all rows."""
+        df = pd.DataFrame(
+            {
+                "snapshot_date": [
+                    date(2023, 4, 1),
+                    date(2023, 4, 9),
+                ]
+            }
+        )
+        start = _rolling_window_start(df, ROLLING_KPI_WINDOW_MONTHS)
+        assert start is not None
+        assert (pd.to_datetime(df["snapshot_date"]) >= start).all()
+
+    def test_empty_dataframe_returns_none(self) -> None:
+        """GIVEN an empty DataFrame, the helper returns None without raising."""
+        df = pd.DataFrame(columns=["snapshot_date"])
+        assert _rolling_window_start(df, ROLLING_KPI_WINDOW_MONTHS) is None
+
+    def test_no_parseable_dates_returns_none(self) -> None:
+        """GIVEN only unparseable snapshot_date values, returns None."""
+        df = pd.DataFrame({"snapshot_date": ["not-a-date", None]})
+        assert _rolling_window_start(df, ROLLING_KPI_WINDOW_MONTHS) is None
+
+    def test_iso_string_date_and_timestamp_inputs_agree(self) -> None:
+        """ISO string, datetime.date, and pandas Timestamp inputs all agree."""
+        iso_df = pd.DataFrame({"snapshot_date": ["2023-01-01", "2023-04-09"]})
+        date_df = pd.DataFrame({"snapshot_date": [date(2023, 1, 1), date(2023, 4, 9)]})
+        ts_df = pd.DataFrame(
+            {
+                "snapshot_date": [
+                    pd.Timestamp("2023-01-01"),
+                    pd.Timestamp("2023-04-09"),
+                ]
+            }
+        )
+        iso_start = _rolling_window_start(iso_df, 3)
+        date_start = _rolling_window_start(date_df, 3)
+        ts_start = _rolling_window_start(ts_df, 3)
+        assert iso_start == date_start == ts_start
+
+
+# ---------------------------------------------------------------------------
+# _boxplot_by_neighborhood_last_months — windowed boxplot (FEATURE-010)
+# ---------------------------------------------------------------------------
+
+
+class TestBoxplotByNeighborhoodLastMonths:
+    """Tests for the rolling 3-month neighborhood boxplot helper."""
+
+    def test_old_outlier_outside_window_does_not_affect_summary(self) -> None:
+        """An old outlier outside the rolling window must not skew min/max/median."""
+        rows = [
+            # Old outlier — 6 months before the latest snapshot.
+            _make_listing(
+                propertyCode="OLD1",
+                snapshot_date=date(2022, 10, 9),
+                priceByArea=99999.0,
+            ),
+        ]
+        # 5 in-window listings spanning the most recent 3 months.
+        for i, (day, price) in enumerate(
+            [
+                (date(2023, 2, 9), 1000.0),
+                (date(2023, 2, 20), 2000.0),
+                (date(2023, 3, 9), 3000.0),
+                (date(2023, 3, 20), 4000.0),
+                (date(2023, 4, 9), 5000.0),
+            ]
+        ):
+            rows.append(
+                _make_listing(
+                    propertyCode=f"NEW{i}", snapshot_date=day, priceByArea=price
+                )
+            )
+        df = pd.DataFrame(rows)
+        records = _boxplot_by_neighborhood_last_months(df, min_count=1)
+        assert len(records) == 1
+        rec = records[0]
+        assert rec["count"] == 5
+        assert rec["min"] == pytest.approx(1000.0)
+        assert rec["max"] == pytest.approx(5000.0)
+        assert rec["median"] == pytest.approx(3000.0)
+
+    def test_returns_same_keys_and_shape_as_all_time_boxplot(self) -> None:
+        """The windowed helper returns the same record keys as the all-time one."""
+        rows = [_make_listing(propertyCode=f"P{i}") for i in range(5)]
+        df = pd.DataFrame(rows)
+        windowed = _boxplot_by_neighborhood_last_months(df, min_count=1)
+        all_time = _boxplot_by_neighborhood(df)
+        assert set(windowed[0].keys()) == set(all_time[0].keys())
+
+    def test_boundary_date_row_is_included(self) -> None:
+        """A row exactly on the window boundary date is included (inclusive)."""
+        rows = [_make_listing(propertyCode=f"P{i}") for i in range(4)]
+        latest = date(2023, 4, 9)
+        boundary = pd.Timestamp(latest) - pd.DateOffset(months=3)
+        rows.append(
+            _make_listing(
+                propertyCode="BOUNDARY",
+                snapshot_date=boundary.date(),
+                priceByArea=7777.0,
+            )
+        )
+        df = pd.DataFrame(rows)
+        records = _boxplot_by_neighborhood_last_months(df, min_count=1)
+        assert records[0]["count"] == 5
+
+    def test_groups_below_min_count_are_excluded(self) -> None:
+        """Groups with fewer than min_count listings inside the window are excluded."""
+        rows = [
+            _make_listing(propertyCode="P1"),
+            _make_listing(propertyCode="P2"),
+        ]
+        df = pd.DataFrame(rows)
+        records = _boxplot_by_neighborhood_last_months(df, min_count=5)
+        assert records == []
+
+    def test_all_time_boxplot_unaffected_by_windowed_helper(self) -> None:
+        """_boxplot_by_neighborhood remains all-time & unfiltered by min_count."""
+        rows = [
+            _make_listing(propertyCode="OLD1", snapshot_date=date(2022, 1, 1)),
+            _make_listing(propertyCode="OLD2", snapshot_date=date(2022, 1, 2)),
+        ]
+        df = pd.DataFrame(rows)
+        # Only 2 rows total — below the default min_count of 5 — yet the
+        # all-time helper must still report them (no implicit filtering).
+        records = _boxplot_by_neighborhood(df)
+        assert len(records) == 1
+        assert records[0]["count"] == 2
+
+    def test_empty_dataframe_returns_empty_list(self) -> None:
+        """Empty input yields an empty list, not an exception."""
+        df = pd.DataFrame(columns=_BASE_COLS)
+        assert _boxplot_by_neighborhood_last_months(df) == []
+
+
+# ---------------------------------------------------------------------------
+# build_population_block — additive boxplot_by_neighborhood_last_3m field
+# ---------------------------------------------------------------------------
+
+
+class TestPopulationBlockLast3MonthsField:
+    """build_population_block must emit the additive rolling boxplot field."""
+
+    def test_general_block_has_last_3m_field(self) -> None:
+        """general population block includes boxplot_by_neighborhood_last_3m."""
+        rows = [_make_listing(propertyCode=f"P{i}") for i in range(5)]
+        block = build_population_block(apply_scope(_df(rows)), row_filter=None)
+        assert "boxplot_by_neighborhood_last_3m" in block
+
+    def test_relevant_block_has_last_3m_field(self) -> None:
+        """relevant population block includes boxplot_by_neighborhood_last_3m."""
+        rows = [_make_listing(propertyCode=f"P{i}") for i in range(5)]
+        block = build_population_block(apply_scope(_df(rows)), row_filter=None)
+        assert "boxplot_by_neighborhood_last_3m" in block
+
+    def test_all_time_field_still_present_and_unchanged(self) -> None:
+        """boxplot_by_neighborhood keeps its all-time values alongside the new field."""
+        rows = [
+            _make_listing(propertyCode="OLD1", snapshot_date=date(2022, 1, 1)),
+            _make_listing(propertyCode="OLD2", snapshot_date=date(2022, 1, 2)),
+        ]
+        block = build_population_block(apply_scope(_df(rows)), row_filter=None)
+        assert "boxplot_by_neighborhood" in block
+        assert block["boxplot_by_neighborhood"][0]["count"] == 2
+
+    def test_last_3m_field_uses_min_count_consistent_with_block_min_count(
+        self,
+    ) -> None:
+        """min_count passed to build_population_block is forwarded to the rolling helper."""
+        rows = [
+            _make_listing(propertyCode="P1"),
+            _make_listing(propertyCode="P2"),
+        ]
+        block = build_population_block(
+            apply_scope(_df(rows)), row_filter=None, min_count=5
+        )
+        # Only 2 listings — below min_count=5 — so the rolling field excludes
+        # this group while the all-time field still reports it.
+        assert block["boxplot_by_neighborhood_last_3m"] == []
+        assert len(block["boxplot_by_neighborhood"]) == 1

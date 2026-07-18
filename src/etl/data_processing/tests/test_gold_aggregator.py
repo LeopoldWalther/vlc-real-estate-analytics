@@ -29,6 +29,7 @@ from gold_aggregator import (  # noqa: E402
     GoldAggregator,
     GoldResult,
     NeighborhoodBoxplot,
+    NeighborhoodBoxplotLast3Months,
     NeighborhoodPriceTimeSeries,
     RentVsSaleRatio,
     RentVsSaleRatioTimeSeries,
@@ -103,12 +104,42 @@ class TestStrategyInterface:
             "rent_vs_sale_ratio",
             "rent_vs_sale_ratio_time_series",
             "boxplot_by_neighborhood",
+            "boxplot_by_neighborhood_last_3m",
         ]
         assert [agg.key for agg in relevant] == [
             "rent_vs_sale_ratio",
             "rent_vs_sale_ratio_time_series",
             "boxplot_by_neighborhood",
+            "boxplot_by_neighborhood_last_3m",
         ]
+
+    def test_neighborhood_boxplot_last_3m_key(self) -> None:
+        """The new strategy exposes the additive schema key."""
+        assert NeighborhoodBoxplotLast3Months().key == (
+            "boxplot_by_neighborhood_last_3m"
+        )
+
+    def test_neighborhood_boxplot_last_3m_delegates_to_pure_helper(self) -> None:
+        """compute() delegates to the pure windowed helper, no duplicated math."""
+        strategy = NeighborhoodBoxplotLast3Months(min_count=1)
+        df = pd.DataFrame(
+            [
+                {
+                    "operation": "sale",
+                    "district": "Extramurs",
+                    "neighborhood": "Patraix",
+                    "snapshot_date": "2023-04-09",
+                    "propertyCode": "P1",
+                    "priceByArea": 2000.0,
+                    "size": 100.0,
+                    "price": 200000.0,
+                }
+            ]
+        )
+        records = strategy.compute(df)
+        assert len(records) == 1
+        assert records[0]["operation"] == "sale"
+        assert records[0]["count"] == 1
 
     @pytest.mark.parametrize(
         "strategy",
