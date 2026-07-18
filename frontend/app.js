@@ -22,7 +22,7 @@ import { weeklyListingVolumeRenderer } from './src/charts/weekly_listing_volume.
 import { sizeHistogramRenderer } from './src/charts/size_histogram.js';
 import { roomsDistributionRenderer } from './src/charts/rooms_distribution.js';
 import { priceHistogramRentRenderer, priceHistogramSaleRenderer } from './src/charts/price_per_area_histogram.js';
-import { listingLocationGridMapRenderer } from './src/charts/listing_location_grid_map.js';
+import { listingLocationsMapRenderer } from './src/charts/listing_locations_map.js';
 import { summaryStats, formatKpi } from './src/summary.js';
 import { resolveTheme, resolveViewport, shouldRerender, createLoadState, transition } from './src/dashboard_state.js';
 import { MAX_SCOPE_SELECTION, extractDistricts, extractNeighborhoods, filterPopulationBlock, toggleScopeSelection } from './src/filters.js';
@@ -74,7 +74,7 @@ const DATA_BASIS_RENDERERS = [
   roomsDistributionRenderer,
   priceHistogramRentRenderer,
   priceHistogramSaleRenderer,
-  listingLocationGridMapRenderer,
+  listingLocationsMapRenderer,
 ];
 
 // Renderer ids whose x-axis is a plain date timeline — they share the
@@ -103,7 +103,7 @@ const containers = {
   'rooms-distribution':              document.getElementById('rooms-distribution'),
   'price-per-area-histogram-rent':   document.getElementById('price-per-area-histogram-rent'),
   'price-per-area-histogram-sale':   document.getElementById('price-per-area-histogram-sale'),
-  'listing-location-grid-map':       document.getElementById('listing-location-grid-map'),
+  'listing-locations-map':          document.getElementById('listing-locations-map'),
 };
 
 const KPI_FORMATTERS = {

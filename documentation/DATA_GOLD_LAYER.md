@@ -146,6 +146,7 @@ parameters, weekly collection volume, and listing distributions) — schema-vers
 | `rooms_distribution` | latest-by-property | Listing counts per `(operation, rooms)`. |
 | `price_per_area_histogram` | latest-by-property | Listing counts binned by `priceByArea` (EUR/m²), with **operation-specific bin widths** (sale: 250 EUR/m², rent: 1 EUR/m²) — sale and rent price/m² live on very different scales, so sharing bin edges would make one side unreadable. |
 | `listing_location_grid_last_3m` | latest-by-property + rolling window | Privacy-safe geo aggregate for the map (see [Privacy-Safe Location Grid](#privacy-safe-location-grid) below). |
+| `listing_locations_last_3m` | latest-by-property + rolling window | Raw (unrounded) per-listing coordinates for the real-map view (see [Per-Listing Locations](#per-listing-locations) below). Operator decision (2026-07-18): precise per-listing location disclosure is acceptable for this project. |
 
 ### Search Config
 
@@ -204,6 +205,34 @@ Example record:
 }
 ```
 
+### Per-Listing Locations
+
+`listing_locations_last_3m` powers the real street-map view on the Data Basis tab, with one point
+per currently-listed property:
+
+- Reuses the same rolling 3-month window and latest-by-property dedup as
+  `listing_location_grid_last_3m`.
+- **Coordinates are emitted exactly as-is** (not rounded/aggregated) — this is an explicit operator
+  decision (2026-07-18) that precise per-listing location disclosure is acceptable for this
+  project, in exchange for a much more legible, real-map visualization (street-level basemap tiles,
+  colored per neighborhood) than the schematic grid allows.
+- Still excludes `propertyCode`, address, and price — every record has *exactly* these keys:
+  `operation`, `district`, `neighborhood`, `latitude`, `longitude`.
+- Kept as an **additive sibling field** to `listing_location_grid_last_3m` (which is unchanged) so
+  any future consumer that prefers the privacy-safe aggregate still has it available.
+
+Example record:
+
+```json
+{
+  "operation": "sale",
+  "district": "Extramurs",
+  "neighborhood": "La Petxina",
+  "latitude": 39.4738216,
+  "longitude": -0.3902541
+}
+```
+
 ### Sample `data_basis` Block
 
 ```json
@@ -236,6 +265,9 @@ Example record:
   ],
   "listing_location_grid_last_3m": [
     { "operation": "sale", "district": "Extramurs", "neighborhood": "La Petxina", "latitude": 39.474, "longitude": -0.39, "count_listings": 7 }
+  ],
+  "listing_locations_last_3m": [
+    { "operation": "sale", "district": "Extramurs", "neighborhood": "La Petxina", "latitude": 39.4738216, "longitude": -0.3902541 }
   ]
 }
 ```

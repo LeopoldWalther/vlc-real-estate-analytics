@@ -39,6 +39,7 @@ from gold_aggregate import (
     apply_scope,
     latest_by_property,
     listing_location_grid_last_3m,
+    listing_locations_last_3m,
     price_per_area_histogram,
     rooms_distribution,
     search_config_summary,
@@ -295,6 +296,31 @@ class ListingLocationGridLast3Months:
         return listing_location_grid_last_3m(df, window_months=self._window_months)
 
 
+class ListingLocationsLast3Months:
+    """
+    Strategy: raw (unrounded) per-listing locations for the last N months.
+
+    Operator decision (2026-07-18): the Data Basis map should render a real
+    street map with one point per listing, rather than the anonymized/
+    rounded grid. Kept as a separate additive field alongside
+    ``listing_location_grid_last_3m`` (which remains unchanged for any
+    consumer relying on the aggregated shape).
+    """
+
+    key: str = "listing_locations_last_3m"
+
+    def __init__(self, window_months: int = ROLLING_KPI_WINDOW_MONTHS) -> None:
+        """
+        Args:
+            window_months: Rolling window length in calendar months.
+        """
+        self._window_months = window_months
+
+    def compute(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Delegate to the pure helper, which owns windowing/dedup."""
+        return listing_locations_last_3m(df, window_months=self._window_months)
+
+
 def default_data_basis() -> Sequence[Aggregation]:
     """
     Build the strategy list for the additive ``data_basis`` top-level block.
@@ -312,6 +338,7 @@ def default_data_basis() -> Sequence[Aggregation]:
         RoomsDistribution(),
         PricePerAreaHistogram(),
         ListingLocationGridLast3Months(),
+        ListingLocationsLast3Months(),
     )
 
 

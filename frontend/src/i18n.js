@@ -80,7 +80,7 @@ const en = {
   'tabs.dataBasis': 'Data Basis',
 
   'dataBasis.intro': 'How this data was collected: search parameters, weekly collection volume, and current listing distributions across the whole collection area.',
-  'dataBasis.mapDescription': 'Aggregated coordinate distribution of recently collected listings, rounded to a privacy-safe grid — not a street-level map.',
+  'dataBasis.mapDescription': 'Exact locations of listings collected in the last 3 months, shown on a real street map and coloured by neighbourhood.',
   'dataBasis.searchConfig.heading': 'Search parameters',
   'dataBasis.searchConfig.radius': 'Search radius',
   'dataBasis.searchConfig.sizeRange': 'Size range',
@@ -105,9 +105,7 @@ const en = {
   'charts.price-per-area-histogram-sale.title': 'Sale price per m² distribution',
   'charts.price-per-area-histogram-sale.xaxis': 'Sale price per m² (€)',
   'charts.price-per-area-histogram-sale.yaxis': 'Listings',
-  'charts.listing-location-grid-map.title': 'Collected listing locations (aggregated, privacy-safe)',
-  'charts.listing-location-grid-map.xaxis': 'Longitude',
-  'charts.listing-location-grid-map.yaxis': 'Latitude',
+  'charts.listing-locations-map.title': 'Collected listing locations',
 };
 
 const de = {
@@ -173,7 +171,7 @@ const de = {
   'tabs.dataBasis': 'Datenbasis',
 
   'dataBasis.intro': 'So wurden diese Daten erhoben: Suchparameter, wöchentliches Erhebungsvolumen und aktuelle Verteilung der Inserate im gesamten Erhebungsgebiet.',
-  'dataBasis.mapDescription': 'Aggregierte Koordinatenverteilung kürzlich erfasster Inserate, auf ein datenschutzfreundliches Raster gerundet — keine straßengenaue Karte.',
+  'dataBasis.mapDescription': 'Exakte Standorte der in den letzten 3 Monaten erfassten Inserate, dargestellt auf einer echten Straßenkarte und nach Stadtviertel eingefärbt.',
   'dataBasis.searchConfig.heading': 'Suchparameter',
   'dataBasis.searchConfig.radius': 'Suchradius',
   'dataBasis.searchConfig.sizeRange': 'Größenbereich',
@@ -198,9 +196,7 @@ const de = {
   'charts.price-per-area-histogram-sale.title': 'Verteilung Kaufpreis pro m²',
   'charts.price-per-area-histogram-sale.xaxis': 'Kaufpreis pro m² (€)',
   'charts.price-per-area-histogram-sale.yaxis': 'Inserate',
-  'charts.listing-location-grid-map.title': 'Standorte erfasster Inserate (aggregiert, datenschutzfreundlich)',
-  'charts.listing-location-grid-map.xaxis': 'Längengrad',
-  'charts.listing-location-grid-map.yaxis': 'Breitengrad',
+  'charts.listing-locations-map.title': 'Standorte erfasster Inserate',
 };
 
 const es = {
@@ -266,7 +262,7 @@ const es = {
   'tabs.dataBasis': 'Base de datos',
 
   'dataBasis.intro': 'Cómo se recopilaron estos datos: parámetros de búsqueda, volumen de recopilación semanal y distribuciones actuales de los anuncios en toda la zona de recopilación.',
-  'dataBasis.mapDescription': 'Distribución agregada de coordenadas de los anuncios recopilados recientemente, redondeada a una cuadrícula que preserva la privacidad — no es un mapa a nivel de calle.',
+  'dataBasis.mapDescription': 'Ubicaciones exactas de los anuncios recopilados en los últimos 3 meses, mostradas en un mapa real de calles y coloreadas por barrio.',
   'dataBasis.searchConfig.heading': 'Parámetros de búsqueda',
   'dataBasis.searchConfig.radius': 'Radio de búsqueda',
   'dataBasis.searchConfig.sizeRange': 'Rango de tamaño',
@@ -291,9 +287,7 @@ const es = {
   'charts.price-per-area-histogram-sale.title': 'Distribución del precio de venta por m²',
   'charts.price-per-area-histogram-sale.xaxis': 'Precio de venta por m² (€)',
   'charts.price-per-area-histogram-sale.yaxis': 'Anuncios',
-  'charts.listing-location-grid-map.title': 'Ubicaciones de los anuncios recopilados (agregado, privacidad garantizada)',
-  'charts.listing-location-grid-map.xaxis': 'Longitud',
-  'charts.listing-location-grid-map.yaxis': 'Latitud',
+  'charts.listing-locations-map.title': 'Ubicaciones de los anuncios recopilados',
 };
 
 const ar = {
@@ -359,7 +353,7 @@ const ar = {
   'tabs.dataBasis': 'قاعدة البيانات',
 
   'dataBasis.intro': 'كيف تم جمع هذه البيانات: معايير البحث، حجم الجمع الأسبوعي، وتوزيعات الإعلانات الحالية في منطقة الجمع بأكملها.',
-  'dataBasis.mapDescription': 'توزيع إحداثيات مجمّع للإعلانات التي تم جمعها مؤخرًا، مقرب إلى شبكة تحافظ على الخصوصية — وليس خريطة على مستوى الشارع.',
+  'dataBasis.mapDescription': 'المواقع الدقيقة للإعلانات التي تم جمعها خلال آخر 3 أشهر، معروضة على خريطة شوارع حقيقية وملوّنة حسب الحي.',
   'dataBasis.searchConfig.heading': 'معايير البحث',
   'dataBasis.searchConfig.radius': 'نطاق البحث',
   'dataBasis.searchConfig.sizeRange': 'نطاق المساحة',
@@ -384,9 +378,7 @@ const ar = {
   'charts.price-per-area-histogram-sale.title': 'توزيع سعر البيع لكل م²',
   'charts.price-per-area-histogram-sale.xaxis': 'سعر البيع لكل م² (€)',
   'charts.price-per-area-histogram-sale.yaxis': 'الإعلانات',
-  'charts.listing-location-grid-map.title': 'مواقع الإعلانات المجمّعة (مجمّعة وآمنة للخصوصية)',
-  'charts.listing-location-grid-map.xaxis': 'خط الطول',
-  'charts.listing-location-grid-map.yaxis': 'خط العرض',
+  'charts.listing-locations-map.title': 'مواقع الإعلانات التي تم جمعها',
 };
 
 const tr = {
@@ -452,7 +444,7 @@ const tr = {
   'tabs.dataBasis': 'Veri Tabanı',
 
   'dataBasis.intro': 'Bu veriler nasıl toplandı: arama parametreleri, haftalık toplama hacmi ve toplama alanının tamamındaki güncel ilan dağılımları.',
-  'dataBasis.mapDescription': 'Son toplanan ilanların, gizliliği koruyan bir ızgaraya yuvarlanmış toplu koordinat dağılımı — sokak düzeyinde bir harita değildir.',
+  'dataBasis.mapDescription': 'Son 3 ayda toplanan ilanların, gerçek bir sokak haritasında gösterilen ve mahalleye göre renklendirilen tam konumları.',
   'dataBasis.searchConfig.heading': 'Arama parametreleri',
   'dataBasis.searchConfig.radius': 'Arama yarıçapı',
   'dataBasis.searchConfig.sizeRange': 'Büyüklük aralığı',
@@ -477,9 +469,7 @@ const tr = {
   'charts.price-per-area-histogram-sale.title': 'm² başına satış fiyatı dağılımı',
   'charts.price-per-area-histogram-sale.xaxis': 'm² başına satış fiyatı (€)',
   'charts.price-per-area-histogram-sale.yaxis': 'İlanlar',
-  'charts.listing-location-grid-map.title': 'Toplanan ilan konumları (toplu, gizliliği koruyan)',
-  'charts.listing-location-grid-map.xaxis': 'Boylam',
-  'charts.listing-location-grid-map.yaxis': 'Enlem',
+  'charts.listing-locations-map.title': 'Toplanan ilan konumları',
 };
 
 const TRANSLATIONS = { en, de, es, ar, tr };

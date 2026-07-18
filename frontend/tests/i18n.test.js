@@ -159,9 +159,7 @@ describe('locale completeness (all 5 locales must expose identical key sets)', (
       'charts.price-per-area-histogram-sale.title',
       'charts.price-per-area-histogram-sale.xaxis',
       'charts.price-per-area-histogram-sale.yaxis',
-      'charts.listing-location-grid-map.title',
-      'charts.listing-location-grid-map.xaxis',
-      'charts.listing-location-grid-map.yaxis',
+      'charts.listing-locations-map.title',
     ];
     const englishKeys = new Set(localeKeys('en'));
     for (const key of requiredNewKeys) {
@@ -169,18 +167,18 @@ describe('locale completeness (all 5 locales must expose identical key sets)', (
     }
   });
 
-  it('the map copy describes an aggregated coordinate distribution, not a street map, in every locale', () => {
+  it('the map copy describes a real street map with exact listing locations, in every locale', () => {
     // Locale-specific phrase fragments (not an English substring check).
-    const aggregatedPhrase = {
-      en: 'aggregat',
-      de: 'aggregiert',
-      es: 'agregad',
-      ar: 'مجمّع',
-      tr: 'toplu',
+    const realMapPhrase = {
+      en: 'street map',
+      de: 'straßenkarte',
+      es: 'mapa real de calles',
+      ar: 'خريطة شوارع',
+      tr: 'sokak haritasında',
     };
     for (const locale of SUPPORTED_LOCALES) {
       const value = t(locale, 'dataBasis.mapDescription');
-      expect(value.toLowerCase()).toContain(aggregatedPhrase[locale]);
+      expect(value.toLowerCase()).toContain(realMapPhrase[locale]);
     }
   });
 });

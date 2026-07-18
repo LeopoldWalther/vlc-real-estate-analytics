@@ -209,6 +209,7 @@ class TestGoldGoldenMaster:
             "rooms_distribution",
             "price_per_area_histogram",
             "listing_location_grid_last_3m",
+            "listing_locations_last_3m",
         }
         # Non-trivial content for every new dataset.
         assert payload["data_basis"]["search_config"]
@@ -217,10 +218,11 @@ class TestGoldGoldenMaster:
         assert payload["data_basis"]["rooms_distribution"]
         assert payload["data_basis"]["price_per_area_histogram"]
         # This fixture predates latitude/longitude columns (task 11.4 keeps
-        # the shared input fixture unchanged) — the geo grid is legitimately
-        # empty here. Its non-empty behaviour is covered directly by
-        # test_gold_aggregate.py / test_gold_aggregator.py.
+        # the shared input fixture unchanged) — the geo grid/points are
+        # legitimately empty here. Their non-empty behaviour is covered
+        # directly by test_gold_aggregate.py / test_gold_aggregator.py.
         assert payload["data_basis"]["listing_location_grid_last_3m"] == []
+        assert payload["data_basis"]["listing_locations_last_3m"] == []
 
 
 class TestGeneralRelevantCompatibility:
