@@ -35,6 +35,12 @@ variable "gold_prefix" {
   default     = "gold/aggregations"
 }
 
+variable "pipeline_health_prefix" {
+  type        = string
+  description = "S3 key prefix for pipeline health observer objects served via the data origin behaviour (review H2)."
+  default     = "gold/pipeline_health"
+}
+
 variable "data_cache_ttl_seconds" {
   type        = number
   description = "Maximum CloudFront cache TTL for the gold data origin (latest.json). Short so chart data refreshes within one cycle."

@@ -330,7 +330,7 @@ tasks:
       serves /gold/pipeline_health/* from the listings bucket with the short data cache policy, and
       the listings bucket OAC policy grants read access to both gold/aggregations/* and
       gold/pipeline_health/*.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: ["12.9"]
