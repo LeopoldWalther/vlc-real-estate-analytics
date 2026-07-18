@@ -30,7 +30,12 @@ import { MAX_SCOPE_SELECTION, extractDistricts, extractNeighborhoods, filterPopu
 import { t, isRtl, resolveLocale } from './src/i18n.js';
 import { resolveActiveTab, buildTabHash } from './src/tab_state.js';
 import { formatSearchConfigSummary } from './src/search_config.js';
-import { overallBadgeLabel, buildSubLightRows, unavailableMessage } from './src/pipeline_health.js';
+import { overallBadgeLabel, buildSubLightRows, unavailableMessage, thresholdRuleText } from './src/pipeline_health.js';
+import { buildDiagramModel, renderDiagramSvg } from './src/pipeline_health_diagram.js';
+import { pipelineExecutionSuccessChartRenderer } from './src/charts/pipeline_execution_success_chart.js';
+import { pipelineExecutionDurationChartRenderer } from './src/charts/pipeline_execution_duration_chart.js';
+import { pipelineApiQuotaChartRenderer } from './src/charts/pipeline_api_quota_chart.js';
+import { pipelineAwsCostChartRenderer } from './src/charts/pipeline_aws_cost_chart.js';
 
 const THEME_STORAGE_KEY = 'vlc-dashboard-theme';
 const LOCALE_STORAGE_KEY = 'vlc-dashboard-locale';
@@ -107,6 +112,18 @@ const containers = {
   'size-histogram':                  document.getElementById('size-histogram'),
   'rooms-distribution':              document.getElementById('rooms-distribution'),
 };
+
+// Pipeline Health detail chart renderers (FEATURE-013, task 13.12) — each
+// paired with the i18n title key its section heading already uses (task
+// 13.5) so titles stay in one place instead of duplicating English copy
+// inside the chart renderer modules themselves.
+const PIPELINE_HEALTH_CHARTS = [
+  { renderer: pipelineExecutionSuccessChartRenderer, titleKey: 'pipelineHealth.detail.executionSuccess.title', checkId: 'execution_success' },
+  { renderer: pipelineExecutionDurationChartRenderer, titleKey: 'pipelineHealth.detail.executionDuration.title', checkId: 'execution_duration' },
+  { renderer: pipelineApiQuotaChartRenderer, titleKey: 'pipelineHealth.detail.apiQuota.title', checkId: 'api_quota' },
+  { renderer: pipelineAwsCostChartRenderer, titleKey: 'pipelineHealth.detail.awsCost.title', checkId: 'aws_cost' },
+];
+
 
 const KPI_FORMATTERS = {
   'median-rent': (stats) => formatKpi(stats.medianRentEurPerM2Month, 'eur_per_m2_month'),
@@ -478,15 +495,33 @@ function resizeDataBasisCharts() {
 }
 
 /**
+ * Nudge each pipeline health detail chart to pick up its container's
+ * now-visible dimensions after the tab is re-activated (mirrors
+ * resizeDataBasisCharts() above).
+ */
+function resizePipelineHealthCharts() {
+  for (const { renderer } of PIPELINE_HEALTH_CHARTS) {
+    const container = document.getElementById(renderer.id);
+    if (container) globalThis.Plotly.Plots.resize(container);
+  }
+}
+
+/**
  * Render the Pipeline Health tab: fetch its independent JSON (lazily, once)
- * and render the overall badge + one row per sub-light check, or the
+ * and render the overall badge, one row per sub-light check, the Medallion
+ * diagram, the 4 detail charts and their threshold captions — or the
  * neutral "not yet available" message on any load failure.
  *
  * Never throws — PipelineHealthDataSource.loadOrUnavailable() already
  * resolves to null on any failure, and this function renders the
- * unavailable state for that case rather than propagating.
+ * unavailable state for that case rather than propagating. A null document
+ * never calls into Plotly at all (task 13.12 acceptance criterion).
+ *
+ * @param {{initial?: boolean}} [options] - initial=true uses Plotly.newPlot
+ *   for the detail charts (first render); false uses Plotly.react so a
+ *   locale/theme change re-renders efficiently without refetching.
  */
-async function renderPipelineHealthTab() {
+async function renderPipelineHealthTab({ initial = true } = {}) {
   if (pipelineHealthDocument === null) {
     pipelineHealthDocument = await pipelineHealthDataSource.loadOrUnavailable();
   }
@@ -494,6 +529,7 @@ async function renderPipelineHealthTab() {
   const overallEl = document.getElementById('pipeline-health-overall');
   const sublightsEl = document.getElementById('pipeline-health-sublights');
   const unavailableEl = document.getElementById('pipeline-health-unavailable');
+  const diagramEl = document.getElementById('pipeline-health-diagram');
   if (!overallEl || !sublightsEl || !unavailableEl) return;
 
   if (!pipelineHealthDocument) {
@@ -501,6 +537,11 @@ async function renderPipelineHealthTab() {
     sublightsEl.hidden = true;
     unavailableEl.hidden = false;
     unavailableEl.textContent = unavailableMessage(currentLocale);
+    if (diagramEl) diagramEl.innerHTML = '';
+    for (const { renderer } of PIPELINE_HEALTH_CHARTS) {
+      const container = document.getElementById(renderer.id);
+      if (container) container.innerHTML = '';
+    }
     return;
   }
 
@@ -531,6 +572,39 @@ async function renderPipelineHealthTab() {
 
     li.append(dot, label, summary);
     sublightsEl.appendChild(li);
+  }
+
+  // Medallion pipeline diagram (task 13.11/13.12) — pure model + SVG string,
+  // safe to inject even for a v1.0 fixture missing per-function detail
+  // (buildDiagramModel degrades missing functions to an 'unknown' status).
+  if (diagramEl) {
+    const model = buildDiagramModel(pipelineHealthDocument);
+    diagramEl.innerHTML = renderDiagramSvg(model, currentLocale);
+  }
+
+  // 4 detail charts + threshold captions (task 13.6/13.7-13.10/13.12) — the
+  // chart-data helpers are null-safe, so a v1.0 fixture (no recent_invocations/
+  // monthly_cost_by_service yet) simply renders an empty/neutral chart
+  // instead of throwing.
+  for (const { renderer, titleKey, checkId } of PIPELINE_HEALTH_CHARTS) {
+    const captionEl = document.getElementById(`pipeline-health-threshold-${checkId}`);
+    if (captionEl) captionEl.textContent = thresholdRuleText(checkId, currentLocale);
+
+    const container = document.getElementById(renderer.id);
+    if (!container) continue;
+
+    const fig = renderer.render(pipelineHealthDocument, currentContext);
+    fig.layout.title = { text: t(currentLocale, titleKey) };
+
+    try {
+      if (initial) {
+        await globalThis.Plotly.newPlot(container, fig.data, fig.layout, PLOTLY_CONFIG);
+      } else {
+        await globalThis.Plotly.react(container, fig.data, fig.layout, PLOTLY_CONFIG);
+      }
+    } catch (err) {
+      console.error(`[Dashboard] Failed to render pipeline health chart '${renderer.id}':`, err);
+    }
   }
 }
 
@@ -575,8 +649,12 @@ function activateTab(tabId, { updateHash = true } = {}) {
   // Pipeline Health is independent of cachedData/dataSource entirely (it
   // has its own DataSource) — it is loaded/rendered on its own first
   // activation, regardless of whether the main gold data has loaded yet.
-  if (tabId === 'pipeline-health' && !renderedTabs.has('pipeline-health')) {
-    renderPipelineHealthTab().then(() => renderedTabs.add('pipeline-health'));
+  if (tabId === 'pipeline-health') {
+    if (!renderedTabs.has('pipeline-health')) {
+      renderPipelineHealthTab({ initial: true }).then(() => renderedTabs.add('pipeline-health'));
+    } else {
+      resizePipelineHealthCharts();
+    }
   }
 }
 
@@ -610,6 +688,9 @@ function updateContext(partial) {
     if (renderedTabs.has('data-basis')) {
       renderDataBasisTab(currentContext, { initial: false });
     }
+  }
+  if (rerenderNeeded && renderedTabs.has('pipeline-health')) {
+    renderPipelineHealthTab({ initial: false });
   }
 }
 
@@ -658,7 +739,7 @@ function setLocale(nextLocale) {
     }
   }
   if (renderedTabs.has('pipeline-health')) {
-    renderPipelineHealthTab();
+    renderPipelineHealthTab({ initial: false });
   }
 }
 
