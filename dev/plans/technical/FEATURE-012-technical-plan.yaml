@@ -220,10 +220,7 @@ tasks:
   - id: "12.7"
     title: "Implement AWS cost health check"
     description: >
-      TDD, RED first. Implement AwsCostCheck using Cost Explorer GetCostAndUsage, grouped by service,
-      month-to-date, excluding documented domain/registrar service names. Ensure the Lambda factory
-      can construct the CE client with the correct global/US endpoint region.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2.5
     depends_on: ["12.1"]

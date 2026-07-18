@@ -626,13 +626,129 @@ class ApiQuotaCheck:
         return GREEN
 
 
+# ---------------------------------------------------------------------------
+# AWS cost health check (FEATURE-012, task 12.7)
+# ---------------------------------------------------------------------------
+#
+# AwsCostCheck answers "is the project's month-to-date AWS spend within
+# budget?" using Cost Explorer's GetCostAndUsage grouped by SERVICE.
+#
+# Review M1: Cost Explorer is effectively a global API and is commonly
+# reached via the us-east-1 endpoint, while this stack otherwise runs in
+# eu-central-1. AwsCostCheck itself only ever receives an
+# already-constructed ``cost_explorer_client`` (no client construction
+# inside the check) — the Lambda factory (task 12.8) is responsible for
+# constructing that client with ``boto3.client("ce", region_name="us-east-1")``.
+
+#: Rule 4 thresholds, in USD, month-to-date.
+AWS_COST_YELLOW_THRESHOLD_USD = 2.0
+AWS_COST_RED_THRESHOLD_USD = 5.0
+
+#: Cost Explorer has no native "exclude domain registration" filter,
+#: so a service-name exclusion list is the pragmatic choice (see design
+#: doc "Design & patterns" - domain/registrar charges are not reliably
+#: taggable resources).
+DEFAULT_EXCLUDED_SERVICES: "tuple[str, ...]" = (
+    "Amazon Registrar",
+    "Amazon Route 53 Domains",
+)
+
+
+class AwsCostCheck:
+    """
+    Strategy: Ampel rule 4 — project-wide, month-to-date AWS cost.
+
+    Adapter around Cost Explorer's ``GetCostAndUsage``, grouped by
+    ``SERVICE``, excluding domain/registrar service names that are not
+    part of the pipeline's own running cost (review M1/design doc).
+    """
+
+    key: str = "aws_cost"
+
+    def __init__(
+        self,
+        cost_explorer_client: object,
+        excluded_services: "tuple[str, ...]" = DEFAULT_EXCLUDED_SERVICES,
+        now_fn: Any = datetime.utcnow,
+    ) -> None:
+        """
+        Args:
+            cost_explorer_client: Already-constructed boto3 ``ce`` client
+                (injected; the Lambda factory in task 12.8 is responsible
+                for using the ``us-east-1`` endpoint — see module comment,
+                review M1). A ``botocore.stub.Stubber`` wraps it in tests.
+            excluded_services: Cost Explorer ``SERVICE`` dimension values
+                excluded from the threshold total (defaults to the
+                documented domain/registrar services).
+            now_fn: Injected clock returning the current UTC ``datetime``,
+                so the month-to-date window is deterministic in tests.
+        """
+        self._client = cost_explorer_client
+        self._excluded_services = tuple(excluded_services)
+        self._now = now_fn
+
+    def evaluate(self) -> HealthCheckResult:
+        """Evaluate rule 4 for the current month-to-date."""
+        now = self._now()
+        start = _month_start(now.year, now.month).date()
+        end = now.date()
+        # Cost Explorer requires Start < End; a same-day evaluation still
+        # needs a 1-day window.
+        if end <= start:
+            end = _add_months(_month_start(now.year, now.month), 1).date()
+
+        response = self._client.get_cost_and_usage(  # type: ignore[attr-defined]
+            TimePeriod={"Start": start.isoformat(), "End": end.isoformat()},
+            Granularity="MONTHLY",
+            Metrics=["UnblendedCost"],
+            GroupBy=[{"Type": "DIMENSION", "Key": "SERVICE"}],
+        )
+
+        included_total = 0.0
+        excluded_total = 0.0
+        excluded_service_names: List[str] = []
+
+        for result_by_time in response.get("ResultsByTime", []):
+            for group in result_by_time.get("Groups", []):
+                service_name = group["Keys"][0]
+                amount = float(group["Metrics"]["UnblendedCost"]["Amount"])
+                if service_name in self._excluded_services:
+                    excluded_total += amount
+                    if service_name not in excluded_service_names:
+                        excluded_service_names.append(service_name)
+                else:
+                    included_total += amount
+
+        if included_total >= AWS_COST_RED_THRESHOLD_USD:
+            status = RED
+        elif included_total >= AWS_COST_YELLOW_THRESHOLD_USD:
+            status = YELLOW
+        else:
+            status = GREEN
+
+        return HealthCheckResult(
+            status=status,
+            summary=f"AWS cost: {status} (${included_total:.2f} month-to-date, excluding domain/registrar)",
+            details={
+                "included_total_usd": round(included_total, 2),
+                "excluded_total_usd": round(excluded_total, 2),
+                "excluded_services": excluded_service_names,
+                "excluded_services_configured": list(self._excluded_services),
+            },
+        )
+
+
 __all__: List[str] = [
+    "AWS_COST_RED_THRESHOLD_USD",
+    "AWS_COST_YELLOW_THRESHOLD_USD",
     "API_QUOTA_EVALUATION_MONTHS",
     "API_QUOTA_MONTHLY_REQUESTS",
     "API_QUOTA_RED_THRESHOLD_REQUESTS",
     "API_QUOTA_YELLOW_THRESHOLD_REQUESTS",
     "CREDENTIAL_SET_LABELS",
     "ApiQuotaCheck",
+    "AwsCostCheck",
+    "DEFAULT_EXCLUDED_SERVICES",
     "DURATION_RED_THRESHOLD_SECONDS",
     "DURATION_YELLOW_THRESHOLD_SECONDS",
     "EXECUTION_HISTORY_WINDOW",
