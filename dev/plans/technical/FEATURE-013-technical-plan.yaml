@@ -341,7 +341,7 @@ tasks:
   - id: "13.13"
     title: "Style diagram, chart sections, captions, mobile and RTL layout"
     description: "Add CSS for detail sections using existing theme/status tokens and verify mobile/RTL behavior."
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2.5
     depends_on: ["13.12"]
