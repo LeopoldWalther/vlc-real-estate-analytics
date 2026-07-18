@@ -177,16 +177,16 @@ after gold's `12:45` run, so it can report on that week's just-completed pipelin
 ## Approach
 
 ### Phase 1 — Backend: API-quota instrumentation
-- [ ] `MetricsPublisher` Protocol + `CloudWatchMetricsPublisher` adapter + in-memory fake in
+- [x] `MetricsPublisher` Protocol + `CloudWatchMetricsPublisher` adapter + in-memory fake in
       `src/etl/common/metrics_publisher.py`, unit-tested like the existing `common/` adapters.
-- [ ] `BronzeCollector` gains an injected `MetricsPublisher`; emits one `put_metric` call per
+- [x] `BronzeCollector` gains an injected `MetricsPublisher`; emits one `put_metric` call per
       operation per run. Existing bronze tests updated to inject a fake publisher; behaviour
       (collected data) is unchanged.
-- [ ] Terraform: add `cloudwatch:PutMetricData` (namespace-scoped) to the bronze Lambda's IAM
+- [x] Terraform: add `cloudwatch:PutMetricData` (namespace-scoped) to the bronze Lambda's IAM
       policy.
 
 ### Phase 2 — Backend: health-check strategies (TDD, one branch per check)
-- [ ] `HealthCheckResult` dataclass + `HealthCheck` Protocol in
+- [x] `HealthCheckResult` dataclass + `HealthCheck` Protocol in
       `src/etl/pipeline_health/health_checks.py` (new package).
 - [ ] `ExecutionSuccessCheck` + `ExecutionDurationCheck` — shared Logs Insights query helper,
       unit-tested against a stubbed `logs` client (moto's Logs Insights support is limited/absent

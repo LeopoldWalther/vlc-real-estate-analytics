@@ -28,7 +28,7 @@ tasks:
       HealthCheckResult dataclass, HealthCheck Protocol, JSON schema constants, and a pure
       worst_status helper. Encode insufficient-history details without treating short history as
       an exception.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 1.5
     depends_on: []
@@ -60,7 +60,7 @@ tasks:
       TDD, RED first. Add a common MetricsPublisher Protocol, CloudWatchMetricsPublisher adapter,
       and in-memory fake. The adapter must support namespace, metric name, value, unit, dimensions,
       and an optional timestamp while keeping boto3 construction at the edge.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: []
@@ -92,7 +92,7 @@ tasks:
       datapoint per attempted Idealista search page request, including requests that later fail
       parsing or persistence. Preserve existing Lambda response fields and FEATURE-007 state-machine
       compatibility. Label LVW as sale and PMV as rent.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 3
     depends_on: ["12.2"]
@@ -128,7 +128,7 @@ tasks:
       Add least-privilege CloudWatch PutMetricData permission to the bronze Lambda role using a
       cloudwatch:namespace condition for VlcRealEstate/Idealista. Do not broaden S3, Secrets Manager,
       or SNS permissions.
-    status: "not_started"
+    status: "done"
     complexity: "small"
     estimated_hours: 1
     depends_on: ["12.3"]
