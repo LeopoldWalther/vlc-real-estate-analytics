@@ -37,7 +37,7 @@ repos:
     hooks:
       - id: mypy
         files: ^src/etl/
-        exclude: ^src/etl/(tests|data_collection/tests|data_processing/tests|common/tests)/
+        exclude: ^src/etl/(tests|data_collection/tests|data_processing/tests|common/tests|pipeline_health/tests)/
         additional_dependencies:
           - "boto3-stubs[lambda,s3,secretsmanager]"
           - types-requests
