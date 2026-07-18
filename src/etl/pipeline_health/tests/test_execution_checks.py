@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import sys
+from datetime import datetime
 from typing import Any, Dict, List
 
 import boto3
@@ -116,6 +117,33 @@ class TestExecutionSuccessCheck:
         for detail in result.details["functions"].values():
             assert detail.get("insufficient_history") is not True
 
+    def test_recent_invocations_are_newest_first_and_bounded_by_window(
+        self, logs_client: Any
+    ) -> None:
+        """FEATURE-013 task 13.2: per-invocation history is exposed in detail."""
+        stubber = Stubber(logs_client)
+        rows = [_report_row(1000, failed=True)] + [_report_row(2000) for _ in range(4)]
+        for _ in FUNCTION_NAMES:
+            _stub_query(stubber, rows)
+        stubber.activate()
+
+        check = ExecutionSuccessCheck(logs_client, FUNCTION_NAMES, window=5)
+        result = check.evaluate()
+
+        for detail in result.details["functions"].values():
+            recent = detail["recent_invocations"]
+            assert len(recent) <= 5
+            assert len(recent) == 5
+            # Newest-first: the first (failed) row stays first.
+            assert recent[0]["succeeded"] is False
+            assert recent[0]["duration_seconds"] == 1.0
+            assert recent[1]["succeeded"] is True
+            assert recent[1]["duration_seconds"] == 2.0
+            # ISO-8601 timestamp string for every entry.
+            for entry in recent:
+                assert "timestamp" in entry
+                datetime.fromisoformat(entry["timestamp"])
+
     def test_fewer_than_window_successful_invocations_is_green_with_flag(
         self, logs_client: Any
     ) -> None:
@@ -212,6 +240,27 @@ class TestExecutionDurationCheck:
         result = check.evaluate()
 
         assert result.status == GREEN
+
+    def test_recent_invocations_are_newest_first_with_iso_timestamps(
+        self, logs_client: Any
+    ) -> None:
+        """FEATURE-013 task 13.2: per-invocation history is exposed in detail."""
+        stubber = Stubber(logs_client)
+        rows = [_report_row(60_000)] * 4 + [_report_row(6 * 60_000)]
+        for _ in FUNCTION_NAMES:
+            _stub_query(stubber, rows)
+        stubber.activate()
+
+        check = ExecutionDurationCheck(logs_client, FUNCTION_NAMES, window=5)
+        result = check.evaluate()
+
+        for detail in result.details["functions"].values():
+            recent = detail["recent_invocations"]
+            assert len(recent) == 5
+            assert recent[0]["duration_seconds"] == 60.0
+            for entry in recent:
+                assert "timestamp" in entry
+                datetime.fromisoformat(entry["timestamp"])
 
     def test_duration_between_five_and_ten_minutes_is_yellow(
         self, logs_client: Any
