@@ -716,6 +716,80 @@ footer a {
   display: none;
 }
 
+/* Pipeline Health tab — Medallion diagram, detail chart sections, and
+   threshold captions (FEATURE-013, task 13.13). Uses the same
+   --color-status-*/--color-surface/--color-border tokens as the sublight
+   rows above so light/dark themes stay in sync automatically; the diagram
+   is an injected inline SVG (renderDiagramSvg() in
+   src/pipeline_health_diagram.js) that itself reads currentColor/status
+   tokens are not applied inline, so we scope fills via nested selectors on
+   the well-known node/edge classes the SVG renderer emits. */
+.pipeline-health-diagram {
+  margin: var(--space-5) 0;
+  overflow-x: auto;
+}
+
+.pipeline-health-diagram svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+/* renderDiagramSvg() (src/pipeline_health_diagram.js, task 13.11) already
+   colors each node's <rect> inline from a fixed green/yellow/red/grey
+   palette chosen to read clearly on both the light and dark --color-surface
+   backgrounds, so only the node/edge label text needs a CSS color here —
+   white reads clearly on all 4 saturated fill colors, in both themes. */
+.pipeline-health-diagram svg g text {
+  fill: #ffffff;
+  font-family: var(--font-sans);
+}
+
+.pipeline-health-diagram svg line {
+  stroke: var(--color-text-muted);
+}
+
+.pipeline-health-detail {
+  margin-top: var(--space-6);
+}
+
+.pipeline-health-detail h3 {
+  color: var(--color-text-heading);
+  font-size: var(--font-size-md, 1rem);
+  margin-bottom: var(--space-2);
+}
+
+.pipeline-health-threshold {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+  margin: 0 0 var(--space-3);
+  /* Long localized captions (e.g. German compound words, Arabic RTL text)
+     must wrap onto multiple lines rather than overflow or force a wide
+     container — overflow-wrap covers unbroken long words in either
+     direction. */
+  overflow-wrap: break-word;
+}
+
+.pipeline-health-chart {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  min-height: 360px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  width: 100%;
+}
+
+/* Common mobile widths (≤767px): match the Data Basis chart-container
+   breakpoint above so Plotly's legend/axis-label automargin has enough
+   room without the chart overflowing the viewport horizontally. */
+@media (max-width: 767px) {
+  .pipeline-health-chart {
+    min-height: 420px;
+  }
+}
+
 /* Data Basis tab — search-config definition list + intro/map copy. */
 .data-basis-intro,
 .data-basis-map-description {
