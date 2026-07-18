@@ -19,6 +19,7 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+from common.metrics_publisher import InMemoryMetricsPublisher  # noqa: E402
 from common.notifier import InMemoryNotifier  # noqa: E402
 from common.object_store import InMemoryObjectStore  # noqa: E402
 from common.secrets_provider import (  # noqa: E402
@@ -75,6 +76,7 @@ def make_collector(
     store: InMemoryObjectStore | None = None,
     notifier: InMemoryNotifier | None = None,
     secrets: Dict[str, Dict[str, str]] | None = None,
+    metrics_publisher: InMemoryMetricsPublisher | None = None,
 ) -> BronzeCollector:
     """Build a BronzeCollector wired entirely with fakes."""
     return BronzeCollector(
@@ -87,6 +89,7 @@ def make_collector(
         secret_name_lvw="secret-lvw",
         secret_name_pmv="secret-pmv",
         s3_prefix="bronze/idealista/",
+        metrics_publisher=metrics_publisher,
     )
 
 
@@ -267,6 +270,102 @@ class TestCollect:
 
         with pytest.raises(IdealistaAPIError, match="Failed to upload to S3"):
             collector.collect()
+
+
+# ---------------------------------------------------------------------------
+# API-quota attempt metrics (FEATURE-012, task 12.3, review finding H1)
+# ---------------------------------------------------------------------------
+
+
+class TestApiRequestMetrics:
+    """
+    Every ATTEMPTED Idealista search page request must emit a metric —
+    including pages that later fail to parse or persist (review H1: the
+    quota light must never show a false green from an uncounted failure).
+    """
+
+    def test_every_attempted_sale_page_emits_lvw_credential_set(self) -> None:
+        metrics = InMemoryMetricsPublisher()
+        api = FakeApiClient(total_pages=3)
+
+        make_collector(api_client=api, metrics_publisher=metrics).collect()
+
+        sale_points = [
+            d for d in metrics.datapoints if d.dimensions.get("Operation") == "sale"
+        ]
+        assert len(sale_points) == 3
+        assert all(d.dimensions["CredentialSet"] == "LVW" for d in sale_points)
+        assert all(d.namespace == "VlcRealEstate/Idealista" for d in sale_points)
+        assert all(d.metric_name == "ApiRequests" for d in sale_points)
+
+    def test_every_attempted_rent_page_emits_pmv_credential_set(self) -> None:
+        metrics = InMemoryMetricsPublisher()
+        api = FakeApiClient(total_pages=2)
+
+        make_collector(api_client=api, metrics_publisher=metrics).collect()
+
+        rent_points = [
+            d for d in metrics.datapoints if d.dimensions.get("Operation") == "rent"
+        ]
+        assert len(rent_points) == 2
+        assert all(d.dimensions["CredentialSet"] == "PMV" for d in rent_points)
+
+    def test_failed_page_after_a_successful_fetch_still_records_the_attempt(
+        self,
+    ) -> None:
+        """
+        The fetch for page 2 succeeds (an API request was attempted and
+        consumed quota) but persistence then fails. The attempt metric
+        must still be recorded — this is the exact scenario review H1
+        flagged as previously uncounted.
+        """
+        metrics = InMemoryMetricsPublisher()
+
+        class FailOnSecondPageStore(InMemoryObjectStore):
+            def __init__(self) -> None:
+                super().__init__()
+                self._calls = 0
+
+            def put_bytes(self, key: str, data: bytes, content_type: str) -> None:
+                self._calls += 1
+                if self._calls == 2:
+                    raise RuntimeError("disk full")
+                super().put_bytes(key, data, content_type)
+
+        api = FakeApiClient(total_pages=3)
+        collector = make_collector(
+            api_client=api, store=FailOnSecondPageStore(), metrics_publisher=metrics
+        )
+
+        with pytest.raises(IdealistaAPIError, match="Failed to upload to S3"):
+            collector.collect()
+
+        # Two sale-page requests were attempted (page 1 persisted, page 2
+        # failed to persist) before the run aborted — both must be counted.
+        sale_points = [
+            d for d in metrics.datapoints if d.dimensions.get("Operation") == "sale"
+        ]
+        assert len(sale_points) == 2
+
+    def test_invalid_json_page_still_records_the_attempt(self) -> None:
+        """A page whose body fails to parse was still an attempted request."""
+        metrics = InMemoryMetricsPublisher()
+        collector = make_collector(
+            api_client=BrokenJsonApiClient(), metrics_publisher=metrics
+        )
+
+        with pytest.raises(IdealistaAPIError, match="Invalid JSON response"):
+            collector.collect()
+
+        assert len(metrics.datapoints) == 1
+        assert metrics.datapoints[0].dimensions["CredentialSet"] == "LVW"
+
+    def test_metrics_publisher_is_optional_and_defaults_to_a_no_op(self) -> None:
+        """Omitting metrics_publisher must not break existing callers."""
+        result = make_collector(metrics_publisher=None).collect()
+
+        assert result.sale_pages == 1
+        assert result.rent_pages == 1
 
 
 # ---------------------------------------------------------------------------
