@@ -253,7 +253,7 @@ tasks:
       runs the four checks, composes overall_status with worst_status, and writes
       gold/pipeline_health/latest.json via ObjectStore. The handler is a thin Factory that injects
       boto3 clients at the edge, including explicit Cost Explorer client configuration.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 4
     depends_on: ["12.5", "12.6", "12.7"]

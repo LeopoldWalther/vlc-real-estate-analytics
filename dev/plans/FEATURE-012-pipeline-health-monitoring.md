@@ -194,15 +194,15 @@ after gold's `12:45` run, so it can report on that week's just-completed pipelin
 - [x] `ApiQuotaCheck` — unit-tested against a stubbed/moto `cloudwatch` client.
 - [x] `AwsCostCheck` — unit-tested against a stubbed `ce` client (moto's Cost Explorer support must
       be verified first — see Open Questions).
-- [ ] `_worst_of(statuses)` pure function + unit tests (all 3×3×3×3 combinations is overkill;
+- [x] `_worst_of(statuses)` pure function + unit tests (all 3×3×3×3 combinations is overkill;
       cover the 4 boundary cases: all green, one red, one yellow no red, mixed).
 
 ### Phase 3 — Backend: orchestrator + Lambda handler
-- [ ] `PipelineHealthAggregator` class (mirrors `GoldAggregator`), writes
+- [x] `PipelineHealthAggregator` class (mirrors `GoldAggregator`), writes
       `gold/pipeline_health/latest.json` via the existing `ObjectStore` Adapter.
-- [ ] Thin `pipeline_health_lambda.py` handler — Factory wire-up (boto3 clients → adapters →
+- [x] Thin `pipeline_health_lambda.py` handler — Factory wire-up (boto3 clients → adapters →
       aggregator), matching the `gold_aggregation_lambda.py` shape.
-- [ ] Integration test: moto-backed S3 write, stubbed CloudWatch/Cost Explorer clients, asserts
+- [x] Integration test: moto-backed S3 write, stubbed CloudWatch/Cost Explorer clients, asserts
       the full JSON shape and overall-status composition end to end.
 
 ### Phase 4 — Infrastructure
