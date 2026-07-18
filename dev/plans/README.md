@@ -16,6 +16,7 @@ small, version-controlled, independently testable tasks.
 | FEATURE-007 | Step Functions orchestration (bronze → silver → gold) | 🔵 | `feature/step-functions-orchestration` | 12–16 h | Medium | Unassigned |
 | FEATURE-008 | OOP/SOLID refactor of the ETL pipeline | 🟢 | `feature/oop-refactor-pipeline` | M (~1.5–2 d) | Medium | @implementer |
 | FEATURE-009 | Frontend redesign: clean, modern, mobile-first dashboard | 🟢 | `feature/frontend-redesign` | M–L (~16.5–18 h) | Medium | Unassigned |
+| FEATURE-010 | Rolling 3-month median for rent/sale KPI tiles | 🟡 | `feature/rolling-3m-median-kpis` | M (~1–1.5 d) | Medium | @implementer |
 
 **Status:** 🔵 planned · 🟡 in progress · 🟢 complete · 🔴 blocked
 
@@ -36,6 +37,9 @@ graph TD
     F008 -.-> F007
     F005 --> F009[FEATURE-009 Frontend redesign]
     F006 --> F009
+    F004 --> F010[FEATURE-010 Rolling 3-month median KPIs]
+    F008 --> F010
+    F009 --> F010
 ```
 
 ## Workflow at a glance

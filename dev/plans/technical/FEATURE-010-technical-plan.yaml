@@ -1,0 +1,375 @@
+metadata:
+  for_feature: "FEATURE-010"
+  title: "Rolling 3-month median for rent/sale KPI tiles"
+  created_by: "@reviewer"
+  created_at: "2026-07-17"
+  version: "1.0"
+  total_tasks: 10
+  estimated_hours: 12
+  risk_level: "medium"
+  critical_path: ["10.1", "10.2", "10.3", "10.4", "10.5", "10.7", "10.8", "10.9", "10.10"]
+  reviewed_plan: "dev/reviews/REVIEW-FEATURE-010.md"
+
+validation:
+  required_checks:
+    - "python-test"
+    - "node-test"
+    - "workflow-consistency"
+  min_coverage: ">80% on new or changed backend/frontend code"
+
+tasks:
+  - id: "10.1"
+    title: "Rolling-window date helper with robust snapshot_date normalization"
+    description: >
+      TDD, RED first. Add tests for a pure helper in gold_aggregate.py that computes the inclusive
+      start of a rolling calendar-month window relative to the maximum snapshot_date in a DataFrame.
+      The helper must handle ISO date strings, datetime.date, pandas Timestamp-compatible values,
+      empty input, and invalid/null dates deterministically. Use pandas-native pd.DateOffset(months=...)
+      and expose ROLLING_KPI_WINDOW_MONTHS = 3 as the single named constant.
+    status: "done"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: []
+    branch: "feature/rolling-3m-median-kpis/10.1-window-helper"
+    commit_message: "feat(gold): add rolling KPI window helper"
+    acceptance_criteria:
+      - "RED: tests in src/etl/data_processing/tests/test_gold_aggregate.py fail before the helper exists"
+      - "GIVEN snapshot_date values spanning more than 3 calendar months WHEN _rolling_window_start(df, 3) runs THEN it returns max(snapshot_date) - pd.DateOffset(months=3)"
+      - "GIVEN only 2 weeks of history WHEN the helper runs THEN downstream filtering with the returned start includes all available rows"
+      - "GIVEN an empty DataFrame or no parseable snapshot_date values WHEN the helper runs THEN it returns None and does not throw"
+      - "GIVEN ISO string, datetime.date, and pandas Timestamp inputs WHEN the helper runs THEN the same inclusive window start is produced"
+      - "ROLLING_KPI_WINDOW_MONTHS is defined once in gold_aggregate.py and no literal 3/90-day rolling window is duplicated in aggregation logic"
+    allowed_files:
+      - "src/etl/data_processing/gold_aggregate.py"
+      - "src/etl/data_processing/tests/test_gold_aggregate.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/data_processing/gold_aggregate.py"
+      - "src/etl/data_processing/tests/test_gold_aggregate.py"
+
+  - id: "10.2"
+    title: "Windowed neighborhood boxplot with min_count stability guard"
+    description: >
+      TDD, RED first. Add _boxplot_by_neighborhood_last_months or similarly named helper that filters
+      to snapshot_date >= rolling window start, applies min_count per (operation, district, neighborhood)
+      inside the window, and delegates to the shared all-time boxplot calculation so quantile math is not
+      duplicated. The existing _boxplot_by_neighborhood default behavior must remain all-time and
+      unfiltered by min_count unless explicitly requested by the new helper.
+    status: "done"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["10.1"]
+    branch: "feature/rolling-3m-median-kpis/10.2-windowed-boxplot"
+    commit_message: "feat(gold): compute 3-month neighborhood boxplot"
+    acceptance_criteria:
+      - "RED: tests prove an old outlier outside the rolling window does not affect min, max, q1, median, or q3"
+      - "GREEN: the windowed helper returns records with the same keys and sorted/grouped shape as boxplot_by_neighborhood"
+      - "GREEN: rows exactly on the boundary date are included (snapshot_date >= window_start)"
+      - "GREEN: groups with fewer than min_count listings inside the window are excluded"
+      - "GREEN: existing tests for _boxplot_by_neighborhood still pass unchanged, proving the all-time field semantics remain intact"
+      - "grep/code review confirms quantile/groupby math is shared or delegated, not copy-pasted into two divergent implementations"
+    allowed_files:
+      - "src/etl/data_processing/gold_aggregate.py"
+      - "src/etl/data_processing/tests/test_gold_aggregate.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/data_processing/gold_aggregate.py"
+      - "src/etl/data_processing/tests/test_gold_aggregate.py"
+
+  - id: "10.3"
+    title: "Emit additive last_3m boxplot from pure build_population_block"
+    description: >
+      Extend the pure gold JSON assembly path so both general and relevant population blocks include
+      boxplot_by_neighborhood_last_3m next to the existing boxplot_by_neighborhood. Keep the original
+      field's meaning and output unchanged. Tests must assert the new sibling field exists in both
+      populations and that the old field remains present.
+    status: "done"
+    complexity: "medium"
+    estimated_hours: 1
+    depends_on: ["10.2"]
+    branch: "feature/rolling-3m-median-kpis/10.3-population-block-field"
+    commit_message: "feat(gold): emit rolling median boxplot field"
+    acceptance_criteria:
+      - "RED: build_population_block/build_aggregation_json tests fail because boxplot_by_neighborhood_last_3m is absent"
+      - "GREEN: general.boxplot_by_neighborhood_last_3m and relevant.boxplot_by_neighborhood_last_3m exist"
+      - "GREEN: existing boxplot_by_neighborhood arrays still exist and keep the all-time values for the same fixture input"
+      - "GREEN: min_count is passed to the new rolling helper consistently with the output's top-level min_count"
+    allowed_files:
+      - "src/etl/data_processing/gold_aggregate.py"
+      - "src/etl/data_processing/tests/test_gold_aggregate.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/data_processing/gold_aggregate.py"
+      - "src/etl/data_processing/tests/test_gold_aggregate.py"
+
+  - id: "10.4"
+    title: "Register Strategy-based GoldAggregator dataset"
+    description: >
+      Add a NeighborhoodBoxplotLast3Months aggregation strategy in gold_aggregator.py that delegates
+      to the new pure helper and registers with key boxplot_by_neighborhood_last_3m in both general
+      and relevant default population strategy sequences. Keep GoldAggregator orchestration unchanged
+      and preserve constructor dependency injection for custom strategy lists.
+    status: "done"
+    complexity: "medium"
+    estimated_hours: 1
+    depends_on: ["10.2"]
+    branch: "feature/rolling-3m-median-kpis/10.4-aggregator-strategy"
+    commit_message: "feat(gold): register rolling boxplot aggregation strategy"
+    acceptance_criteria:
+      - "RED: test_gold_aggregator.py asserts default_populations() includes key == 'boxplot_by_neighborhood_last_3m' in both populations"
+      - "GREEN: NeighborhoodBoxplotLast3Months implements the existing Aggregation Protocol with key and compute"
+      - "GREEN: GoldAggregator._run_population requires no if/switch/isinstance branch for the new dataset"
+      - "GREEN: tests prove injected custom strategy lists still work without requiring the new strategy"
+    allowed_files:
+      - "src/etl/data_processing/gold_aggregator.py"
+      - "src/etl/data_processing/tests/test_gold_aggregator.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/data_processing/gold_aggregator.py"
+      - "src/etl/data_processing/tests/test_gold_aggregator.py"
+
+  - id: "10.5"
+    title: "Golden master and Lambda integration coverage"
+    description: >
+      Regenerate and review the gold golden-master fixture so latest.json includes the additive
+      last_3m field. Extend the moto-backed Lambda integration test to assert both population blocks
+      contain boxplot_by_neighborhood_last_3m in the written S3 object. This task closes the backend
+      data-contract loop.
+    status: "done"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: ["10.3", "10.4"]
+    branch: "feature/rolling-3m-median-kpis/10.5-golden-and-lambda-tests"
+    commit_message: "test(gold): update golden fixture for rolling boxplot field"
+    acceptance_criteria:
+      - "src/etl/data_processing/tests/fixtures/gold_latest_golden.json includes boxplot_by_neighborhood_last_3m in general and relevant blocks"
+      - "test_gold_golden_master.py passes byte-for-byte with the regenerated fixture"
+      - "test_gold_aggregation_lambda.py asserts the S3 latest.json payload contains the new field in both populations"
+      - "pytest for src/etl/data_processing/tests/test_gold_aggregate.py, test_gold_aggregator.py, test_gold_golden_master.py, and test_gold_aggregation_lambda.py passes"
+    allowed_files:
+      - "src/etl/data_processing/tests/fixtures/gold_latest_golden.json"
+      - "src/etl/data_processing/tests/test_gold_golden_master.py"
+      - "src/etl/data_processing/tests/test_gold_aggregation_lambda.py"
+      - "src/etl/data_processing/tests/test_gold_aggregator.py"
+      - "src/etl/data_processing/tests/test_gold_aggregate.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/data_processing/tests/fixtures/gold_latest_golden.json"
+      - "src/etl/data_processing/tests/test_gold_aggregation_lambda.py"
+
+  - id: "10.6"
+    title: "Document the additive rolling boxplot contract"
+    description: >
+      Update DATA_GOLD_LAYER.md to document boxplot_by_neighborhood_last_3m for both population
+      blocks, the ROLLING_KPI_WINDOW_MONTHS constant, inclusive boundary semantics, min_count behavior,
+      short-history fallback, and the fact that boxplot_by_neighborhood remains all-time.
+    status: "done"
+    complexity: "low"
+    estimated_hours: 1
+    depends_on: ["10.3"]
+    branch: "feature/rolling-3m-median-kpis/10.6-gold-docs"
+    commit_message: "docs(gold): document 3-month rolling KPI boxplot"
+    acceptance_criteria:
+      - "documentation/DATA_GOLD_LAYER.md lists boxplot_by_neighborhood_last_3m in the population-block schema"
+      - "Docs state the window is relative to max(snapshot_date), not wall-clock now"
+      - "Docs state the rolling window uses an inclusive lower boundary and applies min_count inside the window"
+      - "Docs explicitly distinguish all-time boxplot_by_neighborhood from rolling boxplot_by_neighborhood_last_3m"
+      - "Docs mention short history uses available rows after applying the same min_count rule"
+    allowed_files:
+      - "documentation/DATA_GOLD_LAYER.md"
+    forbidden_files:
+      - "frontend/**"
+      - "src/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: ["10.4"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "documentation/DATA_GOLD_LAYER.md"
+
+  - id: "10.7"
+    title: "Frontend summary fallback prefers rolling field"
+    description: >
+      Update summaryStats() so the median rent/sale KPI inputs prefer
+      boxplot_by_neighborhood_last_3m and fall back to boxplot_by_neighborhood when the new field is
+      absent. The all-time boxplot chart must keep consuming boxplot_by_neighborhood via its existing
+      renderer path.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: ["10.5"]
+    branch: "feature/rolling-3m-median-kpis/10.7-summary-fallback"
+    commit_message: "feat(frontend): use rolling boxplot for median KPIs"
+    acceptance_criteria:
+      - "RED: summary.test.js includes a case where both fields exist and the rolling field wins over an all-time outlier"
+      - "RED/GREEN: summary.test.js includes a case where the rolling field is absent and existing all-time behavior still works"
+      - "GREEN: medianRentEurPerM2Month and medianSaleEurPerM2 use the selected KPI boxplot input only"
+      - "GREEN: impliedGrossYieldPercent, totalListingCount, and lastUpdated behavior is unchanged"
+      - "GREEN: frontend/tests/boxplot_by_neighborhood.test.js passes unchanged, proving the all-time chart remains decoupled"
+    allowed_files:
+      - "frontend/src/summary.js"
+      - "frontend/tests/summary.test.js"
+    forbidden_files:
+      - "src/etl/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/summary.js"
+      - "frontend/tests/summary.test.js"
+
+  - id: "10.8"
+    title: "KPI labels disclose last-3-month basis in all locales"
+    description: >
+      Update the static KPI label text and i18n translations for English, German, Spanish, Arabic,
+      and Turkish so the rent and sale median KPI cards clearly state they are based on the last
+      3 months. Do not change all-time boxplot chart titles.
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 1
+    depends_on: ["10.7"]
+    branch: "feature/rolling-3m-median-kpis/10.8-kpi-labels"
+    commit_message: "feat(frontend): label median KPIs as 3-month values"
+    acceptance_criteria:
+      - "frontend/index.html fallback labels for data-kpi='median-rent' and data-kpi='median-sale' mention last 3 months"
+      - "frontend/src/i18n.js updates kpi.medianRent and kpi.medianSale in en, de, es, ar, and tr"
+      - "frontend/tests/i18n.test.js passes and asserts no missing translations for the changed keys if such coverage exists"
+      - "Chart title translations for boxplot-by-neighborhood remain all-time/distribution wording and are not changed to 3-month"
+    allowed_files:
+      - "frontend/index.html"
+      - "frontend/src/i18n.js"
+      - "frontend/tests/i18n.test.js"
+    forbidden_files:
+      - "src/etl/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/index.html"
+      - "frontend/src/i18n.js"
+
+  - id: "10.9"
+    title: "Backend PR verification and dev data validation"
+    description: >
+      Close the backend branch lineage with full validation, plan status sync for completed backend
+      tasks, and a dev-only deployment/real-data check of the refreshed latest.json. Do not promote
+      to prod until the new field has been verified against real dev S3 data.
+    status: "done"
+    complexity: "medium"
+    estimated_hours: 1
+    depends_on: ["10.5", "10.6"]
+    branch: "feature/rolling-3m-median-kpis/10.9-backend-verify-dev"
+    commit_message: "chore(gold): verify rolling median backend in dev"
+    acceptance_criteria:
+      - "pytest src/etl/data_processing/tests passes for the touched gold-layer tests"
+      - "python dev/tools/validate_workflow.py exits 0"
+      - "dev latest.json is refreshed by the gold Lambda and contains general/relevant.boxplot_by_neighborhood_last_3m"
+      - "Manual inspection records counts and medians look plausible versus all-time boxplot_by_neighborhood"
+      - "No prod deployment is performed in this task"
+    allowed_files:
+      - "dev/plans/FEATURE-010-rolling-3month-median-kpis.md"
+      - "dev/plans/README.md"
+      - "dev/plans/technical/FEATURE-010-technical-plan.yaml"
+    forbidden_files:
+      - "frontend/**"
+      - "src/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "dev/plans/FEATURE-010-rolling-3month-median-kpis.md"
+      - "dev/plans/README.md"
+      - "dev/plans/technical/FEATURE-010-technical-plan.yaml"
+
+  - id: "10.10"
+    title: "Frontend verification, prod promotion, and feature closeout"
+    description: >
+      After the backend field exists in dev, verify frontend fallback/labels with the updated fixture
+      or a dev latest.json, run the frontend suite, promote the gold change to prod following the
+      existing deployment workflow, and close FEATURE-010 status once prod data and dashboard KPI labels
+      are verified.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: ["10.8", "10.9"]
+    branch: "feature/rolling-3m-median-kpis/10.10-frontend-prod-closeout"
+    commit_message: "chore(feature-010): verify frontend and close rolling median KPIs"
+    acceptance_criteria:
+      - "npx vitest run passes from frontend/"
+      - "node --check frontend/src/summary.js and node --check frontend/src/i18n.js pass"
+      - "Dev dashboard shows median KPI labels indicating last 3 months and plausible rolling values"
+      - "Prod gold Lambda is deployed/promoted only after dev validation succeeds"
+      - "Prod latest.json contains boxplot_by_neighborhood_last_3m in both populations"
+      - "dev/plans/FEATURE-010-rolling-3month-median-kpis.md and dev/plans/README.md status reflect completion"
+      - "python dev/tools/validate_workflow.py exits 0"
+    allowed_files:
+      - "dev/plans/FEATURE-010-rolling-3month-median-kpis.md"
+      - "dev/plans/README.md"
+      - "dev/plans/technical/FEATURE-010-technical-plan.yaml"
+    forbidden_files:
+      - "frontend/src/**"
+      - "src/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "dev/plans/FEATURE-010-rolling-3month-median-kpis.md"
+      - "dev/plans/README.md"
+      - "dev/plans/technical/FEATURE-010-technical-plan.yaml"
+
+git_workflow:
+  branch_root: "feature/rolling-3m-median-kpis"
+  strategy: >
+    Use two PRs under the same feature root. PR 1 is backend/docs: tasks 10.1 through 10.6,
+    followed by 10.9 for dev verification. PR 2 is frontend/closeout: tasks 10.7 and 10.8 after
+    the dev gold JSON contains the new field, followed by 10.10 for final frontend verification and
+    prod promotion. Keep one branch per task using the branch names above, merge small tested slices,
+    and never change infrastructure or CI for this feature unless a deployment blocker is explicitly
+    discovered and approved.
+  pr_per_phase: true
+
+notes:
+  - "Review findings folded in: H1 (summary.js must prefer last_3m but fall back to all-time), H2 (apply min_count to rolling boxplot groups), M1 (KPI labels disclose last-3-month basis), M2 (robust pandas date normalization), M3 (do not duplicate quantile math)."
+  - "The existing boxplot_by_neighborhood field remains an all-time dataset for the box-and-whisker chart; do not repurpose it."
+  - "The rolling window is relative to max(snapshot_date) in the scoped/deduped data, not wall-clock now."
+  - "No new AWS resources are introduced; incremental monthly cloud cost is effectively $0."
+  - "If real dev data has no recent rows after min_count filtering, record that finding explicitly before prod promotion rather than weakening the tests silently."
