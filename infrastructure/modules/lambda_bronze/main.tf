@@ -162,6 +162,33 @@ resource "aws_iam_role_policy" "lambda_sns" {
   })
 }
 
+# Policy for CloudWatch API-quota metric publishing (FEATURE-012, task 12.4).
+# Least privilege: PutMetricData does not support resource-level ARN
+# scoping, so the namespace condition key is the narrowest available
+# restriction — the role may only publish datapoints into the
+# VlcRealEstate/Idealista namespace used by the bronze collector's quota
+# instrumentation (review finding H1).
+resource "aws_iam_role_policy" "lambda_metrics" {
+  name = "${var.environment}-idealista-collector-metrics"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "cloudwatch:PutMetricData"
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "cloudwatch:namespace" = "VlcRealEstate/Idealista"
+          }
+        }
+      }
+    ]
+  })
+}
+
 # Lambda Layer for requests library
 resource "aws_lambda_layer_version" "requests" {
   filename            = "${path.module}/../../../src/etl/lambda_layers/requests/requests.zip"
