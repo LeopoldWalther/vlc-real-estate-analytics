@@ -188,7 +188,7 @@ after gold's `12:45` run, so it can report on that week's just-completed pipelin
 ### Phase 2 — Backend: health-check strategies (TDD, one branch per check)
 - [x] `HealthCheckResult` dataclass + `HealthCheck` Protocol in
       `src/etl/pipeline_health/health_checks.py` (new package).
-- [ ] `ExecutionSuccessCheck` + `ExecutionDurationCheck` — shared Logs Insights query helper,
+- [x] `ExecutionSuccessCheck` + `ExecutionDurationCheck` — shared Logs Insights query helper,
       unit-tested against a stubbed `logs` client (moto's Logs Insights support is limited/absent
       in some versions — see Open Questions; fall back to `botocore.stub.Stubber` if needed).
 - [ ] `ApiQuotaCheck` — unit-tested against a stubbed/moto `cloudwatch` client.

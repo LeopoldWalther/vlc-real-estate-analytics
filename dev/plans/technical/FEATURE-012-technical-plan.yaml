@@ -157,7 +157,7 @@ tasks:
       and ExecutionDurationCheck. Use stubbed clients rather than relying on moto support. Cover
       query success, query failure, timeout, 0 invocations, short history, and the green/yellow/red
       boundary cases.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 4
     depends_on: ["12.1"]
