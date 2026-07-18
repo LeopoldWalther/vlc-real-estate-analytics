@@ -69,12 +69,12 @@ const ALL_RENDERERS = [...GENERAL_ONLY_RENDERERS, ...TOGGLE_RENDERERS];
 // neighbourhood/population filters that affect Trend Analysis charts never
 // touch these.
 const DATA_BASIS_RENDERERS = [
+  listingLocationsMapRenderer,
   weeklyListingVolumeRenderer,
+  priceHistogramSaleRenderer,
+  priceHistogramRentRenderer,
   sizeHistogramRenderer,
   roomsDistributionRenderer,
-  priceHistogramRentRenderer,
-  priceHistogramSaleRenderer,
-  listingLocationsMapRenderer,
 ];
 
 // Renderer ids whose x-axis is a plain date timeline — they share the
@@ -98,12 +98,12 @@ const containers = {
   'rent-vs-sale-ratio-time-series':  document.getElementById('rent-vs-sale-ratio-time-series'),
   'boxplot-by-neighborhood-rent':    document.getElementById('boxplot-by-neighborhood-rent'),
   'boxplot-by-neighborhood-sale':    document.getElementById('boxplot-by-neighborhood-sale'),
+  'listing-locations-map':          document.getElementById('listing-locations-map'),
   'weekly-listing-volume':           document.getElementById('weekly-listing-volume'),
+  'price-per-area-histogram-sale':   document.getElementById('price-per-area-histogram-sale'),
+  'price-per-area-histogram-rent':   document.getElementById('price-per-area-histogram-rent'),
   'size-histogram':                  document.getElementById('size-histogram'),
   'rooms-distribution':              document.getElementById('rooms-distribution'),
-  'price-per-area-histogram-rent':   document.getElementById('price-per-area-histogram-rent'),
-  'price-per-area-histogram-sale':   document.getElementById('price-per-area-histogram-sale'),
-  'listing-locations-map':          document.getElementById('listing-locations-map'),
 };
 
 const KPI_FORMATTERS = {

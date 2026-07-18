@@ -76,7 +76,7 @@ class SearchConfig:
         self.min_size = str(params["min_size_m2"])
         self.max_size = str(params["max_size_m2"])
         self.elevator = str(params["elevator"]).lower()
-        self.air_conditioning = "true"
+        self.air_conditioning = str(params["air_conditioning"]).lower()
         self.preservation = params["preservation"]
         self.language = params["language"]
 

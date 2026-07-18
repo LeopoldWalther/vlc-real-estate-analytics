@@ -141,6 +141,7 @@ describe('locale completeness (all 5 locales must expose identical key sets)', (
       'dataBasis.searchConfig.sizeRange',
       'dataBasis.searchConfig.propertyType',
       'dataBasis.searchConfig.elevator',
+      'dataBasis.searchConfig.airConditioning',
       'dataBasis.searchConfig.preservation',
       'dataBasis.searchConfig.center',
       'dataBasis.searchConfig.yes',

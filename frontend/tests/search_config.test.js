@@ -8,6 +8,7 @@ const fullConfig = {
   min_size_m2: 100,
   max_size_m2: 160,
   elevator: true,
+  air_conditioning: true,
   preservation: 'good',
   property_type: 'homes',
   sale_credential_label: 'LVW',
@@ -52,6 +53,15 @@ describe('formatSearchConfigSummary', () => {
     const elevatorEn = rowsEn.find((r) => r.key === 'elevator');
     const elevatorDe = rowsDe.find((r) => r.key === 'elevator');
     expect(elevatorEn.value).not.toBe(elevatorDe.value);
+  });
+
+  it('includes an airConditioning row translated into a yes/no label per locale', () => {
+    const rowsEn = formatSearchConfigSummary(fullConfig, 'en');
+    const rowsDe = formatSearchConfigSummary(fullConfig, 'de');
+    const acEn = rowsEn.find((r) => r.key === 'airConditioning');
+    const acDe = rowsDe.find((r) => r.key === 'airConditioning');
+    expect(acEn).toBeDefined();
+    expect(acEn.value).not.toBe(acDe.value);
   });
 
   it('gracefully skips missing fields instead of emitting broken rows', () => {

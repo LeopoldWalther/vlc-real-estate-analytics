@@ -37,6 +37,13 @@ IDEALISTA_SEARCH_PARAMS: Dict[str, Any] = {
     "max_size_m2": 160,
     "elevator": True,
     "preservation": "good",
+    # Intended search filter (matches the hardcoded 'true' already carried by
+    # SearchConfig.air_conditioning). NOTE: this is NOT currently sent as an
+    # Idealista API query parameter — the querystring line is deliberately
+    # commented out in bronze_collector.SearchConfig.build_url (operator
+    # decision 2026-07-18: leave the live collection behaviour unchanged for
+    # now). Shown here/on the dashboard as the documented intended filter.
+    "air_conditioning": True,
     # Result paging/ordering (collector-only, but kept here to avoid a
     # second source of truth for the request shape).
     "max_items": 50,
