@@ -182,6 +182,44 @@ describe('locale completeness (all 5 locales must expose identical key sets)', (
       expect(value.toLowerCase()).toContain(realMapPhrase[locale]);
     }
   });
+  it('includes the new pipeline-health detail keys introduced by FEATURE-013', () => {
+    const requiredNewKeys = [
+      'pipelineHealth.status.unknown',
+      'pipelineHealth.detail.executionSuccess.title',
+      'pipelineHealth.detail.executionDuration.title',
+      'pipelineHealth.detail.apiQuota.title',
+      'pipelineHealth.detail.awsCost.title',
+      'pipelineHealth.threshold.executionSuccess',
+      'pipelineHealth.threshold.executionDuration',
+      'pipelineHealth.threshold.apiQuota',
+      'pipelineHealth.threshold.awsCost',
+      'pipelineHealth.diagram.title',
+      'pipelineHealth.diagram.bronze',
+      'pipelineHealth.diagram.silver',
+      'pipelineHealth.diagram.gold',
+      'pipelineHealth.diagram.observer',
+    ];
+    const englishKeys = new Set(localeKeys('en'));
+    for (const key of requiredNewKeys) {
+      expect(englishKeys.has(key), `en is missing required new key: ${key}`).toBe(true);
+    }
+    for (const locale of SUPPORTED_LOCALES) {
+      for (const key of requiredNewKeys) {
+        const value = t(locale, key);
+        expect(value, `${locale}.${key} should not silently fall back to the raw key`).not.toBe(key);
+      }
+    }
+  });
+
+  it('threshold captions match the backend Ampel rule constants (English)', () => {
+    expect(t('en', 'pipelineHealth.threshold.executionDuration')).toMatch(/5 minutes/);
+    expect(t('en', 'pipelineHealth.threshold.executionDuration')).toMatch(/10 minutes/);
+    expect(t('en', 'pipelineHealth.threshold.apiQuota')).toMatch(/80/);
+    expect(t('en', 'pipelineHealth.threshold.apiQuota')).toMatch(/95/);
+    expect(t('en', 'pipelineHealth.threshold.apiQuota')).toMatch(/100/);
+    expect(t('en', 'pipelineHealth.threshold.awsCost')).toMatch(/\$2/);
+    expect(t('en', 'pipelineHealth.threshold.awsCost')).toMatch(/\$5/);
+  });
 });
 
 describe('resolveLocale', () => {
