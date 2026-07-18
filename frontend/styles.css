@@ -21,6 +21,14 @@
   --color-skeleton-base: #e9ecef;
   --color-skeleton-highlight: #f5f6f7;
 
+  /* Pipeline Health traffic-light tokens (FEATURE-012, task 12.11) */
+  --color-status-green: #2f9e44;
+  --color-status-green-bg: #ebfbee;
+  --color-status-yellow: #e8a400;
+  --color-status-yellow-bg: #fff9db;
+  --color-status-red: #e03131;
+  --color-status-red-bg: #fff5f5;
+
   /* Spacing */
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -59,6 +67,14 @@
   --color-error-text: #f8b4b0;
   --color-skeleton-base: #2a2f34;
   --color-skeleton-highlight: #343a40;
+
+  /* Pipeline Health traffic-light tokens (FEATURE-012, task 12.11) */
+  --color-status-green: #40c057;
+  --color-status-green-bg: #1a2e20;
+  --color-status-yellow: #fab005;
+  --color-status-yellow-bg: #332b0f;
+  --color-status-red: #ff6b6b;
+  --color-status-red-bg: #3a1f1f;
 }
 
 /* System dark preference — only applies when there is no explicit override.
@@ -80,6 +96,14 @@
     --color-error-text: #f8b4b0;
     --color-skeleton-base: #2a2f34;
     --color-skeleton-highlight: #343a40;
+
+    /* Pipeline Health traffic-light tokens (FEATURE-012, task 12.11) */
+    --color-status-green: #40c057;
+    --color-status-green-bg: #1a2e20;
+    --color-status-yellow: #fab005;
+    --color-status-yellow-bg: #332b0f;
+    --color-status-red: #ff6b6b;
+    --color-status-red-bg: #3a1f1f;
   }
 }
 
@@ -605,6 +629,91 @@ footer a {
   .tab-bar {
     overflow-x: visible;
   }
+}
+
+/* Pipeline Health tab — overall badge + one row per sub-light check
+   (FEATURE-012, task 12.11). Colors reference the --color-status-* tokens
+   declared in :root/[data-theme="dark"] above so both palettes stay in
+   sync automatically. */
+.pipeline-health-overall {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--space-5);
+}
+
+.pipeline-health-overall[data-status="green"] {
+  background: var(--color-status-green-bg);
+  color: var(--color-status-green);
+}
+
+.pipeline-health-overall[data-status="yellow"] {
+  background: var(--color-status-yellow-bg);
+  color: var(--color-status-yellow);
+}
+
+.pipeline-health-overall[data-status="red"] {
+  background: var(--color-status-red-bg);
+  color: var(--color-status-red);
+}
+
+.pipeline-health-sublights {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.pipeline-health-sublight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+
+.pipeline-health-sublight-dot {
+  flex: 0 0 auto;
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+}
+
+.pipeline-health-sublight[data-status="green"] .pipeline-health-sublight-dot {
+  background: var(--color-status-green);
+}
+
+.pipeline-health-sublight[data-status="yellow"] .pipeline-health-sublight-dot {
+  background: var(--color-status-yellow);
+}
+
+.pipeline-health-sublight[data-status="red"] .pipeline-health-sublight-dot {
+  background: var(--color-status-red);
+}
+
+.pipeline-health-sublight-label {
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text);
+}
+
+.pipeline-health-sublight-summary {
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.pipeline-health-unavailable {
+  color: var(--color-text-muted);
+}
+
+.pipeline-health-unavailable[hidden] {
+  display: none;
 }
 
 /* Data Basis tab — search-config definition list + intro/map copy. */

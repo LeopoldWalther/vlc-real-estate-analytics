@@ -32,7 +32,8 @@
   -->
   <script>
     window.CONFIG = {
-      DATA_URL: "/gold/aggregations/latest.json"
+      DATA_URL: "/gold/aggregations/latest.json",
+      PIPELINE_HEALTH_URL: "/gold/pipeline_health/latest.json"
     };
   </script>
 </head>
@@ -97,6 +98,17 @@
       data-tab-id="data-basis"
       data-i18n="tabs.dataBasis"
     >Data Basis</button>
+    <button
+      type="button"
+      role="tab"
+      id="tab-pipeline-health"
+      class="tab-button"
+      aria-controls="panel-pipeline-health"
+      aria-selected="false"
+      tabindex="-1"
+      data-tab-id="pipeline-health"
+      data-i18n="tabs.pipelineHealth"
+    >Pipeline Health</button>
   </nav>
 
   <main>
@@ -275,6 +287,25 @@
       <p class="data-basis-map-description" data-i18n="dataBasis.mapDescription">
         Exact locations of listings collected in the last 3 months, shown on a real street map and coloured by neighbourhood.
       </p>
+    </section>
+
+    <!-- Pipeline Health tabpanel — hidden until activated. Lazily populated by
+         app.js (task 12.11) from an independent PipelineHealthDataSource, via
+         the pure formatting helpers in src/pipeline_health.js. Renders one
+         overall status badge + one row per named sub-light check; on any
+         load failure, shows the neutral "not yet available" message instead
+         of throwing. -->
+    <section
+      id="panel-pipeline-health"
+      class="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-pipeline-health"
+      tabindex="0"
+      hidden
+    >
+      <div id="pipeline-health-overall" class="pipeline-health-overall" role="status"></div>
+      <ul id="pipeline-health-sublights" class="pipeline-health-sublights"></ul>
+      <p id="pipeline-health-unavailable" class="pipeline-health-unavailable" hidden></p>
     </section>
   </main>
 
