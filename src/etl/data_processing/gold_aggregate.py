@@ -604,7 +604,7 @@ def search_config_summary() -> Dict[str, Any]:
 
     Returns:
         Dict with keys: center_lat, center_lon, distance_m, min_size_m2,
-        max_size_m2, elevator, preservation, property_type,
+        max_size_m2, elevator, air_conditioning, preservation, property_type,
         sale_credential_label, rent_credential_label.
     """
     params = IDEALISTA_SEARCH_PARAMS
@@ -615,6 +615,7 @@ def search_config_summary() -> Dict[str, Any]:
         "min_size_m2": params["min_size_m2"],
         "max_size_m2": params["max_size_m2"],
         "elevator": params["elevator"],
+        "air_conditioning": params["air_conditioning"],
         "preservation": params["preservation"],
         "property_type": params["property_type"],
         "sale_credential_label": params["sale_credential_label"],

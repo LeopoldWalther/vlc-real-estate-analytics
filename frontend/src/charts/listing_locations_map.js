@@ -73,7 +73,7 @@ function toTraces(rows) {
     lon: records.map((r) => r.longitude),
     lat: records.map((r) => r.latitude),
     text: records.map((r) => `${r.neighborhood} (${r.operation})`),
-    marker: { size: 8 },
+    marker: { size: 5 },
   }));
 }
 
@@ -98,7 +98,10 @@ export const listingLocationsMapRenderer = {
       map: {
         style: 'open-street-map',
         center,
-        zoom: 13,
+        // Slightly zoomed out from the 1500 m search radius so surrounding
+        // districts/streets remain visible for context (matches reference
+        // design — the radius circle should not fill the entire viewport).
+        zoom: 12.3,
       },
     };
 

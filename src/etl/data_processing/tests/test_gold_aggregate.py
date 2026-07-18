@@ -858,6 +858,7 @@ class TestSearchConfigSummary:
             "min_size_m2",
             "max_size_m2",
             "elevator",
+            "air_conditioning",
             "preservation",
             "property_type",
             "sale_credential_label",

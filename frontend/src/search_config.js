@@ -23,6 +23,7 @@ import { t } from './i18n.js';
  *   min_size_m2?: number,
  *   max_size_m2?: number,
  *   elevator?: boolean,
+ *   air_conditioning?: boolean,
  *   preservation?: string,
  *   property_type?: string,
  *   sale_credential_label?: string,
@@ -65,6 +66,16 @@ export function formatSearchConfigSummary(searchConfig, locale = 'en') {
       key: 'elevator',
       label: t(locale, 'dataBasis.searchConfig.elevator'),
       value: searchConfig.elevator
+        ? t(locale, 'dataBasis.searchConfig.yes')
+        : t(locale, 'dataBasis.searchConfig.no'),
+    });
+  }
+
+  if (searchConfig.air_conditioning != null) {
+    rows.push({
+      key: 'airConditioning',
+      label: t(locale, 'dataBasis.searchConfig.airConditioning'),
+      value: searchConfig.air_conditioning
         ? t(locale, 'dataBasis.searchConfig.yes')
         : t(locale, 'dataBasis.searchConfig.no'),
     });

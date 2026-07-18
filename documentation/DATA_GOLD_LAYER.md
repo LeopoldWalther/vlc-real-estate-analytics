@@ -166,12 +166,19 @@ the dashboard never depends on collector-internal field names:
   "min_size_m2": 100,
   "max_size_m2": 160,
   "elevator": true,
+  "air_conditioning": true,
   "preservation": "good",
   "property_type": "homes",
   "sale_credential_label": "LVW",
   "rent_credential_label": "PMV"
 }
 ```
+
+> **Note:** `air_conditioning` documents the *intended* search filter (matches the historical
+> hardcoded value in `bronze_collector.SearchConfig`). It is **not currently sent** as an Idealista
+> API query parameter — that line is deliberately commented out in `SearchConfig.build_url()`
+> (operator decision 2026-07-18: leave live collection behaviour unchanged). Listings both with and
+> without air conditioning are collected today.
 
 ### Privacy-Safe Location Grid
 
@@ -245,6 +252,7 @@ Example record:
       "min_size_m2": 100,
       "max_size_m2": 160,
       "elevator": true,
+      "air_conditioning": true,
       "preservation": "good",
       "property_type": "homes",
       "sale_credential_label": "LVW",
