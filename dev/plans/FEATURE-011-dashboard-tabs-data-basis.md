@@ -191,10 +191,10 @@ basemap, no tiles, no external call:
       touch targets per existing convention), dark/light tokens reused from FEATURE-009.
 
 ### Phase 4 — Frontend: Data Basis tab charts
-- [ ] 5 new chart renderer modules (listed above) + Vitest unit tests per renderer (layout from
+- [x] 5 new chart renderer modules (listed above) + Vitest unit tests per renderer (layout from
       `buildLayout()`, trace shape from fixture data), mirroring `price_time_series.test.js`.
 - [ ] `frontend/src/search_config.js` + tests — pure formatting of `data_basis.search_config`.
-- [ ] Extend `frontend/tests/fixtures/latest.sample.json` with a `data_basis` block.
+- [x] Extend `frontend/tests/fixtures/latest.sample.json` with a `data_basis` block.
 - [ ] Wire the 6 new sections (5 charts + search-config panel) into `panel-data-basis`,
       lazy-rendered on first tab activation.
 

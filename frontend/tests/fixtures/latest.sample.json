@@ -147,5 +147,49 @@
         "max": 2950.0
       }
     ]
+  },
+  "data_basis": {
+    "search_config": [
+      {
+        "center_lat": 39.4693441,
+        "center_lon": -0.379561,
+        "distance_m": 1500,
+        "min_size_m2": 100,
+        "max_size_m2": 160,
+        "elevator": true,
+        "preservation": "good",
+        "property_type": "homes",
+        "sale_credential_label": "LVW",
+        "rent_credential_label": "PMV"
+      }
+    ],
+    "weekly_listing_volume": [
+      { "operation": "sale", "snapshot_date": "2026-01-05", "count_listings": 42 },
+      { "operation": "sale", "snapshot_date": "2026-01-12", "count_listings": 45 },
+      { "operation": "rent", "snapshot_date": "2026-01-05", "count_listings": 30 },
+      { "operation": "rent", "snapshot_date": "2026-01-12", "count_listings": 33 }
+    ],
+    "size_histogram_10sqm": [
+      { "operation": "sale", "bin_start_m2": 100, "bin_end_m2": 110, "count_listings": 15 },
+      { "operation": "sale", "bin_start_m2": 110, "bin_end_m2": 120, "count_listings": 20 },
+      { "operation": "rent", "bin_start_m2": 100, "bin_end_m2": 110, "count_listings": 10 },
+      { "operation": "rent", "bin_start_m2": 110, "bin_end_m2": 120, "count_listings": 12 }
+    ],
+    "rooms_distribution": [
+      { "operation": "sale", "rooms": 2, "count_listings": 20 },
+      { "operation": "sale", "rooms": 3, "count_listings": 25 },
+      { "operation": "rent", "rooms": 2, "count_listings": 15 },
+      { "operation": "rent", "rooms": 3, "count_listings": 18 }
+    ],
+    "price_per_area_histogram": [
+      { "operation": "sale", "bin_start_price_m2": 2250.0, "bin_end_price_m2": 2500.0, "count_listings": 9 },
+      { "operation": "sale", "bin_start_price_m2": 2500.0, "bin_end_price_m2": 2750.0, "count_listings": 14 },
+      { "operation": "rent", "bin_start_price_m2": 9.0, "bin_end_price_m2": 10.0, "count_listings": 5 },
+      { "operation": "rent", "bin_start_price_m2": 10.0, "bin_end_price_m2": 11.0, "count_listings": 7 }
+    ],
+    "listing_location_grid_last_3m": [
+      { "operation": "sale", "district": "Extramurs", "neighborhood": "La Petxina", "latitude": 39.474, "longitude": -0.39, "count_listings": 7 },
+      { "operation": "rent", "district": "Ciutat Vella", "neighborhood": "El Carme", "latitude": 39.478, "longitude": -0.377, "count_listings": 4 }
+    ]
   }
 }
