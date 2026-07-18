@@ -22,6 +22,8 @@ import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from gold_aggregate import (  # noqa: E402
     ROLLING_KPI_WINDOW_MONTHS,
+    _boxplot_by_neighborhood,
+    _boxplot_by_neighborhood_last_months,
     _rolling_window_start,
     apply_scope,
     build_aggregation_json,
@@ -684,3 +686,98 @@ class TestRollingWindowStart:
         date_start = _rolling_window_start(date_df, 3)
         ts_start = _rolling_window_start(ts_df, 3)
         assert iso_start == date_start == ts_start
+
+
+# ---------------------------------------------------------------------------
+# _boxplot_by_neighborhood_last_months — windowed boxplot (FEATURE-010)
+# ---------------------------------------------------------------------------
+
+
+class TestBoxplotByNeighborhoodLastMonths:
+    """Tests for the rolling 3-month neighborhood boxplot helper."""
+
+    def test_old_outlier_outside_window_does_not_affect_summary(self) -> None:
+        """An old outlier outside the rolling window must not skew min/max/median."""
+        rows = [
+            # Old outlier — 6 months before the latest snapshot.
+            _make_listing(
+                propertyCode="OLD1",
+                snapshot_date=date(2022, 10, 9),
+                priceByArea=99999.0,
+            ),
+        ]
+        # 5 in-window listings spanning the most recent 3 months.
+        for i, (day, price) in enumerate(
+            [
+                (date(2023, 2, 9), 1000.0),
+                (date(2023, 2, 20), 2000.0),
+                (date(2023, 3, 9), 3000.0),
+                (date(2023, 3, 20), 4000.0),
+                (date(2023, 4, 9), 5000.0),
+            ]
+        ):
+            rows.append(
+                _make_listing(
+                    propertyCode=f"NEW{i}", snapshot_date=day, priceByArea=price
+                )
+            )
+        df = pd.DataFrame(rows)
+        records = _boxplot_by_neighborhood_last_months(df, min_count=1)
+        assert len(records) == 1
+        rec = records[0]
+        assert rec["count"] == 5
+        assert rec["min"] == pytest.approx(1000.0)
+        assert rec["max"] == pytest.approx(5000.0)
+        assert rec["median"] == pytest.approx(3000.0)
+
+    def test_returns_same_keys_and_shape_as_all_time_boxplot(self) -> None:
+        """The windowed helper returns the same record keys as the all-time one."""
+        rows = [_make_listing(propertyCode=f"P{i}") for i in range(5)]
+        df = pd.DataFrame(rows)
+        windowed = _boxplot_by_neighborhood_last_months(df, min_count=1)
+        all_time = _boxplot_by_neighborhood(df)
+        assert set(windowed[0].keys()) == set(all_time[0].keys())
+
+    def test_boundary_date_row_is_included(self) -> None:
+        """A row exactly on the window boundary date is included (inclusive)."""
+        rows = [_make_listing(propertyCode=f"P{i}") for i in range(4)]
+        latest = date(2023, 4, 9)
+        boundary = pd.Timestamp(latest) - pd.DateOffset(months=3)
+        rows.append(
+            _make_listing(
+                propertyCode="BOUNDARY",
+                snapshot_date=boundary.date(),
+                priceByArea=7777.0,
+            )
+        )
+        df = pd.DataFrame(rows)
+        records = _boxplot_by_neighborhood_last_months(df, min_count=1)
+        assert records[0]["count"] == 5
+
+    def test_groups_below_min_count_are_excluded(self) -> None:
+        """Groups with fewer than min_count listings inside the window are excluded."""
+        rows = [
+            _make_listing(propertyCode="P1"),
+            _make_listing(propertyCode="P2"),
+        ]
+        df = pd.DataFrame(rows)
+        records = _boxplot_by_neighborhood_last_months(df, min_count=5)
+        assert records == []
+
+    def test_all_time_boxplot_unaffected_by_windowed_helper(self) -> None:
+        """_boxplot_by_neighborhood remains all-time & unfiltered by min_count."""
+        rows = [
+            _make_listing(propertyCode="OLD1", snapshot_date=date(2022, 1, 1)),
+            _make_listing(propertyCode="OLD2", snapshot_date=date(2022, 1, 2)),
+        ]
+        df = pd.DataFrame(rows)
+        # Only 2 rows total — below the default min_count of 5 — yet the
+        # all-time helper must still report them (no implicit filtering).
+        records = _boxplot_by_neighborhood(df)
+        assert len(records) == 1
+        assert records[0]["count"] == 2
+
+    def test_empty_dataframe_returns_empty_list(self) -> None:
+        """Empty input yields an empty list, not an exception."""
+        df = pd.DataFrame(columns=_BASE_COLS)
+        assert _boxplot_by_neighborhood_last_months(df) == []
