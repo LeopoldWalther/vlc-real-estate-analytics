@@ -225,7 +225,7 @@ tasks:
       boxplot_by_neighborhood_last_3m and fall back to boxplot_by_neighborhood when the new field is
       absent. The all-time boxplot chart must keep consuming boxplot_by_neighborhood via its existing
       renderer path.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 1.5
     depends_on: ["10.5"]
@@ -257,7 +257,7 @@ tasks:
       Update the static KPI label text and i18n translations for English, German, Spanish, Arabic,
       and Turkish so the rent and sale median KPI cards clearly state they are based on the last
       3 months. Do not change all-time boxplot chart titles.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 1
     depends_on: ["10.7"]
@@ -325,7 +325,7 @@ tasks:
       or a dev latest.json, run the frontend suite, promote the gold change to prod following the
       existing deployment workflow, and close FEATURE-010 status once prod data and dashboard KPI labels
       are verified.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 1.5
     depends_on: ["10.8", "10.9"]
