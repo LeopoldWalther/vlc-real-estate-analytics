@@ -1,6 +1,6 @@
 # FEATURE-010 — Rolling 3-month median for rent/sale KPI tiles
 
-**Status:** 🟡 In Progress (backend merged to main; frontend PR pending) · **Effort:** M (~1–1.5 d) · **Priority:** Medium
+**Status:** 🟢 Complete · **Effort:** M (~1–1.5 d) · **Priority:** Medium
 **Branch root:** `feature/rolling-3m-median-kpis` · **Created:** 2026-02-16 · **Updated:** 2026-02-16
 
 > Authored by `@architect`. Reviewed by `@reviewer` (see `dev/reviews/REVIEW-FEATURE-010.md`).
@@ -144,19 +144,19 @@ Ordered, atomic, TDD-sliced tasks. Each task = failing test → minimal implemen
   behaviour (window shrinks to available data, never errors or returns empty).
 
 ### Phase 4 — Frontend: consume the rolling-window field for KPI tiles
-- [ ] **4.1** Add failing Vitest cases in `frontend/tests/summary.test.js`: `summaryStats()`
+- [x] **4.1** Add failing Vitest cases in `frontend/tests/summary.test.js`: `summaryStats()`
   should read `medianRentEurPerM2Month`/`medianSaleEurPerM2` from
   `boxplot_by_neighborhood_last_3m` instead of `boxplot_by_neighborhood`; add a case proving an
   old, out-of-window outlier group present only in `boxplot_by_neighborhood` does not affect the
   KPI value (i.e. `summaryStats` genuinely reads the new field, not the old one).
-- [ ] **4.2** Update `frontend/src/summary.js`: change the two lines in `summaryStats()` that
+- [x] **4.2** Update `frontend/src/summary.js`: change the two lines in `summaryStats()` that
   currently read `data?.boxplot_by_neighborhood` to read `data?.boxplot_by_neighborhood_last_3m`
   for the two median KPIs only. The all-time `boxplot_by_neighborhood` field remains untouched
   and continues to feed the existing box-and-whisker chart.
-- [ ] **4.3** Verify `frontend/tests/boxplot_by_neighborhood.test.js` (the chart renderer test)
+- [x] **4.3** Verify `frontend/tests/boxplot_by_neighborhood.test.js` (the chart renderer test)
   needs **no change** — it consumes `boxplot_by_neighborhood` (all-time), which is unmodified.
   Run the full Vitest suite to confirm no regression.
-- [ ] **4.4** Manual check against a locally-fetched `latest.json` from the dev bucket (or the
+- [x] **4.4** Manual check against a locally-fetched `latest.json` from the dev bucket (or the
   updated fixture): confirm the KPI tiles show a plausible, materially different number from the
   all-time chart's median for at least one neighborhood with a clear recent trend.
 
@@ -169,10 +169,10 @@ Ordered, atomic, TDD-sliced tasks. Each task = failing test → minimal implemen
   `relevant.boxplot_by_neighborhood_last_3m`: counts and medians should look sane (no empty
   arrays if there is recent data; medians closer to today's asking prices than the all-time
   chart's medians).
-- [ ] **5.3** Point the dev frontend at the refreshed dev `latest.json` and visually confirm the
+- [x] **5.3** Point the dev frontend at the refreshed dev `latest.json` and visually confirm the
   KPI tiles render a plausible 3-month figure, with no "n/a"/placeholder regressions on
   neighborhoods that do have recent data.
-- [ ] **5.4** Only after dev verification passes: deploy the gold Lambda change to **prod**
+- [x] **5.4** Only after dev verification passes: deploy the gold Lambda change to **prod**
   (separate `terraform apply`/CI promotion step, following the existing prod-promotion pattern
   from FEATURE-006). No frontend deploy is needed for the frontend PR alone if the frontend is
   already redeployed continuously from `main`/CI — confirm the actual CD trigger before assuming
@@ -238,26 +238,26 @@ impact worth modeling).
 
 ## Success criteria
 
-- [ ] `latest.json` (`general` and `relevant` blocks) contains a new
+- [x] `latest.json` (`general` and `relevant` blocks) contains a new
   `boxplot_by_neighborhood_last_3m` field with the same shape as
   `boxplot_by_neighborhood` (`operation`, `district`, `neighborhood`, `count`, `min`, `q1`,
   `median`, `q3`, `max`), reflecting only listings within
   `ROLLING_KPI_WINDOW_MONTHS` of the latest `snapshot_date`.
-- [ ] `boxplot_by_neighborhood` (all-time) is byte-for-byte unchanged for the same input, apart
+- [x] `boxplot_by_neighborhood` (all-time) is byte-for-byte unchanged for the same input, apart
   from the addition of the new sibling field — the existing golden-master assertion for that
   field still passes.
-- [ ] `frontend/src/summary.js` KPI tiles (`medianRentEurPerM2Month`,
+- [x] `frontend/src/summary.js` KPI tiles (`medianRentEurPerM2Month`,
   `medianSaleEurPerM2`) are computed from `boxplot_by_neighborhood_last_3m`.
-- [ ] The existing all-time box-and-whisker chart renders unchanged (no visual regression;
+- [x] The existing all-time box-and-whisker chart renders unchanged (no visual regression;
   `boxplot_by_neighborhood.test.js` passes unmodified).
-- [ ] `ROLLING_KPI_WINDOW_MONTHS` is a single named constant, not hard-coded in more than one
+- [x] `ROLLING_KPI_WINDOW_MONTHS` is a single named constant, not hard-coded in more than one
   place.
-- [ ] Neighborhoods/snapshots with less than 3 months of history still produce a usable
+- [x] Neighborhoods/snapshots with less than 3 months of history still produce a usable
   (non-error, non-empty-when-data-exists) boxplot entry using whatever history is available.
-- [ ] Verified in dev against real S3 data before any prod deployment.
-- [ ] Tests pass (`pytest` for backend, `vitest` for frontend) and coverage holds ≥80% on new
+- [x] Verified in dev against real S3 data before any prod deployment.
+- [x] Tests pass (`pytest` for backend, `vitest` for frontend) and coverage holds ≥80% on new
   code.
-- [ ] `documentation/DATA_GOLD_LAYER.md` reflects the new field and constant.
+- [x] `documentation/DATA_GOLD_LAYER.md` reflects the new field and constant.
 
 ## Open questions & risks
 
@@ -321,3 +321,17 @@ impact worth modeling).
   and `relevant` blocks, with plausible counts (e.g. 214 rolling vs. 3100 all-time listings for
   one neighborhood/operation) and medians close to but distinct from the all-time boxplot.
   Frontend consumption (tasks 10.7–10.8, PR 2) and prod promotion (task 10.10) are next.
+- **2026-07-18** — `@implementer` completed PR 2 (frontend consumption/labels, tasks 10.7–10.8)
+  and closeout (task 10.10). `frontend/src/summary.js` now prefers
+  `boxplot_by_neighborhood_last_3m` and falls back to `boxplot_by_neighborhood`; KPI labels in
+  all 5 locales (en, de, es, ar, tr) disclose the last-3-month basis without touching the
+  all-time boxplot chart titles. Full Vitest suite (142 tests) and `node --check` on
+  `summary.js`/`i18n.js` pass. Merged PR 2 to `main` (`--no-ff`) and pushed. Verified the dev
+  dashboard live via CloudFront (`vlc-report-dev.leopoldwalther.com`): KPI labels show the
+  3-month wording and the rolling boxplot field renders. Promoted the gold Lambda to **prod**
+  via `terraform apply` (prod environment, Lambda-code-only diff: 0 added/2 changed/0 destroyed)
+  and invoked it; prod `latest.json` now contains `boxplot_by_neighborhood_last_3m` in both
+  `general` and `relevant` blocks with plausible counts/medians. Synced the frontend build to the
+  prod asset bucket and invalidated CloudFront; confirmed the updated KPI labels live at
+  `vlc-report.leopoldwalther.com`. `python dev/tools/validate_workflow.py` passes. FEATURE-010 is
+  closed.
