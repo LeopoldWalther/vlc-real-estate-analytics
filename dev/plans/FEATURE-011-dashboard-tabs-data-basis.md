@@ -179,7 +179,7 @@ basemap, no tiles, no external call:
 ### Phase 3 — Frontend: tab navigation infrastructure
 - [x] `frontend/src/tab_state.js` + `frontend/tests/tab_state.test.js` — `TAB_IDS`,
       `resolveActiveTab()`, `buildTabHash()`, fully pure, no DOM.
-- [ ] `index.html`: add `<nav role="tablist">` with 2 buttons (`role="tab"`,
+- [x] `index.html`: add `<nav role="tablist">` with 2 buttons (`role="tab"`,
       `aria-selected`, `aria-controls`), wrap the existing `<main>` content in
       `<section role="tabpanel" id="panel-trend-analysis">`, add an empty
       `<section role="tabpanel" id="panel-data-basis" hidden>`.
@@ -187,7 +187,7 @@ basemap, no tiles, no external call:
       (`app.title`/new `tabs.trendAnalysis` i18n key) in all 5 locales.
 - [ ] `app.js`: wire tab clicks + `hashchange`, toggle `hidden`/`aria-selected`, call each tab's
       lazy-render callback once, call `Plotly.Plots.resize()` on re-activation.
-- [ ] `styles.css`: tab bar styling, mobile-first (horizontal scroll on narrow viewports, ≥44px
+- [x] `styles.css`: tab bar styling, mobile-first (horizontal scroll on narrow viewports, ≥44px
       touch targets per existing convention), dark/light tokens reused from FEATURE-009.
 
 ### Phase 4 — Frontend: Data Basis tab charts
