@@ -193,13 +193,13 @@ basemap, no tiles, no external call:
 ### Phase 4 — Frontend: Data Basis tab charts
 - [x] 5 new chart renderer modules (listed above) + Vitest unit tests per renderer (layout from
       `buildLayout()`, trace shape from fixture data), mirroring `price_time_series.test.js`.
-- [ ] `frontend/src/search_config.js` + tests — pure formatting of `data_basis.search_config`.
+- [x] `frontend/src/search_config.js` + tests — pure formatting of `data_basis.search_config`.
 - [x] Extend `frontend/tests/fixtures/latest.sample.json` with a `data_basis` block.
 - [ ] Wire the 6 new sections (5 charts + search-config panel) into `panel-data-basis`,
       lazy-rendered on first tab activation.
 
 ### Phase 5 — i18n, accessibility, responsiveness
-- [ ] New i18n keys for tab labels + all new chart titles/axes/search-config panel text, added to
+- [x] New i18n keys for tab labels + all new chart titles/axes/search-config panel text, added to
       all 5 locale dictionaries (`en`, `de`, `es`, `ar`, `tr`) in `i18n.js`.
 - [ ] RTL check for Arabic tab bar (`isRtl()` already available).
 - [ ] Manual check: mobile viewport (tab bar doesn't overflow awkwardly), keyboard tab navigation
