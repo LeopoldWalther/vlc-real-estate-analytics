@@ -7,6 +7,11 @@ import {
   subLightDetails,
   buildSubLightRows,
   unavailableMessage,
+  thresholdRuleText,
+  buildExecutionSuccessSeries,
+  buildExecutionDurationSeries,
+  buildApiQuotaSeries,
+  buildAwsCostSeries,
 } from '../src/pipeline_health.js';
 
 describe('CHECK_IDS', () => {
@@ -100,5 +105,172 @@ describe('unavailableMessage', () => {
       expect(typeof message).toBe('string');
       expect(message.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// FEATURE-013 task 13.6 — pure chart-data/threshold helpers for the detail views.
+
+describe('thresholdRuleText', () => {
+  it('returns a localized, non-empty threshold caption for every check id', () => {
+    for (const id of CHECK_IDS) {
+      for (const locale of ['en', 'de', 'es', 'ar', 'tr']) {
+        const text = thresholdRuleText(id, locale);
+        expect(typeof text).toBe('string');
+        expect(text.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('never throws for an unrecognised check id', () => {
+    expect(() => thresholdRuleText('not-a-real-check', 'en')).not.toThrow();
+    expect(thresholdRuleText('not-a-real-check', 'en')).toBe('');
+  });
+});
+
+const V11_EXECUTION_DOCUMENT = {
+  schema_version: '1.1',
+  execution_success: {
+    status: 'green',
+    details: {
+      functions: {
+        'bronze-collector': {
+          status: 'green',
+          recent_invocations: [
+            { timestamp: '2026-06-03T00:00:00', succeeded: true, duration_seconds: 12.0 },
+            { timestamp: '2026-06-02T00:00:00', succeeded: false, duration_seconds: 15.0 },
+            { timestamp: '2026-06-01T00:00:00', succeeded: true, duration_seconds: 10.0 },
+          ],
+        },
+        'silver-cleaner': {
+          status: 'yellow',
+          query_error: 'Logs Insights query timed out',
+        },
+      },
+    },
+  },
+  execution_duration: {
+    status: 'yellow',
+    details: {
+      functions: {
+        'bronze-collector': {
+          status: 'yellow',
+          max_duration_seconds: 320,
+          recent_invocations: [
+            { timestamp: '2026-06-03T00:00:00', succeeded: true, duration_seconds: 320.0 },
+            { timestamp: '2026-06-02T00:00:00', succeeded: true, duration_seconds: 100.0 },
+          ],
+        },
+      },
+    },
+  },
+};
+
+describe('buildExecutionSuccessSeries', () => {
+  it('returns one series per function, oldest-first, from recent_invocations', () => {
+    const series = buildExecutionSuccessSeries(V11_EXECUTION_DOCUMENT);
+    const bronze = series.find((s) => s.functionName === 'bronze-collector');
+    expect(bronze.points).toHaveLength(3);
+    expect(bronze.points[0].timestamp).toBe('2026-06-01T00:00:00');
+    expect(bronze.points[0].succeeded).toBe(true);
+    expect(bronze.points[2].timestamp).toBe('2026-06-03T00:00:00');
+  });
+
+  it('never throws for a function without recent_invocations (query error)', () => {
+    const series = buildExecutionSuccessSeries(V11_EXECUTION_DOCUMENT);
+    const silver = series.find((s) => s.functionName === 'silver-cleaner');
+    expect(silver.points).toEqual([]);
+  });
+
+  it('returns an empty array for null/undefined/v1.0 documents', () => {
+    expect(buildExecutionSuccessSeries(null)).toEqual([]);
+    expect(buildExecutionSuccessSeries(undefined)).toEqual([]);
+    expect(buildExecutionSuccessSeries({})).toEqual([]);
+    expect(buildExecutionSuccessSeries({ execution_success: { status: 'green', details: {} } })).toEqual([]);
+  });
+});
+
+describe('buildExecutionDurationSeries', () => {
+  it('returns one series per function, oldest-first, with duration_seconds', () => {
+    const series = buildExecutionDurationSeries(V11_EXECUTION_DOCUMENT);
+    const bronze = series.find((s) => s.functionName === 'bronze-collector');
+    expect(bronze.points).toHaveLength(2);
+    expect(bronze.points[0].durationSeconds).toBe(100.0);
+    expect(bronze.points[1].durationSeconds).toBe(320.0);
+  });
+
+  it('returns an empty array for null/malformed input', () => {
+    expect(buildExecutionDurationSeries(null)).toEqual([]);
+    expect(buildExecutionDurationSeries({})).toEqual([]);
+  });
+});
+
+const V11_API_QUOTA_DOCUMENT = {
+  api_quota: {
+    status: 'yellow',
+    details: {
+      credential_sets: {
+        LVW: {
+          status: 'yellow',
+          label: 'sale',
+          quota: 100,
+          monthly_requests: { '2026-01': 40, '2026-02': 82 },
+        },
+        PMV: {
+          status: 'green',
+          label: 'rent',
+          quota: 100,
+          monthly_requests: { '2026-01': 20, '2026-02': 25 },
+        },
+      },
+    },
+  },
+};
+
+describe('buildApiQuotaSeries', () => {
+  it('returns one series per credential set with matching months and values', () => {
+    const series = buildApiQuotaSeries(V11_API_QUOTA_DOCUMENT);
+    expect(series).toHaveLength(2);
+    const lvw = series.find((s) => s.credentialSet === 'LVW');
+    expect(lvw.label).toBe('sale');
+    expect(lvw.quota).toBe(100);
+    expect(lvw.months).toEqual(['2026-01', '2026-02']);
+    expect(lvw.values).toEqual([40, 82]);
+  });
+
+  it('returns an empty array for null/malformed input', () => {
+    expect(buildApiQuotaSeries(null)).toEqual([]);
+    expect(buildApiQuotaSeries({})).toEqual([]);
+  });
+});
+
+const V11_AWS_COST_DOCUMENT = {
+  aws_cost: {
+    status: 'green',
+    details: {
+      monthly_cost_by_service: [
+        { month: '2026-01', services: { 'AWS Lambda': 1.0, 'Amazon S3': 0.2 } },
+        { month: '2026-02', services: { 'AWS Lambda': 1.1 } },
+      ],
+    },
+  },
+};
+
+describe('buildAwsCostSeries', () => {
+  it('returns months and one value series per service, filling gaps with 0', () => {
+    const result = buildAwsCostSeries(V11_AWS_COST_DOCUMENT);
+    expect(result.months).toEqual(['2026-01', '2026-02']);
+    expect(new Set(result.services)).toEqual(new Set(['AWS Lambda', 'Amazon S3']));
+    const lambda = result.valuesByService['AWS Lambda'];
+    const s3 = result.valuesByService['Amazon S3'];
+    expect(lambda).toEqual([1.0, 1.1]);
+    expect(s3).toEqual([0.2, 0]);
+  });
+
+  it('returns safe empty shape for null/malformed input', () => {
+    const result = buildAwsCostSeries(null);
+    expect(result.months).toEqual([]);
+    expect(result.services).toEqual([]);
+    expect(result.valuesByService).toEqual({});
+    expect(buildAwsCostSeries({}).months).toEqual([]);
   });
 });
