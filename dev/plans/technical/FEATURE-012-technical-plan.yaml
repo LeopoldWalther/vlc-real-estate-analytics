@@ -1,0 +1,458 @@
+metadata:
+  for_feature: "FEATURE-012"
+  title: "Pipeline Health monitoring"
+  created_by: "@reviewer"
+  created_at: "2026-07-18"
+  version: "1.0"
+  total_tasks: 12
+  estimated_hours: 34
+  risk_level: "medium-high"
+  critical_path: ["12.1", "12.2", "12.3", "12.4", "12.5", "12.8", "12.9", "12.10", "12.11", "12.12"]
+  reviewed_plan: "dev/reviews/REVIEW-FEATURE-012.md"
+
+validation:
+  required_checks:
+    - "cd src/etl && pytest"
+    - "cd src/etl && black --check . && ruff check . && mypy ."
+    - "cd frontend && npm test"
+    - "terraform fmt -check -recursive infrastructure"
+    - "terraform validate for dev and prod environment roots after terraform init"
+    - "workflow-consistency"
+  min_coverage: ">80% on new Python and frontend modules"
+
+tasks:
+  - id: "12.1"
+    title: "Define pipeline-health domain model and status helpers"
+    description: >
+      TDD, RED first. Create the new pipeline_health package with a HealthStatus type,
+      HealthCheckResult dataclass, HealthCheck Protocol, JSON schema constants, and a pure
+      worst_status helper. Encode insufficient-history details without treating short history as
+      an exception.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: []
+    branch: "feature/pipeline-health-monitoring/12.1-domain-model"
+    commit_message: "feat(health): add pipeline health domain model"
+    acceptance_criteria:
+      - "RED: tests fail before HealthCheckResult, HealthCheck, and worst_status exist"
+      - "GREEN: worst_status returns red over yellow over green deterministically"
+      - "GREEN: HealthCheckResult serializes only JSON-safe status, summary, details, and evaluated_at fields"
+      - "GREEN: insufficient-history cases are represented in details without raising"
+    allowed_files:
+      - "src/etl/pipeline_health/__init__.py"
+      - "src/etl/pipeline_health/health_checks.py"
+      - "src/etl/pipeline_health/tests/test_health_checks.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["12.2"]
+    reversible: true
+    files_to_create:
+      - "src/etl/pipeline_health/__init__.py"
+      - "src/etl/pipeline_health/health_checks.py"
+      - "src/etl/pipeline_health/tests/test_health_checks.py"
+    files_to_modify: []
+
+  - id: "12.2"
+    title: "Add MetricsPublisher adapter and fake"
+    description: >
+      TDD, RED first. Add a common MetricsPublisher Protocol, CloudWatchMetricsPublisher adapter,
+      and in-memory fake. The adapter must support namespace, metric name, value, unit, dimensions,
+      and an optional timestamp while keeping boto3 construction at the edge.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: []
+    branch: "feature/pipeline-health-monitoring/12.2-metrics-publisher"
+    commit_message: "feat(common): add CloudWatch metrics publisher adapter"
+    acceptance_criteria:
+      - "RED: common adapter tests fail before metrics_publisher.py exists"
+      - "GREEN: InMemoryMetricsPublisher records metric datapoints for assertions"
+      - "GREEN: CloudWatchMetricsPublisher maps project-owned inputs to put_metric_data"
+      - "GREEN: no boto3 import is required by BronzeCollector core logic"
+    allowed_files:
+      - "src/etl/common/metrics_publisher.py"
+      - "src/etl/common/tests/test_metrics_publisher.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+      - "src/etl/data_collection/**"
+    can_run_parallel_with: ["12.1"]
+    reversible: true
+    files_to_create:
+      - "src/etl/common/metrics_publisher.py"
+      - "src/etl/common/tests/test_metrics_publisher.py"
+    files_to_modify: []
+
+  - id: "12.3"
+    title: "Instrument bronze API quota attempts"
+    description: >
+      TDD, RED first. Inject MetricsPublisher into BronzeCollector and emit one ApiRequests
+      datapoint per attempted Idealista search page request, including requests that later fail
+      parsing or persistence. Preserve existing Lambda response fields and FEATURE-007 state-machine
+      compatibility. Label LVW as sale and PMV as rent.
+    status: "not_started"
+    complexity: "high"
+    estimated_hours: 3
+    depends_on: ["12.2"]
+    branch: "feature/pipeline-health-monitoring/12.3-bronze-quota-metrics"
+    commit_message: "feat(collector): publish Idealista API request metrics"
+    acceptance_criteria:
+      - "RED: bronze tests prove failed/partial page attempts are not counted before instrumentation"
+      - "GREEN: every attempted sale page emits CredentialSet=LVW and Operation=sale"
+      - "GREEN: every attempted rent page emits CredentialSet=PMV and Operation=rent"
+      - "GREEN: a fetch/parse/upload failure after an API request still records that attempted request"
+      - "GREEN: lambda_handler response body fields remain unchanged"
+    allowed_files:
+      - "src/etl/data_collection/bronze_collector.py"
+      - "src/etl/data_collection/idealista_listings_collector.py"
+      - "src/etl/data_collection/tests/test_bronze_collector.py"
+      - "src/etl/data_collection/tests/test_idealista_listings_collector.py"
+      - "src/etl/common/metrics_publisher.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/data_collection/bronze_collector.py"
+      - "src/etl/data_collection/idealista_listings_collector.py"
+      - "src/etl/data_collection/tests/test_bronze_collector.py"
+      - "src/etl/data_collection/tests/test_idealista_listings_collector.py"
+
+  - id: "12.4"
+    title: "Grant bronze PutMetricData permission"
+    description: >
+      Add least-privilege CloudWatch PutMetricData permission to the bronze Lambda role using a
+      cloudwatch:namespace condition for VlcRealEstate/Idealista. Do not broaden S3, Secrets Manager,
+      or SNS permissions.
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 1
+    depends_on: ["12.3"]
+    branch: "feature/pipeline-health-monitoring/12.4-bronze-metric-iam"
+    commit_message: "chore(terraform): allow bronze quota metric publishing"
+    acceptance_criteria:
+      - "GREEN: bronze Lambda role can call cloudwatch:PutMetricData only for namespace VlcRealEstate/Idealista"
+      - "GREEN: existing bronze IAM policies remain functionally unchanged"
+      - "GREEN: terraform fmt passes"
+    allowed_files:
+      - "infrastructure/modules/lambda_bronze/main.tf"
+      - "infrastructure/modules/lambda_bronze/variables.tf"
+    forbidden_files:
+      - "src/**"
+      - "frontend/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "infrastructure/modules/lambda_bronze/main.tf"
+
+  - id: "12.5"
+    title: "Implement Logs Insights execution checks"
+    description: >
+      TDD, RED first. Implement a bounded-polling Logs Insights helper plus ExecutionSuccessCheck
+      and ExecutionDurationCheck. Use stubbed clients rather than relying on moto support. Cover
+      query success, query failure, timeout, 0 invocations, short history, and the green/yellow/red
+      boundary cases.
+    status: "not_started"
+    complexity: "high"
+    estimated_hours: 4
+    depends_on: ["12.1"]
+    branch: "feature/pipeline-health-monitoring/12.5-logs-execution-checks"
+    commit_message: "feat(health): add Lambda execution health checks"
+    acceptance_criteria:
+      - "RED: execution-check tests fail before Logs Insights helper exists"
+      - "GREEN: latest failed invocation yields red for execution success"
+      - "GREEN: latest success with one earlier failure in the window yields yellow"
+      - "GREEN: all available successful invocations yield green with insufficient_history detail when count < 5"
+      - "GREEN: any duration >10 minutes yields red; any 5-10 minute duration without red yields yellow"
+      - "GREEN: Logs Insights polling is bounded and surfaces timeout as a non-crashing check result"
+    allowed_files:
+      - "src/etl/pipeline_health/health_checks.py"
+      - "src/etl/pipeline_health/tests/test_execution_checks.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+      - "src/etl/data_collection/**"
+    can_run_parallel_with: ["12.6", "12.7"]
+    reversible: true
+    files_to_create:
+      - "src/etl/pipeline_health/tests/test_execution_checks.py"
+    files_to_modify:
+      - "src/etl/pipeline_health/health_checks.py"
+
+  - id: "12.6"
+    title: "Implement API quota health check"
+    description: >
+      TDD, RED first. Implement ApiQuotaCheck using CloudWatch GetMetricData over the last five
+      fully completed calendar months. Make the quota scope explicit: credential-global if dev/prod
+      share credentials, or environment-filtered if separate credentials are configured. Document
+      the chosen dimension semantics in returned details.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2.5
+    depends_on: ["12.1", "12.3"]
+    branch: "feature/pipeline-health-monitoring/12.6-api-quota-check"
+    commit_message: "feat(health): add Idealista API quota check"
+    acceptance_criteria:
+      - "RED: quota tests fail before ApiQuotaCheck exists"
+      - "GREEN: months with all usage <80 requests are green"
+      - "GREEN: any month >=80 and <95 requests is yellow unless a red month exists"
+      - "GREEN: any month >=95 requests is red"
+      - "GREEN: current in-progress month is excluded"
+      - "GREEN: details label LVW as sale and PMV as rent without exposing secret names beyond approved labels"
+    allowed_files:
+      - "src/etl/pipeline_health/health_checks.py"
+      - "src/etl/pipeline_health/tests/test_api_quota_check.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["12.5", "12.7"]
+    reversible: true
+    files_to_create:
+      - "src/etl/pipeline_health/tests/test_api_quota_check.py"
+    files_to_modify:
+      - "src/etl/pipeline_health/health_checks.py"
+
+  - id: "12.7"
+    title: "Implement AWS cost health check"
+    description: >
+      TDD, RED first. Implement AwsCostCheck using Cost Explorer GetCostAndUsage, grouped by service,
+      month-to-date, excluding documented domain/registrar service names. Ensure the Lambda factory
+      can construct the CE client with the correct global/US endpoint region.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2.5
+    depends_on: ["12.1"]
+    branch: "feature/pipeline-health-monitoring/12.7-aws-cost-check"
+    commit_message: "feat(health): add AWS cost threshold check"
+    acceptance_criteria:
+      - "RED: cost tests fail before AwsCostCheck exists"
+      - "GREEN: total project cost <2 USD is green"
+      - "GREEN: cost >=2 and <5 USD is yellow"
+      - "GREEN: cost >=5 USD is red"
+      - "GREEN: excluded Route 53/domain registrar services do not contribute to threshold totals"
+      - "GREEN: details include included total, excluded total, and excluded service names"
+    allowed_files:
+      - "src/etl/pipeline_health/health_checks.py"
+      - "src/etl/pipeline_health/tests/test_aws_cost_check.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["12.5", "12.6"]
+    reversible: true
+    files_to_create:
+      - "src/etl/pipeline_health/tests/test_aws_cost_check.py"
+    files_to_modify:
+      - "src/etl/pipeline_health/health_checks.py"
+
+  - id: "12.8"
+    title: "Build health aggregator and Lambda handler"
+    description: >
+      TDD, RED first. Add PipelineHealthAggregator and pipeline_health_lambda.py. The aggregator
+      runs the four checks, composes overall_status with worst_status, and writes
+      gold/pipeline_health/latest.json via ObjectStore. The handler is a thin Factory that injects
+      boto3 clients at the edge, including explicit Cost Explorer client configuration.
+    status: "not_started"
+    complexity: "high"
+    estimated_hours: 4
+    depends_on: ["12.5", "12.6", "12.7"]
+    branch: "feature/pipeline-health-monitoring/12.8-aggregator-lambda"
+    commit_message: "feat(health): write pipeline health JSON"
+    acceptance_criteria:
+      - "RED: aggregator tests fail before PipelineHealthAggregator exists"
+      - "GREEN: successful aggregation writes gold/pipeline_health/latest.json with content-type application/json"
+      - "GREEN: JSON includes schema_version, generated_at, overall_status, and four named checks"
+      - "GREEN: one failing check does not prevent other checks from returning results unless aggregator construction itself fails"
+      - "GREEN: handler constructs CloudWatch Logs, CloudWatch Metrics, Cost Explorer, and S3 adapters only at the edge"
+    allowed_files:
+      - "src/etl/pipeline_health/pipeline_health_aggregator.py"
+      - "src/etl/pipeline_health/pipeline_health_lambda.py"
+      - "src/etl/pipeline_health/tests/test_pipeline_health_aggregator.py"
+      - "src/etl/pipeline_health/tests/test_pipeline_health_lambda.py"
+      - "src/etl/pipeline_health/health_checks.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "src/etl/pipeline_health/pipeline_health_aggregator.py"
+      - "src/etl/pipeline_health/pipeline_health_lambda.py"
+      - "src/etl/pipeline_health/tests/test_pipeline_health_aggregator.py"
+      - "src/etl/pipeline_health/tests/test_pipeline_health_lambda.py"
+    files_to_modify:
+      - "src/etl/pipeline_health/health_checks.py"
+
+  - id: "12.9"
+    title: "Add pipeline health Lambda Terraform module"
+    description: >
+      Create infrastructure/modules/lambda_pipeline_health mirroring lambda_gold packaging patterns,
+      but packaging pipeline_health plus common only. Add least-privilege IAM for Logs Insights,
+      CloudWatch GetMetricData, Cost Explorer, S3 PutObject to gold/pipeline_health/*, logging, and
+      an independent weekly EventBridge schedule after gold.
+    status: "not_started"
+    complexity: "high"
+    estimated_hours: 4
+    depends_on: ["12.8"]
+    branch: "feature/pipeline-health-monitoring/12.9-health-lambda-terraform"
+    commit_message: "feat(terraform): add pipeline health Lambda module"
+    acceptance_criteria:
+      - "GREEN: module packages src/etl/pipeline_health/*.py and src/etl/common/*.py without tests"
+      - "GREEN: Lambda handler is pipeline_health_lambda.lambda_handler"
+      - "GREEN: S3 write permission is scoped to gold/pipeline_health/*"
+      - "GREEN: Logs permissions are scoped to the three environment Lambda log groups where AWS supports it"
+      - "GREEN: cloudwatch:GetMetricData and ce:GetCostAndUsage Resource='*' limitations are documented in comments"
+      - "GREEN: dev and prod environment roots instantiate the module without attaching it to the Step Functions state machine"
+    allowed_files:
+      - "infrastructure/modules/lambda_pipeline_health/main.tf"
+      - "infrastructure/modules/lambda_pipeline_health/variables.tf"
+      - "infrastructure/modules/lambda_pipeline_health/outputs.tf"
+      - "infrastructure/environments/dev/main.tf"
+      - "infrastructure/environments/prod/main.tf"
+    forbidden_files:
+      - "src/**"
+      - "frontend/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "infrastructure/modules/lambda_pipeline_health/main.tf"
+      - "infrastructure/modules/lambda_pipeline_health/variables.tf"
+      - "infrastructure/modules/lambda_pipeline_health/outputs.tf"
+    files_to_modify:
+      - "infrastructure/environments/dev/main.tf"
+      - "infrastructure/environments/prod/main.tf"
+
+  - id: "12.10"
+    title: "Expose pipeline health JSON through CloudFront"
+    description: >
+      Fix the deployment blocker from review H2. Extend the frontend Terraform module so CloudFront
+      serves /gold/pipeline_health/* from the listings bucket with the short data cache policy, and
+      the listings bucket OAC policy grants read access to both gold/aggregations/* and
+      gold/pipeline_health/*.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["12.9"]
+    branch: "feature/pipeline-health-monitoring/12.10-cloudfront-health-json"
+    commit_message: "fix(terraform): serve pipeline health JSON via CloudFront"
+    acceptance_criteria:
+      - "RED: infrastructure review confirms only gold/aggregations/* is served before this task"
+      - "GREEN: /gold/pipeline_health/latest.json routes to the listings bucket origin"
+      - "GREEN: OAC bucket policy allows CloudFront read for gold/pipeline_health/*"
+      - "GREEN: existing /gold/aggregations/latest.json behavior is unchanged"
+      - "GREEN: data cache TTL policy applies to both data prefixes"
+    allowed_files:
+      - "infrastructure/modules/frontend/main.tf"
+      - "infrastructure/modules/frontend/variables.tf"
+      - "infrastructure/environments/dev/main.tf"
+      - "infrastructure/environments/prod/main.tf"
+    forbidden_files:
+      - "src/**"
+      - "frontend/src/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "infrastructure/modules/frontend/main.tf"
+      - "infrastructure/modules/frontend/variables.tf"
+
+  - id: "12.11"
+    title: "Add Pipeline Health frontend tab"
+    description: >
+      TDD, RED first. Add PipelineHealthDataSource, pure formatting/render helpers, tab id wiring,
+      DOM panel wiring, i18n keys, and badge styles. Health JSON fetch failure must render a neutral
+      not-yet-available state and must not change the Trend Analysis or Data Basis load lifecycle.
+    status: "not_started"
+    complexity: "high"
+    estimated_hours: 5
+    depends_on: ["12.8", "12.10"]
+    branch: "feature/pipeline-health-monitoring/12.11-frontend-tab"
+    commit_message: "feat(frontend): add pipeline health tab"
+    acceptance_criteria:
+      - "RED: frontend tests fail before PipelineHealthDataSource and health formatting helpers exist"
+      - "GREEN: tab_state includes pipeline-health without breaking existing default tab behavior"
+      - "GREEN: health data source validates schema_version and handles HTTP/JSON failures as a neutral unavailable state"
+      - "GREEN: app.js loads health JSON independently from the existing gold aggregations data source"
+      - "GREEN: UI renders one overall badge and four sub-light rows with localized labels"
+      - "GREEN: green/yellow/red badge styles work in light and dark themes"
+    allowed_files:
+      - "frontend/src/pipeline_health_data_source.js"
+      - "frontend/src/pipeline_health.js"
+      - "frontend/src/tab_state.js"
+      - "frontend/src/i18n.js"
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/tests/pipeline_health_data_source.test.js"
+      - "frontend/tests/pipeline_health.test.js"
+      - "frontend/tests/tab_state.test.js"
+    forbidden_files:
+      - "src/etl/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "frontend/src/pipeline_health_data_source.js"
+      - "frontend/src/pipeline_health.js"
+      - "frontend/tests/pipeline_health_data_source.test.js"
+      - "frontend/tests/pipeline_health.test.js"
+    files_to_modify:
+      - "frontend/src/tab_state.js"
+      - "frontend/src/i18n.js"
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/tests/tab_state.test.js"
+
+  - id: "12.12"
+    title: "Document schema, rules, deployment, and manual validation"
+    description: >
+      Add PIPELINE_HEALTH_LAYER.md documenting the JSON schema, four ampel rules, metric dimensions,
+      Cost Explorer exclusions, insufficient-history behavior, CloudFront path, and dev-to-prod
+      deployment validation steps. Run all required validation gates.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 3
+    depends_on: ["12.4", "12.9", "12.10", "12.11"]
+    branch: "feature/pipeline-health-monitoring/12.12-docs-validation"
+    commit_message: "docs: document pipeline health layer"
+    acceptance_criteria:
+      - "GREEN: documentation includes the exact four health rules and thresholds"
+      - "GREEN: documentation explains quota metric dimensions and whether quota is credential-global or environment-local"
+      - "GREEN: documentation lists Cost Explorer excluded services"
+      - "GREEN: documentation includes manual dev invocation and CloudFront fetch verification steps"
+      - "GREEN: all validation.required_checks pass before merge"
+    allowed_files:
+      - "documentation/PIPELINE_HEALTH_LAYER.md"
+      - "README.md"
+      - "dev/plans/FEATURE-012-pipeline-health-monitoring.md"
+    forbidden_files:
+      - "src/**"
+      - "frontend/src/**"
+      - "infrastructure/modules/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "documentation/PIPELINE_HEALTH_LAYER.md"
+    files_to_modify:
+      - "README.md"
+      - "dev/plans/FEATURE-012-pipeline-health-monitoring.md"
+
+git_workflow:
+  branch_root: "feature/pipeline-health-monitoring"
+  task_branch_policy: "Create one branch per task using the branch field; merge in dependency order after tests pass."
+  commit_policy: "Use the commit_message field verbatim or with a task-id suffix."
+  promotion_policy: >
+    Apply Terraform to dev first, manually invoke the health Lambda, verify S3 object and
+    CloudFront fetch, then apply prod separately. Do not wire the health Lambda into the Step
+    Functions orchestrator.
+
+notes:
+  - "The technical plan intentionally fixes review H1 by counting API request attempts, not only successful pages."
+  - "The technical plan intentionally fixes review H2 by adding CloudFront and bucket-policy support for gold/pipeline_health/*."
+  - "SNS red-status alerting is deferred; implement only the tab MVP unless explicitly approved later."
+  - "Use botocore Stubber/fakes for Logs Insights, CloudWatch Metrics, and Cost Explorer tests where moto coverage is absent."
