@@ -28,11 +28,18 @@ from gold_aggregator import (  # noqa: E402
     DistrictPriceTimeSeries,
     GoldAggregator,
     GoldResult,
+    ListingLocationGridLast3Months,
     NeighborhoodBoxplot,
     NeighborhoodBoxplotLast3Months,
     NeighborhoodPriceTimeSeries,
+    PricePerAreaHistogram,
     RentVsSaleRatio,
     RentVsSaleRatioTimeSeries,
+    RoomsDistribution,
+    SearchConfigDataset,
+    SizeHistogram10sqm,
+    WeeklyListingVolume,
+    default_data_basis,
     default_populations,
 )
 from tests.test_gold_golden_master import (  # noqa: E402
@@ -226,3 +233,160 @@ class TestSilverHistoryReading:
         result = make_aggregator(store).aggregate()
 
         assert result.size_bytes > 0
+
+
+# ---------------------------------------------------------------------------
+# Data Basis strategies + wiring (FEATURE-011, task 11.4)
+# ---------------------------------------------------------------------------
+
+
+class TestDefaultDataBasis:
+    """default_data_basis() returns the frozen strategy list, in schema order."""
+
+    def test_returns_expected_keys_in_order(self) -> None:
+        strategies = default_data_basis()
+
+        assert [agg.key for agg in strategies] == [
+            "search_config",
+            "weekly_listing_volume",
+            "size_histogram_10sqm",
+            "rooms_distribution",
+            "price_per_area_histogram",
+            "listing_location_grid_last_3m",
+        ]
+
+    @pytest.mark.parametrize(
+        "strategy",
+        [
+            WeeklyListingVolume(),
+            SizeHistogram10sqm(),
+            RoomsDistribution(),
+            PricePerAreaHistogram(),
+            ListingLocationGridLast3Months(),
+        ],
+        ids=lambda s: s.key,
+    )
+    def test_every_data_basis_strategy_handles_empty_input(self, strategy: Any) -> None:
+        """
+        Liskov: every per-listing Data Basis strategy accepts an empty df.
+        (SearchConfigDataset is excluded — it is the one static, input-
+        independent dataset; see TestSearchConfigDatasetIgnoresInput.)
+        """
+        empty = pd.DataFrame(
+            columns=[
+                "operation",
+                "district",
+                "neighborhood",
+                "snapshot_date",
+                "propertyCode",
+                "priceByArea",
+                "size",
+                "price",
+                "rooms",
+                "latitude",
+                "longitude",
+            ]
+        )
+        assert strategy.compute(empty) == []
+
+
+class TestSearchConfigDatasetIgnoresInput:
+    """SearchConfigDataset's compute() always returns the same static record."""
+
+    def test_returns_single_record_regardless_of_df(self) -> None:
+        records = SearchConfigDataset().compute(pd.DataFrame())
+        assert len(records) == 1
+        assert "center_lat" in records[0]
+
+
+class TestGoldAggregatorEmitsDataBasis:
+    """GoldAggregator.build_document wires the additive data_basis block."""
+
+    def test_document_has_data_basis_key_without_changing_schema_version(
+        self,
+    ) -> None:
+        store = _store_with_silver(load_silver_fixture())
+
+        with mock.patch("gold_aggregate.datetime") as frozen_dt:
+            frozen_dt.now.return_value = _FROZEN_NOW
+            result = make_aggregator(store).aggregate()
+
+        document = json.loads(store.get_bytes(result.key))
+        assert document["schema_version"] == "1.0"
+        assert "data_basis" in document
+
+    def test_general_and_relevant_dataset_keys_are_unchanged(self) -> None:
+        """H2: adding data_basis must not alter general/relevant dataset keys."""
+        store = _store_with_silver(load_silver_fixture())
+        result = make_aggregator(store).aggregate()
+        document = json.loads(store.get_bytes(result.key))
+
+        assert set(document["general"].keys()) == {
+            "price_time_series_neighborhood",
+            "price_time_series_district",
+            "rent_vs_sale_ratio",
+            "rent_vs_sale_ratio_time_series",
+            "boxplot_by_neighborhood",
+            "boxplot_by_neighborhood_last_3m",
+        }
+        assert set(document["relevant"].keys()) == {
+            "rent_vs_sale_ratio",
+            "rent_vs_sale_ratio_time_series",
+            "boxplot_by_neighborhood",
+            "boxplot_by_neighborhood_last_3m",
+        }
+
+    def test_data_basis_operates_on_unscoped_data(self) -> None:
+        """
+        Data Basis counts listings from EVERY district, not just the 3 scope
+        districts general/relevant are restricted to.
+        """
+        store = InMemoryObjectStore()
+        buffer = io.BytesIO()
+        df = pd.DataFrame(
+            [
+                {
+                    "operation": "sale",
+                    "district": "Benimaclet",  # out of scope for general/relevant
+                    "neighborhood": "Benimaclet",
+                    "snapshot_date": "2023-04-09",
+                    "propertyCode": "OUT1",
+                    "priceByArea": 2000.0,
+                    "size": 100.0,
+                    "price": 200_000.0,
+                    "floor": "2",
+                    "rooms": 2,
+                    "bathrooms": 1,
+                    "hasLift": True,
+                    "latitude": 39.48,
+                    "longitude": -0.35,
+                }
+            ]
+        )
+        df.to_parquet(buffer, index=False, engine="pyarrow")
+        store.put_bytes(
+            f"{SILVER_PREFIX}/operation=sale/snapshot_date=2023-04-09/part.parquet",
+            buffer.getvalue(),
+            content_type="application/octet-stream",
+        )
+
+        result = make_aggregator(store).aggregate()
+        document = json.loads(store.get_bytes(result.key))
+
+        assert document["general"]["price_time_series_neighborhood"] == []
+        assert document["data_basis"]["weekly_listing_volume"] == [
+            {
+                "operation": "sale",
+                "snapshot_date": "2023-04-09",
+                "count_listings": 1,
+            }
+        ]
+
+    def test_moto_lambda_aggregation_includes_data_basis(self) -> None:
+        """Acceptance criterion: moto-backed Lambda aggregation test confirms
+        latest.json includes data_basis (see test_gold_aggregation_lambda.py
+        for the dedicated moto/S3 Lambda-level coverage)."""
+        store = _store_with_silver(load_silver_fixture())
+        result = make_aggregator(store).aggregate()
+        document = json.loads(store.get_bytes(result.key))
+        assert "data_basis" in document

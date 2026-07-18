@@ -54,6 +54,8 @@ _SILVER_COLS = [
     "rooms",
     "bathrooms",
     "hasLift",
+    "latitude",
+    "longitude",
 ]
 
 # Top-level keys required by the frozen schema v1.0.
@@ -65,6 +67,7 @@ _SCHEMA_V1_KEYS = {
     "relevant_filter",
     "general",
     "relevant",
+    "data_basis",
 }
 
 
@@ -88,6 +91,8 @@ def _make_row(**overrides: Any) -> Dict[str, Any]:
         "rooms": 3,
         "bathrooms": 2,
         "hasLift": True,
+        "latitude": 39.469077,
+        "longitude": -0.3799074,
     }
     base.update(overrides)
     return base
@@ -213,6 +218,27 @@ class TestLambdaHappyPath:
         assert "boxplot_by_neighborhood" in payload["general"]
         assert "boxplot_by_neighborhood" in payload["relevant"]
 
+    def test_lambda_output_includes_data_basis_block(self, s3_with_silver: Any) -> None:
+        """
+        Acceptance criterion (task 11.4): a moto-backed Lambda aggregation
+        test confirms latest.json includes the additive data_basis block.
+        """
+        lambda_handler({}, None)
+
+        payload = _read_latest_json(s3_with_silver, BUCKET)
+        assert "data_basis" in payload
+        assert set(payload["data_basis"].keys()) == {
+            "search_config",
+            "weekly_listing_volume",
+            "size_histogram_10sqm",
+            "rooms_distribution",
+            "price_per_area_histogram",
+            "listing_location_grid_last_3m",
+        }
+        # search_config is a static single-record dataset even with minimal
+        # fixture data.
+        assert payload["data_basis"]["search_config"]
+
 
 # ---------------------------------------------------------------------------
 # Test: empty silver history
@@ -273,6 +299,14 @@ class TestEmptySilverHistory:
                 assert (
                     value == []
                 ), f"Expected empty list for {pop}.{key}, got {value!r}"
+        # data_basis: every per-listing dataset is empty, but search_config
+        # is a static single-record dataset that never depends on the data.
+        data_basis = payload["data_basis"]
+        for key, value in data_basis.items():
+            if key == "search_config":
+                assert value, "search_config must always emit one record"
+            else:
+                assert value == [], f"Expected empty list for data_basis.{key}"
 
 
 # ---------------------------------------------------------------------------
