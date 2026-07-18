@@ -118,6 +118,24 @@ const en = {
   'pipelineHealth.check.apiQuota': 'API quota',
   'pipelineHealth.check.awsCost': 'AWS cost',
   'pipelineHealth.notAvailable': 'Pipeline health data is not yet available.',
+
+  // FEATURE-013: detail views — section titles, threshold captions, diagram
+  // labels. Threshold captions mirror the exact backend rule constants
+  // (health_checks.py) so the UI never drifts from the actual Ampel logic.
+  'pipelineHealth.status.unknown': 'Unknown',
+  'pipelineHealth.detail.executionSuccess.title': 'Execution success history',
+  'pipelineHealth.detail.executionDuration.title': 'Execution duration history',
+  'pipelineHealth.detail.apiQuota.title': 'API quota history',
+  'pipelineHealth.detail.awsCost.title': 'AWS cost history',
+  'pipelineHealth.threshold.executionSuccess': 'Red if the latest invocation failed; yellow if any of the last 5 invocations failed.',
+  'pipelineHealth.threshold.executionDuration': 'Green under 5 minutes; yellow from 5 minutes; red from 10 minutes.',
+  'pipelineHealth.threshold.apiQuota': 'Green under 80 requests/month; yellow from 80; red from 95 (quota: 100 requests/month).',
+  'pipelineHealth.threshold.awsCost': 'Green under $2; yellow from $2; red from $5 month-to-date (excluding domain/registrar costs).',
+  'pipelineHealth.diagram.title': 'Medallion pipeline',
+  'pipelineHealth.diagram.bronze': 'Bronze (raw collection)',
+  'pipelineHealth.diagram.silver': 'Silver (cleaned)',
+  'pipelineHealth.diagram.gold': 'Gold (aggregated)',
+  'pipelineHealth.diagram.observer': 'Pipeline Health (observer)',
 };
 
 const de = {
@@ -221,6 +239,21 @@ const de = {
   'pipelineHealth.check.apiQuota': 'API-Kontingent',
   'pipelineHealth.check.awsCost': 'AWS-Kosten',
   'pipelineHealth.notAvailable': 'Pipeline-Zustandsdaten sind noch nicht verfügbar.',
+
+  'pipelineHealth.status.unknown': 'Unbekannt',
+  'pipelineHealth.detail.executionSuccess.title': 'Verlauf des Ausführungserfolgs',
+  'pipelineHealth.detail.executionDuration.title': 'Verlauf der Ausführungsdauer',
+  'pipelineHealth.detail.apiQuota.title': 'Verlauf des API-Kontingents',
+  'pipelineHealth.detail.awsCost.title': 'Verlauf der AWS-Kosten',
+  'pipelineHealth.threshold.executionSuccess': 'Rot, wenn die letzte Ausführung fehlgeschlagen ist; Gelb, wenn eine der letzten 5 Ausführungen fehlgeschlagen ist.',
+  'pipelineHealth.threshold.executionDuration': 'Grün unter 5 Minuten; Gelb ab 5 Minuten; Rot ab 10 Minuten.',
+  'pipelineHealth.threshold.apiQuota': 'Grün unter 80 Anfragen/Monat; Gelb ab 80; Rot ab 95 (Kontingent: 100 Anfragen/Monat).',
+  'pipelineHealth.threshold.awsCost': 'Grün unter 2 $; Gelb ab 2 $; Rot ab 5 $ (Monat bis heute, ohne Domain-/Registrar-Kosten).',
+  'pipelineHealth.diagram.title': 'Medallion-Pipeline',
+  'pipelineHealth.diagram.bronze': 'Bronze (Rohdaten)',
+  'pipelineHealth.diagram.silver': 'Silver (bereinigt)',
+  'pipelineHealth.diagram.gold': 'Gold (aggregiert)',
+  'pipelineHealth.diagram.observer': 'Pipeline-Zustand (Beobachter)',
 };
 
 const es = {
@@ -324,6 +357,21 @@ const es = {
   'pipelineHealth.check.apiQuota': 'Cuota de la API',
   'pipelineHealth.check.awsCost': 'Coste de AWS',
   'pipelineHealth.notAvailable': 'Los datos de estado del pipeline aún no están disponibles.',
+
+  'pipelineHealth.status.unknown': 'Desconocido',
+  'pipelineHealth.detail.executionSuccess.title': 'Historial de éxito de ejecución',
+  'pipelineHealth.detail.executionDuration.title': 'Historial de duración de ejecución',
+  'pipelineHealth.detail.apiQuota.title': 'Historial de cuota de la API',
+  'pipelineHealth.detail.awsCost.title': 'Historial de coste de AWS',
+  'pipelineHealth.threshold.executionSuccess': 'Rojo si la última ejecución falló; amarillo si alguna de las últimas 5 ejecuciones falló.',
+  'pipelineHealth.threshold.executionDuration': 'Verde por debajo de 5 minutos; amarillo a partir de 5 minutos; rojo a partir de 10 minutos.',
+  'pipelineHealth.threshold.apiQuota': 'Verde por debajo de 80 solicitudes/mes; amarillo desde 80; rojo desde 95 (cuota: 100 solicitudes/mes).',
+  'pipelineHealth.threshold.awsCost': 'Verde por debajo de 2 $; amarillo desde 2 $; rojo desde 5 $ en lo que va de mes (excluyendo costes de dominio/registrador).',
+  'pipelineHealth.diagram.title': 'Pipeline Medallion',
+  'pipelineHealth.diagram.bronze': 'Bronze (datos en bruto)',
+  'pipelineHealth.diagram.silver': 'Silver (datos limpios)',
+  'pipelineHealth.diagram.gold': 'Gold (datos agregados)',
+  'pipelineHealth.diagram.observer': 'Estado del pipeline (observador)',
 };
 
 const ar = {
@@ -427,6 +475,21 @@ const ar = {
   'pipelineHealth.check.apiQuota': 'حصة واجهة برمجة التطبيقات',
   'pipelineHealth.check.awsCost': 'تكلفة AWS',
   'pipelineHealth.notAvailable': 'بيانات سلامة خط الأنابيب غير متوفرة بعد.',
+
+  'pipelineHealth.status.unknown': 'غير معروف',
+  'pipelineHealth.detail.executionSuccess.title': 'سجل نجاح التنفيذ',
+  'pipelineHealth.detail.executionDuration.title': 'سجل مدة التنفيذ',
+  'pipelineHealth.detail.apiQuota.title': 'سجل حصة واجهة برمجة التطبيقات',
+  'pipelineHealth.detail.awsCost.title': 'سجل تكلفة AWS',
+  'pipelineHealth.threshold.executionSuccess': 'أحمر إذا فشل آخر تنفيذ؛ أصفر إذا فشل أي من آخر 5 عمليات تنفيذ.',
+  'pipelineHealth.threshold.executionDuration': 'أخضر أقل من 5 دقائق؛ أصفر من 5 دقائق؛ أحمر من 10 دقائق.',
+  'pipelineHealth.threshold.apiQuota': 'أخضر أقل من 80 طلبًا/شهريًا؛ أصفر من 80؛ أحمر من 95 (الحصة: 100 طلب/شهريًا).',
+  'pipelineHealth.threshold.awsCost': 'أخضر أقل من 2 دولار؛ أصفر من 2 دولار؛ أحمر من 5 دولارات منذ بداية الشهر (باستثناء تكاليف النطاق/المسجل).',
+  'pipelineHealth.diagram.title': 'خط أنابيب الميدالية',
+  'pipelineHealth.diagram.bronze': 'البرونزية (بيانات خام)',
+  'pipelineHealth.diagram.silver': 'الفضية (بيانات منظفة)',
+  'pipelineHealth.diagram.gold': 'الذهبية (بيانات مجمعة)',
+  'pipelineHealth.diagram.observer': 'سلامة خط الأنابيب (مراقب)',
 };
 
 const tr = {
@@ -530,6 +593,21 @@ const tr = {
   'pipelineHealth.check.apiQuota': 'API kotası',
   'pipelineHealth.check.awsCost': 'AWS maliyeti',
   'pipelineHealth.notAvailable': 'Pipeline sağlığı verileri henüz mevcut değil.',
+
+  'pipelineHealth.status.unknown': 'Bilinmiyor',
+  'pipelineHealth.detail.executionSuccess.title': 'Yürütme başarısı geçmişi',
+  'pipelineHealth.detail.executionDuration.title': 'Yürütme süresi geçmişi',
+  'pipelineHealth.detail.apiQuota.title': 'API kotası geçmişi',
+  'pipelineHealth.detail.awsCost.title': 'AWS maliyeti geçmişi',
+  'pipelineHealth.threshold.executionSuccess': 'Son yürütme başarısız olduysa kırmızı; son 5 yürütmeden biri başarısız olduysa sarı.',
+  'pipelineHealth.threshold.executionDuration': '5 dakikanın altında yeşil; 5 dakikadan itibaren sarı; 10 dakikadan itibaren kırmızı.',
+  'pipelineHealth.threshold.apiQuota': 'Ayda 80 istekten az yeşil; 80\'den itibaren sarı; 95\'ten itibaren kırmızı (kota: ayda 100 istek).',
+  'pipelineHealth.threshold.awsCost': '2 $\'ın altında yeşil; 2 $\'dan itibaren sarı; 5 $\'dan itibaren kırmızı (ay başından bugüne, alan adı/kayıt maliyetleri hariç).',
+  'pipelineHealth.diagram.title': 'Medallion pipeline',
+  'pipelineHealth.diagram.bronze': 'Bronz (ham veri)',
+  'pipelineHealth.diagram.silver': 'Silver (temizlenmiş)',
+  'pipelineHealth.diagram.gold': 'Gold (toplanmış)',
+  'pipelineHealth.diagram.observer': 'Pipeline Sağlığı (gözlemci)',
 };
 
 const TRANSLATIONS = { en, de, es, ar, tr };
