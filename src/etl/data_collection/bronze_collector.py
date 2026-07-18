@@ -27,6 +27,7 @@ from typing import Dict, List, Optional, Protocol, Tuple
 
 from common.notifier import Notifier
 from common.object_store import ObjectStore
+from common.search_config import IDEALISTA_SEARCH_PARAMS
 from common.secrets_provider import SecretsProvider
 
 logger = logging.getLogger()
@@ -48,29 +49,36 @@ class SearchConfig:
     each instance now carries its ``operation`` so sale/rent variants are
     interchangeable strategies. ``build_url`` keeps its optional
     *operation* argument for backward compatibility.
+
+    FEATURE-011 (task 11.1): every search literal is read from the shared
+    :data:`common.search_config.IDEALISTA_SEARCH_PARAMS` constant at
+    construction time, so the collector and the gold ``data_basis.search_config``
+    dataset can never silently drift apart (review M2). The Idealista API
+    request payload is unchanged.
     """
 
-    BASE_URL = "https://api.idealista.com/3.5/"
-    COUNTRY = "es"
+    BASE_URL = IDEALISTA_SEARCH_PARAMS["base_url"]
+    COUNTRY = IDEALISTA_SEARCH_PARAMS["country"]
 
     def __init__(self, operation: str = "sale") -> None:
         """
         Args:
             operation: Either ``'sale'`` or ``'rent'``.
         """
+        params = IDEALISTA_SEARCH_PARAMS
         self.operation = operation
-        self.max_items = "50"
-        self.order = "distance"
-        self.center = "39.4693441,-0.379561"  # Valencia city center
-        self.distance = "1500"  # meters
-        self.property_type = "homes"
-        self.sort = "asc"
-        self.min_size = "100"
-        self.max_size = "160"
-        self.elevator = "true"
+        self.max_items = str(params["max_items"])
+        self.order = params["order"]
+        self.center = f"{params['center_lat']},{params['center_lon']}"
+        self.distance = str(params["distance_m"])
+        self.property_type = params["property_type"]
+        self.sort = params["sort"]
+        self.min_size = str(params["min_size_m2"])
+        self.max_size = str(params["max_size_m2"])
+        self.elevator = str(params["elevator"]).lower()
         self.air_conditioning = "true"
-        self.preservation = "good"
-        self.language = "en"
+        self.preservation = params["preservation"]
+        self.language = params["language"]
 
     @classmethod
     def sale(cls) -> "SearchConfig":
