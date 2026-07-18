@@ -258,7 +258,7 @@ tasks:
       TDD, RED first. Create renderer modules for weekly volume, size histogram, rooms distribution,
       price/m2 histogram, and privacy-safe location grid map. Tests should assert trace shape,
       empty-input safety, layout/theme usage, and radius-overlay geometry for the map.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 4
     depends_on: ["11.4"]
