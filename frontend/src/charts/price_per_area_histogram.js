@@ -46,7 +46,10 @@ function makeHistogramRenderer(id, title, operation, xAxisLabel) {
         viewport: context.viewport,
         colorScheme: context.colorScheme,
         overrides: {
-          xaxis: { title: { text: xAxisLabel } },
+          // Bin labels like "10-11" can be misread by Plotly's automatic axis-type
+          // detection as dates (e.g. "Oct 2011"). Force a categorical axis so the
+          // labels always render as-is, as discrete bins.
+          xaxis: { title: { text: xAxisLabel }, type: 'category' },
           yaxis: { title: { text: 'Listings' } },
         },
       });

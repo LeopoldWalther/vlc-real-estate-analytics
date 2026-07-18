@@ -912,7 +912,9 @@ class TestWeeklyListingVolume:
         assert by_key[("sale", "2023-04-16")] == 1
 
     def test_includes_data_outside_the_three_scope_districts(self) -> None:
-        """Data Basis operates on unscoped Silver data, unlike general/relevant."""
+        """This pure helper itself has no scope filtering — GoldAggregator
+        applies apply_scope() upstream before calling it (see
+        test_gold_aggregator.py::test_data_basis_respects_scope_districts)."""
         rows = [_make_listing(district="Benimaclet", propertyCode="P1")]
         result = weekly_listing_volume(_df(rows))
         assert result[0]["count_listings"] == 1

@@ -337,10 +337,12 @@ class TestGoldAggregatorEmitsDataBasis:
             "boxplot_by_neighborhood_last_3m",
         }
 
-    def test_data_basis_operates_on_unscoped_data(self) -> None:
+    def test_data_basis_respects_scope_districts(self) -> None:
         """
-        Data Basis counts listings from EVERY district, not just the 3 scope
-        districts general/relevant are restricted to.
+        Data Basis must show the same neighbourhoods as Trend Analysis, not a
+        superset (operator decision 2026-07-18): a listing whose district
+        falls outside SCOPE_DISTRICTS is excluded from both general/relevant
+        AND data_basis.
         """
         store = InMemoryObjectStore()
         buffer = io.BytesIO()
@@ -375,13 +377,7 @@ class TestGoldAggregatorEmitsDataBasis:
         document = json.loads(store.get_bytes(result.key))
 
         assert document["general"]["price_time_series_neighborhood"] == []
-        assert document["data_basis"]["weekly_listing_volume"] == [
-            {
-                "operation": "sale",
-                "snapshot_date": "2023-04-09",
-                "count_listings": 1,
-            }
-        ]
+        assert document["data_basis"]["weekly_listing_volume"] == []
 
     def test_moto_lambda_aggregation_includes_data_basis(self) -> None:
         """Acceptance criterion: moto-backed Lambda aggregation test confirms
