@@ -64,6 +64,11 @@ SCOPE_DISTRICTS: List[str] = ["Extramurs", "Ciutat Vella", "L'Eixample"]
 
 _DEFAULT_MIN_COUNT: int = 5
 
+# Single named constant for the rolling KPI window length (FEATURE-010).
+# The rolling window is relative to max(snapshot_date) in the scoped/deduped
+# data, not wall-clock now — see _rolling_window_start().
+ROLLING_KPI_WINDOW_MONTHS: int = 3
+
 # The "apartments like ours" predicate, echoed into the JSON contract.
 RELEVANT_FILTER_SPEC: Dict[str, Any] = {
     "hasLift": True,
@@ -89,6 +94,39 @@ def utc_now_iso() -> str:
     ``datetime`` reference once.
     """
     return datetime.now(tz=timezone.utc).isoformat()
+
+
+def _rolling_window_start(
+    df: pd.DataFrame, window_months: int = ROLLING_KPI_WINDOW_MONTHS
+) -> Optional[pd.Timestamp]:
+    """
+    Compute the inclusive start of a rolling calendar-month window.
+
+    The window is anchored to ``max(snapshot_date)`` within ``df`` — never to
+    wall-clock "now" — so backfills and delayed collection runs remain
+    deterministic. ``snapshot_date`` values are normalised with
+    ``pd.to_datetime(..., errors="coerce")`` so ISO strings, ``datetime.date``,
+    and pandas ``Timestamp`` inputs all produce the same window start (M2).
+
+    Args:
+        df: DataFrame with a ``snapshot_date`` column (any date-like dtype).
+        window_months: Number of calendar months to look back. Defaults to
+            :data:`ROLLING_KPI_WINDOW_MONTHS`.
+
+    Returns:
+        The inclusive window start as a ``pd.Timestamp``, or ``None`` when
+        ``df`` is empty or contains no parseable ``snapshot_date`` values.
+    """
+    if df.empty or "snapshot_date" not in df.columns:
+        return None
+
+    parsed = pd.to_datetime(df["snapshot_date"], errors="coerce")
+    parsed = parsed.dropna()
+    if parsed.empty:
+        return None
+
+    max_date = parsed.max()
+    return cast(pd.Timestamp, max_date - pd.DateOffset(months=window_months))
 
 
 def _relevant_rows(df: pd.DataFrame) -> pd.DataFrame:

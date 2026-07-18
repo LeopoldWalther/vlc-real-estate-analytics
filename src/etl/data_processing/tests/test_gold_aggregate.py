@@ -21,6 +21,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from gold_aggregate import (  # noqa: E402
+    ROLLING_KPI_WINDOW_MONTHS,
+    _rolling_window_start,
     apply_scope,
     build_aggregation_json,
     build_population_block,
@@ -612,3 +614,73 @@ class TestBuildAggregationJson:
         result = build_aggregation_json(_df(rows))
         assert result["relevant"]["rent_vs_sale_ratio"] == []
         assert result["relevant"]["boxplot_by_neighborhood"] == []
+
+
+# ---------------------------------------------------------------------------
+# _rolling_window_start — rolling KPI window helper (FEATURE-010)
+# ---------------------------------------------------------------------------
+
+
+class TestRollingWindowStart:
+    """Tests for the pure rolling-window start helper."""
+
+    def test_rolling_kpi_window_months_is_three(self) -> None:
+        """The single named window-length constant must be 3 months."""
+        assert ROLLING_KPI_WINDOW_MONTHS == 3
+
+    def test_returns_max_minus_three_months_for_long_history(self) -> None:
+        """GIVEN >3 months of history, returns max(snapshot_date) - 3 months."""
+        df = pd.DataFrame(
+            {
+                "snapshot_date": [
+                    date(2023, 1, 1),
+                    date(2023, 2, 1),
+                    date(2023, 3, 1),
+                    date(2023, 4, 9),
+                ]
+            }
+        )
+        start = _rolling_window_start(df, ROLLING_KPI_WINDOW_MONTHS)
+        expected = pd.Timestamp(date(2023, 4, 9)) - pd.DateOffset(months=3)
+        assert start == expected
+
+    def test_short_history_returns_start_before_all_rows(self) -> None:
+        """GIVEN only 2 weeks of history, the returned start includes all rows."""
+        df = pd.DataFrame(
+            {
+                "snapshot_date": [
+                    date(2023, 4, 1),
+                    date(2023, 4, 9),
+                ]
+            }
+        )
+        start = _rolling_window_start(df, ROLLING_KPI_WINDOW_MONTHS)
+        assert start is not None
+        assert (pd.to_datetime(df["snapshot_date"]) >= start).all()
+
+    def test_empty_dataframe_returns_none(self) -> None:
+        """GIVEN an empty DataFrame, the helper returns None without raising."""
+        df = pd.DataFrame(columns=["snapshot_date"])
+        assert _rolling_window_start(df, ROLLING_KPI_WINDOW_MONTHS) is None
+
+    def test_no_parseable_dates_returns_none(self) -> None:
+        """GIVEN only unparseable snapshot_date values, returns None."""
+        df = pd.DataFrame({"snapshot_date": ["not-a-date", None]})
+        assert _rolling_window_start(df, ROLLING_KPI_WINDOW_MONTHS) is None
+
+    def test_iso_string_date_and_timestamp_inputs_agree(self) -> None:
+        """ISO string, datetime.date, and pandas Timestamp inputs all agree."""
+        iso_df = pd.DataFrame({"snapshot_date": ["2023-01-01", "2023-04-09"]})
+        date_df = pd.DataFrame({"snapshot_date": [date(2023, 1, 1), date(2023, 4, 9)]})
+        ts_df = pd.DataFrame(
+            {
+                "snapshot_date": [
+                    pd.Timestamp("2023-01-01"),
+                    pd.Timestamp("2023-04-09"),
+                ]
+            }
+        )
+        iso_start = _rolling_window_start(iso_df, 3)
+        date_start = _rolling_window_start(date_df, 3)
+        ts_start = _rolling_window_start(ts_df, 3)
+        assert iso_start == date_start == ts_start
