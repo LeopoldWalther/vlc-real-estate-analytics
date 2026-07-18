@@ -32,6 +32,7 @@ from bronze_collector import (  # noqa: E402
     IdealistaApiClient,
     SearchConfig,
 )
+from common.search_config import IDEALISTA_SEARCH_PARAMS  # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Test doubles + builder
@@ -112,6 +113,74 @@ class TestSearchConfigStrategies:
         url = SearchConfig().build_url("rent")
         assert "operation=rent" in url
         assert "numPage=%s" in url
+
+
+# ---------------------------------------------------------------------------
+# Shared search-config source of truth (FEATURE-011, task 11.1)
+# ---------------------------------------------------------------------------
+
+
+class TestSharedSearchConfigSourceOfTruth:
+    """SearchConfig must build its request from common.search_config, not
+    from duplicated literals."""
+
+    def test_build_url_reflects_shared_center_and_distance(self) -> None:
+        url = SearchConfig.sale().build_url()
+
+        lat = IDEALISTA_SEARCH_PARAMS["center_lat"]
+        lon = IDEALISTA_SEARCH_PARAMS["center_lon"]
+        assert f"center={lat},{lon}" in url
+        assert f"distance={IDEALISTA_SEARCH_PARAMS['distance_m']}" in url
+
+    def test_build_url_reflects_shared_size_and_filters(self) -> None:
+        url = SearchConfig.rent().build_url()
+
+        assert f"propertyType={IDEALISTA_SEARCH_PARAMS['property_type']}" in url
+        assert f"minSize={IDEALISTA_SEARCH_PARAMS['min_size_m2']}" in url
+        assert f"maxSize={IDEALISTA_SEARCH_PARAMS['max_size_m2']}" in url
+        assert f"elevator={str(IDEALISTA_SEARCH_PARAMS['elevator']).lower()}" in url
+        assert f"preservation={IDEALISTA_SEARCH_PARAMS['preservation']}" in url
+
+    def test_build_url_actually_reads_the_shared_module(self) -> None:
+        """
+        Proves SearchConfig consumes ``common.search_config`` at
+        construction time rather than merely duplicating equal literals.
+        """
+        import common.search_config as search_config_module
+
+        original = dict(search_config_module.IDEALISTA_SEARCH_PARAMS)
+        try:
+            search_config_module.IDEALISTA_SEARCH_PARAMS["distance_m"] = 9999
+            search_config_module.IDEALISTA_SEARCH_PARAMS["min_size_m2"] = 42
+            url = SearchConfig.sale().build_url()
+            assert "distance=9999" in url
+            assert "minSize=42" in url
+        finally:
+            search_config_module.IDEALISTA_SEARCH_PARAMS.clear()
+            search_config_module.IDEALISTA_SEARCH_PARAMS.update(original)
+
+    def test_url_unchanged_from_pre_refactor_snapshot(self) -> None:
+        """
+        Locks the exact request shape the Idealista API has always
+        received — the refactor must not silently change the payload.
+        """
+        url = SearchConfig().build_url("sale")
+        assert url == (
+            "https://api.idealista.com/3.5/es/search"
+            "?operation=sale"
+            "&maxItems=50"
+            "&order=distance"
+            "&center=39.4693441,-0.379561"
+            "&distance=1500"
+            "&propertyType=homes"
+            "&sort=asc"
+            "&minSize=100"
+            "&maxSize=160"
+            "&numPage=%s"
+            "&elevator=true"
+            "&preservation=good"
+            "&language=en"
+        )
 
 
 # ---------------------------------------------------------------------------
