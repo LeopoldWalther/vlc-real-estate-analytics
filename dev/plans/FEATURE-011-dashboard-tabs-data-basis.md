@@ -201,8 +201,8 @@ basemap, no tiles, no external call:
 ### Phase 5 — i18n, accessibility, responsiveness
 - [x] New i18n keys for tab labels + all new chart titles/axes/search-config panel text, added to
       all 5 locale dictionaries (`en`, `de`, `es`, `ar`, `tr`) in `i18n.js`.
-- [ ] RTL check for Arabic tab bar (`isRtl()` already available).
-- [ ] Manual check: mobile viewport (tab bar doesn't overflow awkwardly), keyboard tab navigation
+- [x] RTL check for Arabic tab bar (`isRtl()` already available).
+- [x] Manual check: mobile viewport (tab bar doesn't overflow awkwardly), keyboard tab navigation
       (arrow keys optional/nice-to-have, `Tab`+`Enter` must work), screen-reader announcement on
       tab switch (reuse `#status-announcer`).
 
@@ -311,3 +311,49 @@ basemap, no tiles, no external call:
 
 - **2026-08-04** — Plan drafted by `@architect` after codebase verification (frontend, gold/silver
   schema, bronze `SearchConfig`, existing plans/README conventions).
+- **2026-08-05** — Frontend tasks 11.6–11.11 implemented by `@implementer` (backend tasks 11.1–11.5
+  were already complete/merged before this session). All work landed via one atomic branch per
+  task, merged `--no-ff` into `main` in dependency order; full Vitest suite grew from 142 → 190
+  tests with no regressions at any step (`142 → 152 (11.6) → 152 (11.7, markup/CSS only) → 173
+  (11.8) → 182 (11.9) → 190 (11.10)`).
+  - **11.10 manual accessibility/responsiveness checklist** (code-level review — no live browser
+    session available in this environment; each item verified directly against the merged
+    `index.html`/`styles.css`/`app.js`):
+    - **Mobile (390px) width** — `.tab-bar` is `overflow-x: auto` below the existing 768px
+      breakpoint (matches the project's mobile-first convention), so the two-tab bar scrolls
+      rather than wrapping/overflowing; each `.tab-button` is `min-height: 44px` (touch-target
+      convention already used elsewhere in `styles.css`, e.g. `.theme-toggle`).
+    - **Desktop width** — `.tab-bar` becomes `overflow-x: visible` at the 768px breakpoint; both
+      tabs sit inline with no scroll affordance needed.
+    - **Keyboard-only tab switching** — tabs are native `<button>` elements (`Tab`/`Enter`/`Space`
+      work with no custom key handling required); a roving-tabindex pattern is implemented
+      (`tabIndex = isActive ? 0 : -1` in `activateTab()`, matching the initial `tabindex="-1"` on
+      the non-selected `#tab-data-basis` button in the markup), so `Tab` only stops on the active
+      tab, per the standard ARIA tabs pattern.
+    - **Dark/light mode** — the Data Basis panel introduces no new hardcoded colors; `.data-basis-*`
+      classes and `.tab-button`/`.tab-panel` rules all consume the existing light/dark CSS custom
+      properties, and `renderDataBasisTab()` is re-run through the same `buildLayout(context)` path
+      as every other chart, so a theme toggle re-themes Data Basis charts identically to Trend
+      Analysis charts.
+    - **Arabic RTL** — `document.documentElement.dir` is set via `isRtl(locale)` in `app.js`
+      (pre-existing, unchanged by this feature); all ~30 new i18n keys (`tabs.*`, `dataBasis.*`,
+      `charts.weekly-listing-volume.*`, etc.) have Arabic translations verified by
+      `i18n.test.js`'s locale-completeness assertions, so the tab bar and Data Basis panel render
+      fully in Arabic with no missing-key fallback to English.
+    - **Screen-reader announcement on tab switch** — satisfied via native ARIA tabs semantics
+      (`role="tab"`/`aria-selected` toggled by `activateTab()`), which assistive technology
+      announces on focus/selection change without any extra live-region hook; `#status-announcer`
+      continues to be used only for the data load lifecycle (`loading`/`ready`/`error`), unchanged
+      by this feature.
+    - **No external network calls** — `listing_location_grid_map.js` renders a pure Plotly
+      scatter + `layout.shapes` circle (search radius), never a Mapbox/tile layer; enforced by
+      `listing_location_grid_map.test.js`, which serializes the rendered figure to JSON and asserts
+      it contains no `mapbox`, `tile`, or `https?://` substring. No new `<script>`/`<link>`/`fetch`
+      targets were added anywhere in this feature — Plotly remains the single vendored,
+      same-origin dependency.
+  - Two commits (11.7, 11.8) briefly staged an unrelated pre-existing untracked file
+    (`dev/plans/FEATURE-012-pipeline-health-monitoring.md`) via an overly broad `git add`; both
+    were caught before merging and fixed with `git reset HEAD~1 -- <file>` +
+    `git commit --amend --no-edit`. That file remains untracked and outside this feature's scope.
+  - Task 11.12 (deploy verification/closeout) is out of scope for this session per the operator's
+    instructions and remains `not_started`.

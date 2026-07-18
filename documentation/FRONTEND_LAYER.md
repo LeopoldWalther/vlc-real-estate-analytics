@@ -86,7 +86,82 @@ accepts an optional `render(populationBlock, context)` second parameter defaulti
 `{ viewport: 'desktop', colorScheme: 'light' }` so every pre-existing call site/test keeps working
 unchanged.
 
-## Chart Inventory
+## Tabbed dashboard architecture (FEATURE-011)
+
+The dashboard is split into two tabs — **Trend Analysis** (the original eight charts, above) and
+**Data Basis** — sharing one `<nav role="tablist">` / `role="tabpanel"` shell:
+
+```
+<nav role="tablist">
+  <button role="tab" id="tab-trend-analysis" data-tab-id="trend-analysis" aria-selected="true">
+  <button role="tab" id="tab-data-basis"     data-tab-id="data-basis"     aria-selected="false">
+
+<section role="tabpanel" id="panel-trend-analysis">  ← existing 8 charts, rendered eagerly by run()
+<section role="tabpanel" id="panel-data-basis" hidden>  ← 6 new charts, rendered lazily
+```
+
+- **`src/tab_state.js`** — pure, DOM-free tab registry: `TAB_IDS` (`['trend-analysis',
+  'data-basis']`), `DEFAULT_TAB_ID`, `resolveActiveTab(hash, validIds, fallbackId)` (maps a
+  `location.hash` to a known tab id, falling back to the default for anything missing/invalid), and
+  `buildTabHash(tabId)` (the inverse, for writing `location.hash` back out). Adding a third tab in
+  future is a one-line change to `TAB_IDS` — no other module needs to change its shape to
+  accommodate it.
+- **`app.js` tab wiring** — a click on any `.tab-button` or a `hashchange` event calls
+  `activateTab(tabId)`, which: toggles `aria-selected`/`tabIndex` on every button, toggles `hidden`
+  on every `.tab-panel`, updates `location.hash` (skipped when reacting to a `hashchange` that
+  already changed it, to avoid a duplicate history entry), and — for `data-basis` — either
+  lazy-renders its charts the first time (`renderDataBasisTab()`) or calls
+  `Plotly.Plots.resize()` on every subsequent re-activation (a Plotly chart drawn inside a
+  `display:none` container cannot size itself correctly, so first paint must wait until the panel
+  is visible; a resize nudge is enough once it has already been painted at least once). A
+  module-level `renderedTabs` Set tracks which tabs have been painted. Deep-linking to
+  `#data-basis` on first page load is handled by resolving the starting hash before the first
+  fetch, then re-checking after `run()`'s data load completes (the lazy-render guard is a no-op
+  until `cachedData` exists).
+- **Filter isolation by construction** — `renderDataBasisTab()` always renders against
+  `cachedData.data_basis` directly; it is never passed through `applyScope()` or the active
+  population toggle. The existing district/neighbourhood/population filters therefore only ever
+  affect Trend Analysis charts, with no conditional logic required to enforce this — the Data
+  Basis renderers simply never see scoped data.
+
+## Data Basis tab: chart renderers & search-config panel
+
+Six new renderer modules under `src/charts/` follow the identical `{id, title, render(dataBasis,
+context) -> {data, layout}}` Strategy contract as the original eight and plug into the same
+`plotChart()` pipeline in `app.js`, keyed by the same `charts.<id>.*` i18n title/axis lookups:
+
+| Container ID | Renderer(s) | Chart type | Source array |
+|---|---|---|---|
+| `weekly-listing-volume` | `weeklyListingVolumeRenderer` | scatter, sale/rent traces | `weekly_listing_volume` |
+| `size-histogram` | `sizeHistogramRenderer` | grouped bar (10 m² bins) | `size_histogram_10sqm` |
+| `rooms-distribution` | `roomsDistributionRenderer` | grouped bar | `rooms_distribution` |
+| `price-per-area-histogram-rent` | `priceHistogramRentRenderer` | bar | `price_per_area_histogram` (rent) |
+| `price-per-area-histogram-sale` | `priceHistogramSaleRenderer` | bar | `price_per_area_histogram` (sale) |
+| `listing-location-grid-map` | `listingLocationGridMapRenderer` | scatter + search-radius shape | `listing_location_grid_last_3m` |
+
+The rent/sale price-per-area histogram is split into two renderers (mirroring
+`boxplot_by_neighborhood.js`'s Factory pattern) for the same reason as the Trend Analysis
+boxplots: rent (~€10–25/m²) and sale (~€2 000–6 000/m²) prices differ by two orders of magnitude
+and cannot share a readable axis.
+
+**`listing_location_grid_map.js` renders an aggregated coordinate scatter, not a street map** — it
+is a pure Plotly `scattergl`/`scatter` trace (marker size encodes `count_listings`) plus a
+`layout.shapes` circle centred on `search_config[0].center_lat/lon` with radius
+`search_config[0].distance_m`, aspect-corrected via `scaleanchor`/`scaleratio: 1` so the circle
+renders round rather than elliptical. **No Mapbox layer, tile server, or any external URL is ever
+referenced** — the renderer only emits Plotly primitives, verified by a dedicated test
+(`listing_location_grid_map.test.js`) that serializes the whole returned figure to JSON and asserts
+it contains no `mapbox`, `tile`, or `https?://` substring. This keeps the map fully same-origin,
+consistent with the vendored-Plotly, no-CDN posture of the rest of the frontend.
+
+- **`src/search_config.js`** — pure `formatSearchConfigSummary(searchConfig, locale)` turning the
+  single `data_basis.search_config[0]` record into an ordered array of `{key, label, value}` rows
+  (search radius, size range, property type, elevator, preservation state, map center), with labels
+  sourced from `i18n.js` (`dataBasis.searchConfig.*` keys) and units/booleans formatted per locale.
+  `app.js`'s `renderSearchConfigPanel()` clears and repopulates the `<dl id="data-basis-search-config">`
+  from these rows on first Data Basis render and again on every locale switch.
+
+## Chart Inventory — Trend Analysis (original)
 
 | Container ID | Renderer | Population | Data key |
 |---|---|---|---|
@@ -146,9 +221,9 @@ over-engineering.
 
 ```
 frontend/
-├── index.html                          # Single HTML page; KPI row; 8 chart containers; toggle; theme button
-├── app.js                              # Entry — thin orchestration; wires DataSource + pure modules + renderers
-├── styles.css                          # Design tokens (light/dark), responsive card grid, skeletons, a11y
+├── index.html                          # Tablist shell; Trend Analysis panel (8 charts); Data Basis panel (6 charts + search-config)
+├── app.js                              # Entry — thin orchestration; tab wiring + DataSource + pure modules + renderers
+├── styles.css                          # Design tokens (light/dark), tab bar, responsive card grid, skeletons, a11y
 ├── favicon.svg                         # Inline SVG brand mark
 ├── vendor/
 │   └── plotly.min.js                   # Vendored Plotly.js v2.35.2 (same-origin, no CDN)
@@ -158,15 +233,22 @@ frontend/
 │   ├── chart_theme.js                  # buildLayout(viewport, colorScheme, overrides) factory
 │   ├── dashboard_state.js              # Pure theme/viewport/rerender/lifecycle helpers
 │   ├── summary.js                      # Pure summaryStats + formatKpi (KPI headline row)
+│   ├── tab_state.js                    # Pure TAB_IDS/resolveActiveTab/buildTabHash
+│   ├── search_config.js                # Pure formatSearchConfigSummary (Data Basis panel)
 │   └── charts/
 │       ├── price_time_series.js        # Factory: priceTimeSeriesRentRenderer + SaleRenderer
 │       ├── price_time_series_district.js # Factory: district rent + sale
 │       ├── rent_vs_sale_ratio.js       # rentVsSaleRatioRenderer (scatter)
 │       ├── rent_vs_sale_ratio_time_series.js  # ratioTimeSeriesRenderer (line)
-│       └── boxplot_by_neighborhood.js  # makeBoxplotRenderer; separate rent + sale renderers
+│       ├── boxplot_by_neighborhood.js  # makeBoxplotRenderer; separate rent + sale renderers
+│       ├── weekly_listing_volume.js    # weeklyListingVolumeRenderer (Data Basis)
+│       ├── size_histogram.js           # sizeHistogramRenderer (Data Basis)
+│       ├── rooms_distribution.js       # roomsDistributionRenderer (Data Basis)
+│       ├── price_per_area_histogram.js # priceHistogramRentRenderer + SaleRenderer (Data Basis)
+│       └── listing_location_grid_map.js # listingLocationGridMapRenderer (Data Basis, no external map)
 └── tests/
     ├── fixtures/
-    │   └── latest.sample.json          # Schema-v1.0 fixture used by all tests
+    │   └── latest.sample.json          # Schema-v1.0 fixture (incl. data_basis block) used by all tests
     ├── data_source.test.js
     ├── transforms.test.js
     ├── transforms_additional.test.js
@@ -177,7 +259,16 @@ frontend/
     ├── price_time_series_district.test.js
     ├── rent_vs_sale_ratio.test.js
     ├── rent_vs_sale_ratio_time_series.test.js
-    └── boxplot_by_neighborhood.test.js
+    ├── boxplot_by_neighborhood.test.js
+    ├── tab_state.test.js
+    ├── search_config.test.js
+    ├── weekly_listing_volume.test.js
+    ├── size_histogram.test.js
+    ├── rooms_distribution.test.js
+    ├── price_per_area_histogram.test.js
+    ├── listing_location_grid_map.test.js
+    ├── i18n.test.js
+    └── app_tab_wiring.test.js          # Integration test for tab click/hashchange/lazy-render wiring
 ```
 
 ## Infrastructure
@@ -239,12 +330,16 @@ npm run test:coverage
 
 Tests use [Vitest](https://vitest.dev/) with `FakeDataSource` and a local fixture
 (`tests/fixtures/latest.sample.json`). No DOM, no network, no Plotly mock at module level —
-Plotly is injected via `vi.stubGlobal` where needed. `app.js` itself has no dedicated unit tests
-(kept intentionally thin, DOM-only orchestration — see FEATURE-009 review finding M2) and is
-excluded from coverage; all non-trivial logic lives in the pure `src/*.js` modules, which are all
-covered. The suite runs in < 350 ms.
+Plotly is injected via `vi.stubGlobal` where needed. Every `src/*.js` module is pure (DOM-free) and
+unit tested directly; `app.js` itself remains a thin DOM-applying entry point with no exported
+functions, but its tab-navigation wiring (task 11.10) is exercised end-to-end by
+`app_tab_wiring.test.js` against a small purpose-built fake `document`/`window`/`Plotly` (no
+jsdom/happy-dom dependency) that supports only the specific selector syntax (`#id`, `.class`,
+`[attr]`/`[attr="value"]`, a single descendant combinator) app.js actually uses — every other
+selector call in app.js is written defensively with `?.`, matching real "not found" DOM behaviour.
+The suite runs in well under a second.
 
 ```bash
-# Full suite (106 tests)
+# Full suite
 cd frontend && npm test
 ```

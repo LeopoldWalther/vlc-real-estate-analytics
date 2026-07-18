@@ -385,7 +385,7 @@ tasks:
       Document the tab architecture and Data Basis frontend modules, then perform a manual mobile,
       keyboard, dark/light, and RTL smoke check. Record the checklist in the feature plan progress
       log/status section.
-    status: "not_started"
+    status: "done"
     complexity: "low"
     estimated_hours: 1
     depends_on: ["11.10"]
