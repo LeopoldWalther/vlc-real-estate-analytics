@@ -30,6 +30,13 @@ Environment variables
   monitor for execution success/duration (required).
 - ``AWS_REGION_DEFAULT``: Region for Logs/CloudWatch/S3 clients (optional;
   boto3's default resolution is used when omitted).
+
+FEATURE-013 (task 13.4): schema v1.1 (per-invocation ``recent_invocations``
+and monthly ``monthly_cost_by_service`` history) requires no additional
+wiring here — ``ExecutionSuccessCheck``/``ExecutionDurationCheck`` and
+``AwsCostCheck`` already default-construct their own history adapters from
+the same injected clients, so the factory below is unchanged and still
+produces the v1.1 document (``pipeline_health_aggregator.SCHEMA_VERSION``).
 """
 
 from __future__ import annotations

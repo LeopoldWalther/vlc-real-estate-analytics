@@ -13,22 +13,24 @@
  * yet available" state rather than throwing uncaught into app.js (task
  * 12.11 acceptance criterion).
  *
- * Supported schema_version: '1.0' (pipeline_health_aggregator.SCHEMA_VERSION).
+ * Supported schema_version: '1.0' and '1.1' (FEATURE-013, task 13.4 — the
+ * frontend must tolerate both during the v1.1 backend rollout window).
  */
 
-const SUPPORTED_SCHEMA_VERSION = '1.0';
+const SUPPORTED_SCHEMA_VERSIONS = ['1.0', '1.1'];
 
 /**
- * Assert that the parsed JSON declares schema_version '1.0'.
+ * Assert that the parsed JSON declares a supported schema_version.
  *
  * @param {object} data - Parsed JSON object.
- * @throws {Error} If schema_version is absent or does not equal '1.0'.
+ * @throws {Error} If schema_version is absent or not one of
+ *   SUPPORTED_SCHEMA_VERSIONS.
  */
 function _assertSchemaVersion(data) {
-  if (data.schema_version !== SUPPORTED_SCHEMA_VERSION) {
+  if (!SUPPORTED_SCHEMA_VERSIONS.includes(data.schema_version)) {
     throw new Error(
       `Unsupported schema_version '${data.schema_version}'. ` +
-        `Expected '${SUPPORTED_SCHEMA_VERSION}'.`
+        `Expected one of: ${SUPPORTED_SCHEMA_VERSIONS.join(', ')}.`
     );
   }
 }
@@ -48,7 +50,7 @@ export class PipelineHealthDataSource {
   /**
    * Fetch and validate the pipeline-health JSON.
    *
-   * @returns {Promise<object>} The validated pipeline-health document (schema v1.0).
+   * @returns {Promise<object>} The validated pipeline-health document (schema v1.0 or v1.1).
    * @throws {Error} On HTTP failure, network error, malformed JSON, or
    *   schema_version mismatch.
    */

@@ -83,3 +83,36 @@ class TestLambdaHandler:
             assert response["key"] == "gold/pipeline_health/latest.json"
             assert response["bytes"] > 0
             assert response["overall_status"] in ("green", "yellow", "red")
+
+    def test_handler_writes_schema_v1_1_document_with_new_fields(self) -> None:
+        """FEATURE-013 task 13.4: end-to-end schema v1.1 wiring."""
+        import json
+
+        with mock_aws():
+            s3_client = boto3.client("s3", region_name="eu-central-1")
+            s3_client.create_bucket(
+                Bucket=BUCKET,
+                CreateBucketConfiguration={"LocationConstraint": "eu-central-1"},
+            )
+
+            with patch.dict(os.environ, ENV, clear=False):
+                lambda_handler({}, None)
+
+            body = s3_client.get_object(
+                Bucket=BUCKET, Key="gold/pipeline_health/latest.json"
+            )["Body"].read()
+            document = json.loads(body)
+
+            assert document["schema_version"] == "1.1"
+            # Under moto, execution/cost checks degrade to a synthetic error
+            # result (Logs Insights / Cost Explorer aren't implemented by
+            # moto) — this test only asserts the schema-version wiring, not
+            # the check math itself (covered by the unit tests above).
+            for key in (
+                "execution_success",
+                "execution_duration",
+                "api_quota",
+                "aws_cost",
+            ):
+                assert key in document
+                assert "details" in document[key]

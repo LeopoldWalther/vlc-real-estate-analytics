@@ -31,7 +31,18 @@ describe('PipelineHealthDataSource', () => {
     expect(data.aws_cost).toBeDefined();
   });
 
-  it('rejects with a clear error message when schema_version is not 1.0', async () => {
+  it('resolves with parsed data when schema_version is 1.1 (FEATURE-013)', async () => {
+    const v11Fixture = { ...VALID_FIXTURE, schema_version: '1.1' };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => v11Fixture }));
+
+    const ds = new PipelineHealthDataSource('https://example.test/pipeline_health/latest.json');
+    const data = await ds.load();
+
+    expect(data.schema_version).toBe('1.1');
+    expect(data.overall_status).toBe('green');
+  });
+
+  it('rejects with a clear error message when schema_version is not 1.0 or 1.1', async () => {
     const wrongSchema = { ...VALID_FIXTURE, schema_version: '2.0' };
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => wrongSchema }));
 
