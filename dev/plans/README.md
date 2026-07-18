@@ -19,6 +19,7 @@ small, version-controlled, independently testable tasks.
 | FEATURE-010 | Rolling 3-month median for rent/sale KPI tiles | 🟢 | `feature/rolling-3m-median-kpis` | M (~1–1.5 d) | Medium | @implementer |
 | FEATURE-011 | Dashboard tabs & Data Basis (deployed dev+prod) | ✅ | `feature/dashboard-tabs-data-basis` | L (~3–3.5 d) | Medium | @implementer |
 | FEATURE-012 | Pipeline Health monitoring (traffic light: bronze/silver/gold, API quota, AWS cost) | 🟢 | `feature/pipeline-health-monitoring` | L (~3.5–4 d) | Medium | @implementer |
+| FEATURE-013 | Pipeline Health tab — detailed views & history (Medallion diagram, 4 KPI history charts, threshold captions) | 🟡 | `feature/pipeline-health-detail-views` | L (~35 h) | Medium | @implementer |
 
 **Status:** 🔵 planned · 🟡 in progress · 🟢 complete · 🔴 blocked
 
@@ -44,6 +45,8 @@ graph TD
     F009 --> F010
     F004 --> F011[FEATURE-011 Dashboard tabs & Data Basis]
     F010 --> F011
+    F011 --> F012[FEATURE-012 Pipeline Health monitoring]
+    F012 --> F013[FEATURE-013 Pipeline Health detail views]
 ```
 
 ## Workflow at a glance
