@@ -180,7 +180,7 @@ class _LogsInsightsExecutionHistory:
         " | filter @message like /REPORT/"
         " | parse @message /(?<error_marker>Task timed out|ERROR|"
         "Process exited before completing request)/"
-        " | fields @timestamp, duration_ms, error_marker"
+        " | display @timestamp, duration_ms, error_marker"
         " | sort @timestamp desc"
         " | limit {limit}"
     )
