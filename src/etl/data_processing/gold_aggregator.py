@@ -26,8 +26,10 @@ import pandas as pd
 from common.object_store import ObjectStore
 from gold_aggregate import (
     RELEVANT_FILTER_SPEC,
+    ROLLING_KPI_WINDOW_MONTHS,
     SCOPE_DISTRICTS,
     _boxplot_by_neighborhood,
+    _boxplot_by_neighborhood_last_months,
     _dedup,
     _price_time_series_district,
     _price_time_series_neighborhood,
@@ -142,6 +144,32 @@ class NeighborhoodBoxplot:
         return _boxplot_by_neighborhood(df)
 
 
+class NeighborhoodBoxplotLast3Months:
+    """Strategy: rolling 3-month priceByArea 5-number summary per neighborhood."""
+
+    key: str = "boxplot_by_neighborhood_last_3m"
+
+    def __init__(
+        self,
+        min_count: int = 5,
+        window_months: int = ROLLING_KPI_WINDOW_MONTHS,
+    ) -> None:
+        """
+        Args:
+            min_count: Minimum listings inside the window before a group is
+                included (schema stability guard, review finding H2).
+            window_months: Rolling window length in calendar months.
+        """
+        self._min_count = min_count
+        self._window_months = window_months
+
+    def compute(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
+        """Delegate to the pure windowed helper in :mod:`gold_aggregate`."""
+        return _boxplot_by_neighborhood_last_months(
+            df, window_months=self._window_months, min_count=self._min_count
+        )
+
+
 def default_populations(
     min_count: int,
 ) -> Tuple[Sequence[Aggregation], Sequence[Aggregation]]:
@@ -161,6 +189,7 @@ def default_populations(
     ratio = RentVsSaleRatio(min_count)
     ratio_ts = RentVsSaleRatioTimeSeries(min_count)
     boxplot = NeighborhoodBoxplot()
+    boxplot_last_3m = NeighborhoodBoxplotLast3Months(min_count)
 
     general: Sequence[Aggregation] = (
         NeighborhoodPriceTimeSeries(),
@@ -168,8 +197,9 @@ def default_populations(
         ratio,
         ratio_ts,
         boxplot,
+        boxplot_last_3m,
     )
-    relevant: Sequence[Aggregation] = (ratio, ratio_ts, boxplot)
+    relevant: Sequence[Aggregation] = (ratio, ratio_ts, boxplot, boxplot_last_3m)
     return general, relevant
 
 

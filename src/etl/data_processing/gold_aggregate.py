@@ -617,6 +617,9 @@ def build_population_block(
         deduped, min_count=min_count
     )
     block["boxplot_by_neighborhood"] = _boxplot_by_neighborhood(deduped)
+    block["boxplot_by_neighborhood_last_3m"] = _boxplot_by_neighborhood_last_months(
+        deduped, min_count=min_count
+    )
 
     return block
 

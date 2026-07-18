@@ -781,3 +781,50 @@ class TestBoxplotByNeighborhoodLastMonths:
         """Empty input yields an empty list, not an exception."""
         df = pd.DataFrame(columns=_BASE_COLS)
         assert _boxplot_by_neighborhood_last_months(df) == []
+
+
+# ---------------------------------------------------------------------------
+# build_population_block — additive boxplot_by_neighborhood_last_3m field
+# ---------------------------------------------------------------------------
+
+
+class TestPopulationBlockLast3MonthsField:
+    """build_population_block must emit the additive rolling boxplot field."""
+
+    def test_general_block_has_last_3m_field(self) -> None:
+        """general population block includes boxplot_by_neighborhood_last_3m."""
+        rows = [_make_listing(propertyCode=f"P{i}") for i in range(5)]
+        block = build_population_block(apply_scope(_df(rows)), row_filter=None)
+        assert "boxplot_by_neighborhood_last_3m" in block
+
+    def test_relevant_block_has_last_3m_field(self) -> None:
+        """relevant population block includes boxplot_by_neighborhood_last_3m."""
+        rows = [_make_listing(propertyCode=f"P{i}") for i in range(5)]
+        block = build_population_block(apply_scope(_df(rows)), row_filter=None)
+        assert "boxplot_by_neighborhood_last_3m" in block
+
+    def test_all_time_field_still_present_and_unchanged(self) -> None:
+        """boxplot_by_neighborhood keeps its all-time values alongside the new field."""
+        rows = [
+            _make_listing(propertyCode="OLD1", snapshot_date=date(2022, 1, 1)),
+            _make_listing(propertyCode="OLD2", snapshot_date=date(2022, 1, 2)),
+        ]
+        block = build_population_block(apply_scope(_df(rows)), row_filter=None)
+        assert "boxplot_by_neighborhood" in block
+        assert block["boxplot_by_neighborhood"][0]["count"] == 2
+
+    def test_last_3m_field_uses_min_count_consistent_with_block_min_count(
+        self,
+    ) -> None:
+        """min_count passed to build_population_block is forwarded to the rolling helper."""
+        rows = [
+            _make_listing(propertyCode="P1"),
+            _make_listing(propertyCode="P2"),
+        ]
+        block = build_population_block(
+            apply_scope(_df(rows)), row_filter=None, min_count=5
+        )
+        # Only 2 listings — below min_count=5 — so the rolling field excludes
+        # this group while the all-time field still reports it.
+        assert block["boxplot_by_neighborhood_last_3m"] == []
+        assert len(block["boxplot_by_neighborhood"]) == 1
