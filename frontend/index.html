@@ -290,11 +290,13 @@
     </section>
 
     <!-- Pipeline Health tabpanel — hidden until activated. Lazily populated by
-         app.js (task 12.11) from an independent PipelineHealthDataSource, via
-         the pure formatting helpers in src/pipeline_health.js. Renders one
-         overall status badge + one row per named sub-light check; on any
-         load failure, shows the neutral "not yet available" message instead
-         of throwing. -->
+         app.js (task 12.11; detail views added FEATURE-013 task 13.12) from
+         an independent PipelineHealthDataSource, via the pure formatting
+         helpers in src/pipeline_health.js. Renders one overall status badge
+         + one row per named sub-light check, a Medallion pipeline diagram,
+         4 history charts (one per Ampel rule) and their threshold captions;
+         on any load failure, shows the neutral "not yet available" message
+         instead of throwing. -->
     <section
       id="panel-pipeline-health"
       class="tab-panel"
@@ -306,6 +308,32 @@
       <div id="pipeline-health-overall" class="pipeline-health-overall" role="status"></div>
       <ul id="pipeline-health-sublights" class="pipeline-health-sublights"></ul>
       <p id="pipeline-health-unavailable" class="pipeline-health-unavailable" hidden></p>
+
+      <div id="pipeline-health-diagram" class="pipeline-health-diagram" role="img"></div>
+
+      <section class="pipeline-health-detail" data-check="execution_success">
+        <h3 data-i18n="pipelineHealth.detail.executionSuccess.title">Execution success history</h3>
+        <p id="pipeline-health-threshold-execution_success" class="pipeline-health-threshold"></p>
+        <div id="pipeline-execution-success-chart" class="pipeline-health-chart"></div>
+      </section>
+
+      <section class="pipeline-health-detail" data-check="execution_duration">
+        <h3 data-i18n="pipelineHealth.detail.executionDuration.title">Execution duration history</h3>
+        <p id="pipeline-health-threshold-execution_duration" class="pipeline-health-threshold"></p>
+        <div id="pipeline-execution-duration-chart" class="pipeline-health-chart"></div>
+      </section>
+
+      <section class="pipeline-health-detail" data-check="api_quota">
+        <h3 data-i18n="pipelineHealth.detail.apiQuota.title">API quota history</h3>
+        <p id="pipeline-health-threshold-api_quota" class="pipeline-health-threshold"></p>
+        <div id="pipeline-api-quota-chart" class="pipeline-health-chart"></div>
+      </section>
+
+      <section class="pipeline-health-detail" data-check="aws_cost">
+        <h3 data-i18n="pipelineHealth.detail.awsCost.title">AWS cost history</h3>
+        <p id="pipeline-health-threshold-aws_cost" class="pipeline-health-threshold"></p>
+        <div id="pipeline-aws-cost-chart" class="pipeline-health-chart"></div>
+      </section>
     </section>
   </main>
 
