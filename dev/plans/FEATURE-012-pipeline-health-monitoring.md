@@ -191,7 +191,7 @@ after gold's `12:45` run, so it can report on that week's just-completed pipelin
 - [x] `ExecutionSuccessCheck` + `ExecutionDurationCheck` — shared Logs Insights query helper,
       unit-tested against a stubbed `logs` client (moto's Logs Insights support is limited/absent
       in some versions — see Open Questions; fall back to `botocore.stub.Stubber` if needed).
-- [ ] `ApiQuotaCheck` — unit-tested against a stubbed/moto `cloudwatch` client.
+- [x] `ApiQuotaCheck` — unit-tested against a stubbed/moto `cloudwatch` client.
 - [ ] `AwsCostCheck` — unit-tested against a stubbed `ce` client (moto's Cost Explorer support must
       be verified first — see Open Questions).
 - [ ] `_worst_of(statuses)` pure function + unit tests (all 3×3×3×3 combinations is overkill;

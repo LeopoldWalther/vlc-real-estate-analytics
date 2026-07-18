@@ -191,7 +191,7 @@ tasks:
       fully completed calendar months. Make the quota scope explicit: credential-global if dev/prod
       share credentials, or environment-filtered if separate credentials are configured. Document
       the chosen dimension semantics in returned details.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2.5
     depends_on: ["12.1", "12.3"]
