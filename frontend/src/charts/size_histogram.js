@@ -58,7 +58,9 @@ export const sizeHistogramRenderer = {
       viewport: context.viewport,
       colorScheme: context.colorScheme,
       overrides: {
-        xaxis: { title: { text: 'Size bin (m²)' } },
+        // See price_per_area_histogram.js: force category axis so bin labels
+        // like "100-110" are never mis-detected as dates.
+        xaxis: { title: { text: 'Size bin (m²)' }, type: 'category' },
         yaxis: { title: { text: 'Listings' } },
         barmode: 'group',
       },

@@ -122,8 +122,11 @@ parameters, weekly collection volume, and listing distributions) — schema-vers
 
 **Key differences from `general`/`relevant`:**
 
-- **Unscoped.** Data Basis datasets are computed over the **entire** silver history — every
-  district, not just the 3 scope districts (`apply_scope()` is never applied here).
+- **Scoped, like `general`/`relevant` (since 2026-07-18).** Data Basis datasets are computed over
+  the same `apply_scope()`-filtered silver history as `general`/`relevant` — only the 3 scope
+  districts (`SCOPE_DISTRICTS`). This keeps the neighbourhoods shown on the Data Basis tab (e.g. the
+  listing-locations map legend) identical to the neighbourhoods available on the Trend Analysis tab
+  (operator decision: Data Basis must never show *more* neighbourhoods than Trend Analysis).
 - **Two dedup semantics, chosen per dataset:**
   - **Per-snapshot dedup** (`_dedup`, identical to `general`/`relevant`) for
     `weekly_listing_volume` — the same property re-listed in a later week must still contribute to
@@ -141,7 +144,7 @@ parameters, weekly collection volume, and listing distributions) — schema-vers
 | Dataset | Dedup | Description |
 |---|---|---|
 | `search_config` | n/a (static) | Public, stable serialization of the shared Idealista search parameters (see [Search Config](#search-config) below). Always exactly one record. |
-| `weekly_listing_volume` | per-snapshot | Listing counts per `(operation, snapshot_date)`, across all districts. |
+| `weekly_listing_volume` | per-snapshot | Listing counts per `(operation, snapshot_date)`, scoped to the 3 scope districts. |
 | `size_histogram_10sqm` | latest-by-property | Listing counts binned into deterministic 10 m² buckets, per operation. |
 | `rooms_distribution` | latest-by-property | Listing counts per `(operation, rooms)`. |
 | `price_per_area_histogram` | latest-by-property | Listing counts binned by `priceByArea` (EUR/m²), with **operation-specific bin widths** (sale: 250 EUR/m², rent: 1 EUR/m²) — sale and rent price/m² live on very different scales, so sharing bin edges would make one side unreadable. |

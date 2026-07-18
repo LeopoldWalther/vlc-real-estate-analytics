@@ -217,12 +217,13 @@ def default_populations(
 # Data Basis strategies (FEATURE-011)
 # ---------------------------------------------------------------------------
 #
-# Unlike the general/relevant strategies above, Data Basis strategies each
-# receive the RAW, UNSCOPED combined silver history (no apply_scope, no
-# upfront _dedup) — every strategy applies exactly the dedup semantics its
-# own dataset needs (per-snapshot for the volume time-series, latest-by-
-# property for the distribution/geo datasets). This keeps general/relevant
-# assembly (apply_scope + single shared _dedup) completely untouched (H2).
+# Unlike the general/relevant strategies above, Data Basis strategies do not
+# share ONE upfront dedup pass — every strategy applies exactly the dedup
+# semantics its own dataset needs (per-snapshot for the volume time-series,
+# latest-by-property for the distribution/geo datasets). Since 2026-07-18,
+# Data Basis strategies DO receive the same apply_scope()-filtered DataFrame
+# as general/relevant (operator decision: the Data Basis tab must describe
+# the same neighbourhoods as Trend Analysis, not a superset).
 
 
 class SearchConfigDataset:
@@ -441,8 +442,10 @@ class GoldAggregator:
 
         Returns:
             Dict matching schema v1.0 exactly (key order included), with one
-            additional top-level ``data_basis`` key (H2: general/relevant are
-            unaffected — same ``apply_scope``/``_dedup`` path as before).
+            additional top-level ``data_basis`` key. ``data_basis`` shares the
+            same ``apply_scope()`` district filter as ``general``/``relevant``
+            (operator decision 2026-07-18), but each strategy still owns its
+            own dedup semantics.
         """
         scoped = apply_scope(silver_df)
 
@@ -454,7 +457,7 @@ class GoldAggregator:
             "relevant_filter": RELEVANT_FILTER_SPEC,
             "general": self._run_population(scoped, None, self._general),
             "relevant": self._run_population(scoped, _relevant_rows, self._relevant),
-            "data_basis": self._run_data_basis(silver_df, self._data_basis),
+            "data_basis": self._run_data_basis(scoped, self._data_basis),
         }
 
     # ------------------------------------------------------------------
@@ -474,15 +477,18 @@ class GoldAggregator:
 
     @staticmethod
     def _run_data_basis(
-        silver_df: pd.DataFrame,
+        scoped: pd.DataFrame,
         aggregations: Sequence[Aggregation],
     ) -> Dict[str, Any]:
         """
-        Run every Data Basis strategy against the RAW, UNSCOPED silver
-        history — no ``apply_scope``, no shared upfront dedup. Each strategy
-        owns the dedup semantics its own dataset needs (task 11.4).
+        Run every Data Basis strategy against the scope-districts-filtered
+        silver history — the same ``apply_scope()`` restriction used for
+        ``general``/``relevant`` (operator decision 2026-07-18: Data Basis
+        must show the same neighbourhoods as the Trend Analysis tab, not a
+        superset). No shared upfront dedup beyond scoping — each strategy
+        still owns the dedup semantics its own dataset needs (task 11.4).
         """
-        return {agg.key: agg.compute(silver_df) for agg in aggregations}
+        return {agg.key: agg.compute(scoped) for agg in aggregations}
 
     def _read_silver_history(self) -> pd.DataFrame:
         """Read and combine every silver Parquet under the prefix."""
