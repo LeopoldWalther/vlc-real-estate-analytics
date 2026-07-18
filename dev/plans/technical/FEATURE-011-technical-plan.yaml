@@ -1,0 +1,464 @@
+metadata:
+  for_feature: "FEATURE-011"
+  title: "Tab navigation and Data Basis tab"
+  created_by: "@reviewer"
+  created_at: "2026-07-18"
+  version: "1.0"
+  total_tasks: 12
+  estimated_hours: 26
+  risk_level: "medium"
+  critical_path: ["11.1", "11.2", "11.3", "11.4", "11.6", "11.7", "11.8", "11.10", "11.12"]
+  reviewed_plan: "dev/reviews/REVIEW-FEATURE-011.md"
+
+validation:
+  required_checks:
+    - "python-test"
+    - "node-test"
+    - "workflow-consistency"
+  min_coverage: ">80% on new backend/frontend modules"
+
+tasks:
+  - id: "11.1"
+    title: "Shared Idealista search-config source of truth"
+    description: >
+      TDD, RED first. Introduce a shared common search-config module so the collector and the gold
+      Data Basis export use the same values. Refactor SearchConfig to read from the shared constant
+      without changing the Idealista API request payload or existing collector behavior.
+    status: "done"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: []
+    branch: "feature/dashboard-tabs-data-basis/11.1-shared-search-config"
+    commit_message: "refactor(collector): share Idealista search config constants"
+    acceptance_criteria:
+      - "RED: data collection tests fail before the shared search-config module exists or is consumed"
+      - "GREEN: src/etl/common/search_config.py defines IDEALISTA_SEARCH_PARAMS with center, radius, property type, size, elevator, preservation, and credential labels"
+      - "GREEN: SearchConfig builds the same sale/rent request parameters as before the refactor"
+      - "GREEN: no frontend file duplicates the raw search-parameter literals in this task"
+    allowed_files:
+      - "src/etl/common/search_config.py"
+      - "src/etl/data_collection/bronze_collector.py"
+      - "src/etl/data_collection/tests/test_bronze_collector.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "src/etl/common/search_config.py"
+    files_to_modify:
+      - "src/etl/data_collection/bronze_collector.py"
+      - "src/etl/data_collection/tests/test_bronze_collector.py"
+
+  - id: "11.2"
+    title: "Data Basis pure aggregation helpers"
+    description: >
+      TDD, RED first. Add pure gold_aggregate helpers for search_config serialization, weekly listing
+      volume, latest-by-property deduplication, 10m2 size histogram, rooms distribution, and price/m2
+      histogram. These helpers operate on unscoped Silver data for Data Basis only and must not alter
+      existing general/relevant aggregation behavior.
+    status: "done"
+    complexity: "high"
+    estimated_hours: 3
+    depends_on: ["11.1"]
+    branch: "feature/dashboard-tabs-data-basis/11.2-data-basis-helpers"
+    commit_message: "feat(gold): add data basis aggregation helpers"
+    acceptance_criteria:
+      - "RED: test_gold_aggregate.py covers every new helper before implementation"
+      - "GREEN: weekly_listing_volume groups per-snapshot-deduped unscoped rows by operation and snapshot_date with count_listings"
+      - "GREEN: latest-by-property dedup keeps the latest snapshot_date row per (operation, propertyCode)"
+      - "GREEN: size_histogram_10sqm emits operation, bin_start_m2, bin_end_m2, count_listings and handles bin edges deterministically"
+      - "GREEN: rooms_distribution emits operation, rooms, count_listings"
+      - "GREEN: price_per_area_histogram emits separate operation-specific bins because sale and rent scales differ"
+      - "GREEN: empty input returns empty arrays rather than throwing"
+    allowed_files:
+      - "src/etl/data_processing/gold_aggregate.py"
+      - "src/etl/data_processing/tests/test_gold_aggregate.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/data_processing/gold_aggregate.py"
+      - "src/etl/data_processing/tests/test_gold_aggregate.py"
+
+  - id: "11.3"
+    title: "Privacy-safe last-3-month location grid"
+    description: >
+      TDD, RED first. Replace raw per-listing location export with a privacy-safe aggregate for the
+      map: filter to the last 3 months, latest-dedup by property, round coordinates to a coarse grid,
+      group by operation/district/neighborhood/rounded coordinate, and emit counts only.
+    status: "done"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["11.2"]
+    branch: "feature/dashboard-tabs-data-basis/11.3-privacy-safe-geo-grid"
+    commit_message: "feat(gold): aggregate listing locations into privacy-safe grid"
+    acceptance_criteria:
+      - "RED: tests fail when raw latitude/longitude rows or propertyCode-like fields are emitted"
+      - "GREEN: listing_location_grid_last_3m contains operation, district, neighborhood, latitude, longitude, and count_listings only"
+      - "GREEN: coordinates are rounded to the documented precision before grouping"
+      - "GREEN: rows older than the rolling 3-month window are excluded"
+      - "GREEN: propertyCode, address, exact price, and unrounded coordinate fields are absent from every emitted record"
+      - "GREEN: payload cardinality is reduced when multiple listings fall into the same rounded grid cell"
+    allowed_files:
+      - "src/etl/data_processing/gold_aggregate.py"
+      - "src/etl/data_processing/tests/test_gold_aggregate.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/data_processing/gold_aggregate.py"
+      - "src/etl/data_processing/tests/test_gold_aggregate.py"
+
+  - id: "11.4"
+    title: "Wire additive data_basis block through GoldAggregator"
+    description: >
+      Add Data Basis strategy classes and a default_data_basis() factory in gold_aggregator.py.
+      GoldAggregator should emit a new top-level data_basis sibling while preserving existing
+      general/relevant behavior. Regenerate the golden fixture and add tests that the additive block
+      survives the aggregation path.
+    status: "done"
+    complexity: "high"
+    estimated_hours: 3
+    depends_on: ["11.2", "11.3"]
+    branch: "feature/dashboard-tabs-data-basis/11.4-data-basis-strategies"
+    commit_message: "feat(gold): emit data basis block"
+    acceptance_criteria:
+      - "RED: test_gold_aggregator.py fails before data_basis strategies are registered"
+      - "GREEN: default_data_basis() returns strategies for search_config, weekly_listing_volume, size_histogram_10sqm, rooms_distribution, price_per_area_histogram, and listing_location_grid_last_3m"
+      - "GREEN: GoldAggregator emits top-level data_basis without changing schema_version"
+      - "GREEN: general and relevant blocks remain present and their existing dataset keys are unchanged"
+      - "GREEN: golden-master fixture includes data_basis and passes byte-for-byte after deliberate regeneration"
+      - "GREEN: moto-backed Lambda aggregation test confirms latest.json includes data_basis"
+    allowed_files:
+      - "src/etl/data_processing/gold_aggregator.py"
+      - "src/etl/data_processing/tests/test_gold_aggregator.py"
+      - "src/etl/data_processing/tests/test_gold_golden_master.py"
+      - "src/etl/data_processing/tests/test_gold_aggregation_lambda.py"
+      - "src/etl/data_processing/tests/fixtures/gold_latest_golden.json"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/data_processing/gold_aggregator.py"
+      - "src/etl/data_processing/tests/test_gold_aggregator.py"
+      - "src/etl/data_processing/tests/test_gold_aggregation_lambda.py"
+      - "src/etl/data_processing/tests/fixtures/gold_latest_golden.json"
+
+  - id: "11.5"
+    title: "Document Data Basis gold contract"
+    description: >
+      Update the gold-layer documentation with the new data_basis block, field shapes, dedup rules,
+      rolling-window rules, and privacy-safe location grid rationale.
+    status: "done"
+    complexity: "low"
+    estimated_hours: 1
+    depends_on: ["11.4"]
+    branch: "feature/dashboard-tabs-data-basis/11.5-gold-docs"
+    commit_message: "docs(gold): document data basis block"
+    acceptance_criteria:
+      - "documentation/DATA_GOLD_LAYER.md documents data_basis as an additive top-level block"
+      - "Docs distinguish per-snapshot dedup for weekly volume from latest-by-property dedup for distributions"
+      - "Docs state location data is rounded/aggregated and contains counts only"
+      - "Docs include sample records for every new dataset"
+    allowed_files:
+      - "documentation/DATA_GOLD_LAYER.md"
+    forbidden_files:
+      - "frontend/**"
+      - "src/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "documentation/DATA_GOLD_LAYER.md"
+
+  - id: "11.6"
+    title: "Pure tab state module"
+    description: >
+      TDD, RED first. Add tab_state.js with pure helpers for valid tab ids, hash resolution, and hash
+      creation. No DOM, window, document, Plotly, or fetch references are allowed in this module.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 1.5
+    depends_on: []
+    branch: "feature/dashboard-tabs-data-basis/11.6-tab-state"
+    commit_message: "feat(frontend): add pure tab state helpers"
+    acceptance_criteria:
+      - "RED: tab_state.test.js is written before implementation"
+      - "GREEN: resolveActiveTab('#data-basis') returns data-basis and invalid/missing hashes fall back to trend-analysis"
+      - "GREEN: buildTabHash('trend-analysis') and buildTabHash('data-basis') return stable URL hashes"
+      - "GREEN: module has no document/window/fetch/Plotly references"
+      - "GREEN: FEATURE-012 can append a third valid tab without changing resolution logic"
+    allowed_files:
+      - "frontend/src/tab_state.js"
+      - "frontend/tests/tab_state.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: ["11.2", "11.3", "11.5"]
+    reversible: true
+    files_to_create:
+      - "frontend/src/tab_state.js"
+      - "frontend/tests/tab_state.test.js"
+    files_to_modify: []
+
+  - id: "11.7"
+    title: "Accessible tab markup and responsive styling"
+    description: >
+      Add a tablist to index.html, wrap the existing dashboard content in the Trend Analysis
+      tabpanel, add a Data Basis tabpanel shell, and style the tab bar mobile-first with existing
+      design tokens. Do not wire rendering logic yet.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["11.6"]
+    branch: "feature/dashboard-tabs-data-basis/11.7-tab-markup-styles"
+    commit_message: "feat(frontend): add accessible dashboard tabs"
+    acceptance_criteria:
+      - "index.html contains a nav role='tablist' with Trend Analysis and Data Basis tabs"
+      - "Each tab has role='tab', aria-controls, aria-selected, and a >=44px touch target"
+      - "Each panel has role='tabpanel' and the Data Basis panel starts hidden"
+      - "Existing chart/container ids used by app.js are preserved inside the Trend Analysis panel"
+      - "styles.css adds mobile-friendly tab styling without raw color literals outside token definitions"
+    allowed_files:
+      - "frontend/index.html"
+      - "frontend/styles.css"
+    forbidden_files:
+      - "frontend/app.js"
+      - "frontend/src/**"
+      - "src/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/index.html"
+      - "frontend/styles.css"
+
+  - id: "11.8"
+    title: "Data Basis chart renderers and transforms"
+    description: >
+      TDD, RED first. Create renderer modules for weekly volume, size histogram, rooms distribution,
+      price/m2 histogram, and privacy-safe location grid map. Tests should assert trace shape,
+      empty-input safety, layout/theme usage, and radius-overlay geometry for the map.
+    status: "not_started"
+    complexity: "high"
+    estimated_hours: 4
+    depends_on: ["11.4"]
+    branch: "feature/dashboard-tabs-data-basis/11.8-data-basis-charts"
+    commit_message: "feat(frontend): add data basis chart renderers"
+    acceptance_criteria:
+      - "RED: one Vitest file per new chart renderer fails before modules exist"
+      - "GREEN: weekly_listing_volume renderer creates separate sale/rent traces over snapshot_date"
+      - "GREEN: size and price histogram renderers use bar traces with operation-specific grouping"
+      - "GREEN: rooms distribution renderer handles numeric/string room values deterministically"
+      - "GREEN: location map renderer consumes listing_location_grid_last_3m aggregate records and uses marker size or text/count to represent count_listings"
+      - "GREEN: location map layout contains a radius shape centered on the search_config center and no external mapbox/tile config"
+      - "GREEN: every renderer returns safe empty data/layout for missing data_basis input"
+    allowed_files:
+      - "frontend/src/charts/weekly_listing_volume.js"
+      - "frontend/src/charts/size_histogram.js"
+      - "frontend/src/charts/rooms_distribution.js"
+      - "frontend/src/charts/price_per_area_histogram.js"
+      - "frontend/src/charts/listing_location_grid_map.js"
+      - "frontend/tests/weekly_listing_volume.test.js"
+      - "frontend/tests/size_histogram.test.js"
+      - "frontend/tests/rooms_distribution.test.js"
+      - "frontend/tests/price_per_area_histogram.test.js"
+      - "frontend/tests/listing_location_grid_map.test.js"
+      - "frontend/tests/fixtures/latest.sample.json"
+    forbidden_files:
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "src/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: ["11.7"]
+    reversible: true
+    files_to_create:
+      - "frontend/src/charts/weekly_listing_volume.js"
+      - "frontend/src/charts/size_histogram.js"
+      - "frontend/src/charts/rooms_distribution.js"
+      - "frontend/src/charts/price_per_area_histogram.js"
+      - "frontend/src/charts/listing_location_grid_map.js"
+      - "frontend/tests/weekly_listing_volume.test.js"
+      - "frontend/tests/size_histogram.test.js"
+      - "frontend/tests/rooms_distribution.test.js"
+      - "frontend/tests/price_per_area_histogram.test.js"
+      - "frontend/tests/listing_location_grid_map.test.js"
+    files_to_modify:
+      - "frontend/tests/fixtures/latest.sample.json"
+
+  - id: "11.9"
+    title: "Search config panel and i18n labels"
+    description: >
+      Add a pure search_config frontend formatter and i18n keys for tab labels, Data Basis copy, and
+      all new chart titles/axes in English, German, Spanish, Arabic, and Turkish.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["11.4", "11.7"]
+    branch: "feature/dashboard-tabs-data-basis/11.9-search-config-i18n"
+    commit_message: "feat(frontend): add data basis labels and search config formatter"
+    acceptance_criteria:
+      - "frontend/src/search_config.js formats the public data_basis.search_config shape without DOM access"
+      - "search_config.test.js covers missing fields, metric units, and locale-independent formatting basics"
+      - "i18n.js contains tab/search-config/chart keys for en, de, es, ar, and tr"
+      - "i18n tests pass and fail on missing keys if a locale is incomplete"
+      - "Map copy clearly describes the chart as an aggregated coordinate distribution, not a street map"
+    allowed_files:
+      - "frontend/src/search_config.js"
+      - "frontend/src/i18n.js"
+      - "frontend/tests/search_config.test.js"
+      - "frontend/tests/i18n.test.js"
+    forbidden_files:
+      - "frontend/app.js"
+      - "src/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "frontend/src/search_config.js"
+      - "frontend/tests/search_config.test.js"
+    files_to_modify:
+      - "frontend/src/i18n.js"
+      - "frontend/tests/i18n.test.js"
+
+  - id: "11.10"
+    title: "Wire lazy Data Basis rendering in app.js"
+    description: >
+      Wire tab clicks/hashchange, lazy render the Data Basis tab once data is loaded and the panel is
+      visible, render the search-config panel, and resize Plotly charts when reactivating tabs. Keep
+      app.js as DOM/fetch orchestration only; reuse pure helpers and renderers.
+    status: "not_started"
+    complexity: "high"
+    estimated_hours: 3
+    depends_on: ["11.7", "11.8", "11.9"]
+    branch: "feature/dashboard-tabs-data-basis/11.10-app-tab-wiring"
+    commit_message: "feat(frontend): wire Data Basis tab rendering"
+    acceptance_criteria:
+      - "Tab clicks update aria-selected, hidden panels, and location hash"
+      - "hashchange deep-links to Trend Analysis or Data Basis and invalid hashes fall back safely"
+      - "Data Basis charts render only after the Data Basis panel is visible"
+      - "Plotly.Plots.resize is called for charts when returning to an already-rendered tab"
+      - "Existing population/district/neighborhood filters still affect only Trend Analysis charts"
+      - "npx vitest run passes"
+    allowed_files:
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/tests/app_tab_wiring.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "frontend/tests/app_tab_wiring.test.js"
+    files_to_modify:
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "frontend/styles.css"
+
+  - id: "11.11"
+    title: "Frontend documentation and manual accessibility checklist"
+    description: >
+      Document the tab architecture and Data Basis frontend modules, then perform a manual mobile,
+      keyboard, dark/light, and RTL smoke check. Record the checklist in the feature plan progress
+      log/status section.
+    status: "not_started"
+    complexity: "low"
+    estimated_hours: 1
+    depends_on: ["11.10"]
+    branch: "feature/dashboard-tabs-data-basis/11.11-frontend-docs-a11y"
+    commit_message: "docs(frontend): document tabbed Data Basis dashboard"
+    acceptance_criteria:
+      - "documentation/FRONTEND_LAYER.md documents tab_state.js, search_config.js, and new Data Basis chart modules"
+      - "Manual checklist covers 390px mobile width, desktop width, keyboard-only tab switching, dark/light mode, and Arabic RTL labels"
+      - "No external network calls are introduced by Data Basis map rendering"
+      - "dev/plans/FEATURE-011-dashboard-tabs-data-basis.md progress log records the manual checklist result"
+    allowed_files:
+      - "documentation/FRONTEND_LAYER.md"
+      - "dev/plans/FEATURE-011-dashboard-tabs-data-basis.md"
+    forbidden_files:
+      - "frontend/src/**"
+      - "src/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "documentation/FRONTEND_LAYER.md"
+      - "dev/plans/FEATURE-011-dashboard-tabs-data-basis.md"
+
+  - id: "11.12"
+    title: "Deploy verification and feature closeout"
+    description: >
+      Run full backend/frontend validation, deploy the updated gold Lambda to dev first, refresh
+      latest.json, visually verify the Data Basis tab in dev, then promote to prod. Sync all workflow
+      statuses after verification.
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["11.5", "11.11"]
+    branch: "feature/dashboard-tabs-data-basis/11.12-verify-deploy-closeout"
+    commit_message: "chore(feature-011): verify and close Data Basis tab"
+    acceptance_criteria:
+      - "Relevant pytest suites for data_collection and data_processing pass"
+      - "npx vitest run passes from frontend/"
+      - "python dev/tools/validate_workflow.py exits 0"
+      - "Dev latest.json contains data_basis with all expected datasets and privacy-safe location grid"
+      - "Dev dashboard renders Trend Analysis and Data Basis tabs without console errors on mobile and desktop"
+      - "Prod promotion happens only after dev verification succeeds"
+      - "dev/plans/FEATURE-011-dashboard-tabs-data-basis.md, dev/plans/README.md, and this technical plan reflect completion"
+    allowed_files:
+      - "dev/plans/FEATURE-011-dashboard-tabs-data-basis.md"
+      - "dev/plans/README.md"
+      - "dev/plans/technical/FEATURE-011-technical-plan.yaml"
+    forbidden_files:
+      - "frontend/**"
+      - "src/**"
+      - "infrastructure/**"
+      - ".github/workflows/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "dev/plans/FEATURE-011-dashboard-tabs-data-basis.md"
+      - "dev/plans/README.md"
+      - "dev/plans/technical/FEATURE-011-technical-plan.yaml"
+
+git_workflow:
+  branch_root: "feature/dashboard-tabs-data-basis"
+  strategy: >
+    Use one feature lineage with small task branches off main. Backend/data-contract tasks 11.1-11.5
+    should merge first and be verified before app.js depends on data_basis. Frontend tab-shell work
+    11.6-11.7 can proceed independently from backend helpers; chart/i18n/app wiring fans in after
+    the backend fixture and tab markup exist. Do not implement FEATURE-012 Pipeline Health here.
+  pr_per_phase: true
+
+notes:
+  - "Review findings folded in: H1 privacy-safe location grid instead of raw coordinates; H2 existing general/relevant blocks remain compatible; M1 map labelled as aggregate coordinate distribution; M2 stable public search_config shape; M3 pure modules keep app.js thin."
+  - "No external map tiles, CDN, Mapbox token, or third-party network call is allowed in FEATURE-011."
+  - "The Data Basis tab describes the collection area and dataset shape; it is intentionally separate from Trend Analysis filters and KPIs."
+  - "If the user later wants a real street map, create a separate plan because it changes the frontend privacy/network contract."
