@@ -69,6 +69,42 @@ describe('t', () => {
       }
     }
   });
+
+  it('discloses the last-3-month basis for median KPI labels in every locale (M1)', () => {
+    // Each locale's own "3 month(s)" wording — not an English substring check,
+    // since e.g. Arabic and Turkish translate the phrase.
+    const threeMonthPhrase = {
+      en: '3 month',
+      de: '3 Monat',
+      es: '3 meses',
+      ar: '3 أشهر',
+      tr: 'son 3 ay',
+    };
+    for (const locale of ['en', 'de', 'es', 'ar', 'tr']) {
+      const phrase = threeMonthPhrase[locale];
+      expect(
+        t(locale, 'kpi.medianRent'),
+        `${locale}.kpi.medianRent should mention the 3-month basis`,
+      ).toContain(phrase);
+      expect(
+        t(locale, 'kpi.medianSale'),
+        `${locale}.kpi.medianSale should mention the 3-month basis`,
+      ).toContain(phrase);
+    }
+  });
+
+  it('keeps the all-time boxplot chart titles unchanged (no 3-month wording)', () => {
+    const chartTitleKeys = [
+      'charts.boxplot-by-neighborhood-rent.title',
+      'charts.boxplot-by-neighborhood-sale.title',
+    ];
+    for (const locale of ['en', 'de', 'es', 'ar', 'tr']) {
+      for (const key of chartTitleKeys) {
+        const value = t(locale, key);
+        expect(value, `${locale}.${key} should not mention 3 months`).not.toMatch(/3\s*(month|Monat|mes|شهر|ay)/i);
+      }
+    }
+  });
 });
 
 describe('isRtl', () => {
