@@ -585,6 +585,11 @@ _DEFAULT_PRICE_PER_AREA_BIN_WIDTH: float = 250.0
 # Bin width for the listing-size histogram (m2).
 _SIZE_HISTOGRAM_BIN_WIDTH_M2: int = 10
 
+# Coordinate rounding precision for the privacy-safe location grid: 3 decimal
+# degrees is roughly 80-110 m in Valencia's latitude — coarse enough that no
+# individual listing's exact location is exposed (review H1).
+_LOCATION_GRID_PRECISION_DECIMALS: int = 3
+
 
 def search_config_summary() -> Dict[str, Any]:
     """
@@ -674,6 +679,88 @@ def latest_by_property(df: pd.DataFrame) -> pd.DataFrame:
     working = working.sort_values("_parsed_snapshot", kind="stable")
     deduped = working.drop_duplicates(subset=["operation", "propertyCode"], keep="last")
     return deduped.drop(columns=["_parsed_snapshot"])
+
+
+def listing_location_grid_last_3m(
+    df: pd.DataFrame,
+    window_months: int = ROLLING_KPI_WINDOW_MONTHS,
+    precision_decimals: int = _LOCATION_GRID_PRECISION_DECIMALS,
+) -> List[Dict[str, Any]]:
+    """
+    Privacy-safe, rolling-window aggregate of listing locations for the map.
+
+    **Never emits raw per-listing coordinates.** Coordinates are rounded to
+    ``precision_decimals`` (default 3 — roughly 80-110 m in Valencia) BEFORE
+    grouping, and only the aggregate ``count_listings`` is emitted alongside
+    ``operation``/``district``/``neighborhood``/rounded ``latitude``/
+    ``longitude``. No ``propertyCode``, address, exact price, or unrounded
+    coordinate ever leaves this function (review H1).
+
+    Reuses :func:`_rolling_window_start` (the FEATURE-010 rolling-window
+    helper) for the last-3-month filter and :func:`latest_by_property` for
+    the latest-snapshot-per-property dedup, so this windowing/dedup logic is
+    never duplicated.
+
+    Args:
+        df: Listings DataFrame (any scope — Data Basis is unscoped), with
+            ``latitude``/``longitude`` columns.
+        window_months: Rolling window length in calendar months. Defaults to
+            :data:`ROLLING_KPI_WINDOW_MONTHS`.
+        precision_decimals: Coordinate rounding precision in decimal degrees.
+            Defaults to :data:`_LOCATION_GRID_PRECISION_DECIMALS`.
+
+    Returns:
+        List of record dicts with EXACTLY these keys: operation, district,
+        neighborhood, latitude, longitude, count_listings. Empty list when
+        input is empty, has no geo columns, has no parseable snapshot dates,
+        or no rows fall inside the window.
+    """
+    if df.empty:
+        return []
+    if not {"latitude", "longitude"}.issubset(df.columns):
+        return []
+
+    window_start = _rolling_window_start(df, window_months)
+    if window_start is None:
+        return []
+
+    parsed_dates = pd.to_datetime(df["snapshot_date"], errors="coerce")
+    windowed = df[parsed_dates >= window_start]
+    if windowed.empty:
+        return []
+
+    latest = latest_by_property(windowed)
+    working = latest.dropna(subset=["latitude", "longitude"]).copy()
+    if working.empty:
+        return []
+
+    working["latitude"] = working["latitude"].round(precision_decimals)
+    working["longitude"] = working["longitude"].round(precision_decimals)
+
+    grp = (
+        working.groupby(
+            ["operation", "district", "neighborhood", "latitude", "longitude"]
+        )
+        .size()
+        .reset_index(name="count_listings")
+        .sort_values(["operation", "district", "neighborhood", "latitude", "longitude"])
+    )
+
+    # Explicit column allow-list: guards against ever leaking any other
+    # column, even if the input DataFrame carries extra fields (H1).
+    return cast(
+        List[Dict[str, Any]],
+        grp[
+            [
+                "operation",
+                "district",
+                "neighborhood",
+                "latitude",
+                "longitude",
+                "count_listings",
+            ]
+        ].to_dict(orient="records"),
+    )
 
 
 def size_histogram_10sqm(
