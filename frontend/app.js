@@ -18,10 +18,17 @@ import { priceTimeSeriesDistrictRentRenderer, priceTimeSeriesDistrictSaleRendere
 import { rentVsSaleRatioRenderer } from './src/charts/rent_vs_sale_ratio.js';
 import { ratioTimeSeriesRenderer } from './src/charts/rent_vs_sale_ratio_time_series.js';
 import { boxplotRentRenderer, boxplotSaleRenderer } from './src/charts/boxplot_by_neighborhood.js';
+import { weeklyListingVolumeRenderer } from './src/charts/weekly_listing_volume.js';
+import { sizeHistogramRenderer } from './src/charts/size_histogram.js';
+import { roomsDistributionRenderer } from './src/charts/rooms_distribution.js';
+import { priceHistogramRentRenderer, priceHistogramSaleRenderer } from './src/charts/price_per_area_histogram.js';
+import { listingLocationGridMapRenderer } from './src/charts/listing_location_grid_map.js';
 import { summaryStats, formatKpi } from './src/summary.js';
 import { resolveTheme, resolveViewport, shouldRerender, createLoadState, transition } from './src/dashboard_state.js';
 import { MAX_SCOPE_SELECTION, extractDistricts, extractNeighborhoods, filterPopulationBlock, toggleScopeSelection } from './src/filters.js';
 import { t, isRtl, resolveLocale } from './src/i18n.js';
+import { resolveActiveTab, buildTabHash } from './src/tab_state.js';
+import { formatSearchConfigSummary } from './src/search_config.js';
 
 const THEME_STORAGE_KEY = 'vlc-dashboard-theme';
 const LOCALE_STORAGE_KEY = 'vlc-dashboard-locale';
@@ -57,6 +64,19 @@ const GENERAL_ONLY_RENDERERS = [
 
 const ALL_RENDERERS = [...GENERAL_ONLY_RENDERERS, ...TOGGLE_RENDERERS];
 
+// Data Basis tab renderers — consume the unscoped, unfiltered
+// data_basis block directly (never applyScope()'d), so the district/
+// neighbourhood/population filters that affect Trend Analysis charts never
+// touch these.
+const DATA_BASIS_RENDERERS = [
+  weeklyListingVolumeRenderer,
+  sizeHistogramRenderer,
+  roomsDistributionRenderer,
+  priceHistogramRentRenderer,
+  priceHistogramSaleRenderer,
+  listingLocationGridMapRenderer,
+];
+
 // Renderer ids whose x-axis is a plain date timeline — they share the
 // generic 'charts.xaxis.date' i18n key instead of a per-renderer xaxis key
 // (see plotChart()'s title/axis translation override).
@@ -66,6 +86,7 @@ const SHARED_DATE_XAXIS_RENDERER_IDS = new Set([
   'price-time-series-district-rent',
   'price-time-series-district-sale',
   'rent-vs-sale-ratio-time-series',
+  'weekly-listing-volume',
 ]);
 
 const containers = {
@@ -77,6 +98,12 @@ const containers = {
   'rent-vs-sale-ratio-time-series':  document.getElementById('rent-vs-sale-ratio-time-series'),
   'boxplot-by-neighborhood-rent':    document.getElementById('boxplot-by-neighborhood-rent'),
   'boxplot-by-neighborhood-sale':    document.getElementById('boxplot-by-neighborhood-sale'),
+  'weekly-listing-volume':           document.getElementById('weekly-listing-volume'),
+  'size-histogram':                  document.getElementById('size-histogram'),
+  'rooms-distribution':              document.getElementById('rooms-distribution'),
+  'price-per-area-histogram-rent':   document.getElementById('price-per-area-histogram-rent'),
+  'price-per-area-histogram-sale':   document.getElementById('price-per-area-histogram-sale'),
+  'listing-location-grid-map':       document.getElementById('listing-location-grid-map'),
 };
 
 const KPI_FORMATTERS = {
@@ -101,6 +128,11 @@ const dataSource = new DataSource(window.CONFIG.DATA_URL);
 let activePopulation = 'general';
 let cachedData = null;
 let loadState = createLoadState();
+
+// Tab navigation state — 'trend-analysis' is rendered eagerly by run();
+// 'data-basis' is rendered lazily, once, the first time it becomes visible
+// (Plotly cannot size a chart inside a hidden/display:none container).
+const renderedTabs = new Set(['trend-analysis']);
 
 // District/neighborhood scope filters — both cap at MAX_SCOPE_SELECTION.
 // Empty array means "no restriction" on that axis (see filters.js).
@@ -386,6 +418,107 @@ async function renderAllCharts(context, { initial = true } = {}) {
 }
 
 /**
+ * Render the search-config definition list inside the Data Basis panel from
+ * data_basis.search_config[0], via the pure search_config.js formatter.
+ */
+function renderSearchConfigPanel() {
+  const container = document.getElementById('data-basis-search-config');
+  if (!container) return;
+  const searchConfig = cachedData?.data_basis?.search_config?.[0];
+  const rows = formatSearchConfigSummary(searchConfig, currentLocale);
+  container.textContent = '';
+  for (const row of rows) {
+    const dt = document.createElement('dt');
+    dt.textContent = row.label;
+    const dd = document.createElement('dd');
+    dd.textContent = row.value;
+    container.appendChild(dt);
+    container.appendChild(dd);
+  }
+}
+
+/**
+ * Render every Data Basis chart against the unscoped data_basis block (never
+ * applyScope()'d — district/neighbourhood/population filters only affect
+ * Trend Analysis) plus the search-config panel.
+ *
+ * @param {{viewport: string, colorScheme: string}} context
+ * @param {{initial: boolean}} [options]
+ */
+async function renderDataBasisTab(context, { initial = true } = {}) {
+  renderSearchConfigPanel();
+  for (const renderer of DATA_BASIS_RENDERERS) {
+    await plotChart(renderer, cachedData.data_basis, context, { initial });
+  }
+}
+
+/**
+ * Call Plotly.Plots.resize on every Data Basis chart container. Used when
+ * re-activating a tab whose charts were already rendered while hidden (or
+ * whose viewport changed while the tab was inactive) — Plotly needs an
+ * explicit nudge to pick up the container's now-visible dimensions.
+ */
+function resizeDataBasisCharts() {
+  for (const renderer of DATA_BASIS_RENDERERS) {
+    const container = containers[renderer.id];
+    if (container) globalThis.Plotly.Plots.resize(container);
+  }
+}
+
+const tabButtons = Array.from(document.querySelectorAll('.tab-button'));
+const tabPanels = Array.from(document.querySelectorAll('.tab-panel'));
+
+// Tracks the currently active tab id so run() can lazily render the Data
+// Basis tab if the page loaded deep-linked to it (i.e. activateTab() ran
+// before cachedData existed).
+let activeTabId = resolveActiveTab(window.location.hash);
+
+/**
+ * Activate a dashboard tab: update aria-selected/tabindex on every tab
+ * button, toggle `hidden` on every tabpanel, and (for 'data-basis') lazily
+ * render its charts on first activation or resize them if already rendered.
+ *
+ * @param {string} tabId - A valid tab_state.js tab id.
+ * @param {{updateHash?: boolean}} [options] - Set updateHash: false when
+ *   reacting to a hashchange event that already updated location.hash (avoids
+ *   a redundant/duplicate history entry).
+ */
+function activateTab(tabId, { updateHash = true } = {}) {
+  activeTabId = tabId;
+  for (const button of tabButtons) {
+    const isActive = button.dataset.tabId === tabId;
+    button.setAttribute('aria-selected', String(isActive));
+    button.tabIndex = isActive ? 0 : -1;
+  }
+  for (const panel of tabPanels) {
+    panel.hidden = panel.id !== `panel-${tabId}`;
+  }
+  if (updateHash) {
+    window.location.hash = buildTabHash(tabId);
+  }
+  if (tabId === 'data-basis' && cachedData) {
+    if (!renderedTabs.has('data-basis')) {
+      renderDataBasisTab(currentContext, { initial: true }).then(() => renderedTabs.add('data-basis'));
+    } else {
+      resizeDataBasisCharts();
+    }
+  }
+}
+
+for (const button of tabButtons) {
+  button.addEventListener('click', () => activateTab(button.dataset.tabId));
+}
+
+window.addEventListener('hashchange', () => {
+  activateTab(resolveActiveTab(window.location.hash), { updateHash: false });
+});
+
+// Deep-link to whichever tab the starting hash resolves to (falls back to
+// DEFAULT_TAB_ID for a missing/invalid hash) before the first data load, so
+// a shared/bookmarked '#data-basis' URL opens directly on that tab.
+activateTab(resolveActiveTab(window.location.hash), { updateHash: false });
+
+/**
  * Merge a partial context change, apply the resulting theme, and re-render
  * charts only when dashboard_state.shouldRerender says the change is
  * significant (viewport bucket or color scheme actually changed).
@@ -399,6 +532,9 @@ function updateContext(partial) {
   applyTheme(currentContext.colorScheme);
   if (rerenderNeeded && cachedData) {
     renderAllCharts(currentContext, { initial: false });
+    if (renderedTabs.has('data-basis')) {
+      renderDataBasisTab(currentContext, { initial: false });
+    }
   }
 }
 
@@ -442,6 +578,9 @@ function setLocale(nextLocale) {
     renderScopeFilters();
     renderKpis(applyScope(cachedData[activePopulation]));
     renderAllCharts(currentContext, { initial: false });
+    if (renderedTabs.has('data-basis')) {
+      renderDataBasisTab(currentContext, { initial: false });
+    }
   }
 }
 
@@ -610,6 +749,14 @@ async function run() {
   renderKpis(applyScope(cachedData.general));
   applyTheme(currentContext.colorScheme);
   await renderAllCharts(currentContext, { initial: true });
+
+  // If the page loaded deep-linked to the Data Basis tab (activateTab() ran
+  // before cachedData existed, so its lazy-render branch was a no-op then),
+  // render it now that data is available.
+  if (activeTabId === 'data-basis' && !renderedTabs.has('data-basis')) {
+    await renderDataBasisTab(currentContext, { initial: true });
+    renderedTabs.add('data-basis');
+  }
 
   // Show the toggle only when 'relevant' data is present. Wire the change
   // listener once (a retry-triggered re-run of run() must not attach a

@@ -219,9 +219,10 @@
     </div>
     </section>
 
-    <!-- Data Basis tabpanel — hidden until activated. Content (search-config
-         summary + chart containers) is added by task 11.10 once the chart
-         renderers (11.8) and search_config formatter/i18n (11.9) exist. -->
+    <!-- Data Basis tabpanel — hidden until activated. Lazily populated by
+         app.js on first activation using the chart renderers (11.8) and
+         search-config formatter/i18n (11.9); this markup only declares the
+         static shell + container ids app.js writes into. -->
     <section
       id="panel-data-basis"
       class="tab-panel"
@@ -229,7 +230,52 @@
       aria-labelledby="tab-data-basis"
       tabindex="0"
       hidden
-    ></section>
+    >
+      <p class="data-basis-intro" data-i18n="dataBasis.intro">
+        How this data was collected: search parameters, weekly collection volume, and current listing distributions across the whole collection area.
+      </p>
+
+      <section class="data-basis-search-config" aria-labelledby="data-basis-search-config-heading">
+        <h2 id="data-basis-search-config-heading" data-i18n="dataBasis.searchConfig.heading">Search parameters</h2>
+        <dl id="data-basis-search-config"></dl>
+      </section>
+
+      <div class="chart-grid">
+        <section class="chart-section">
+          <div class="chart-skeleton" aria-hidden="true"></div>
+          <div id="weekly-listing-volume" class="chart-container"></div>
+        </section>
+
+        <section class="chart-section">
+          <div class="chart-skeleton" aria-hidden="true"></div>
+          <div id="size-histogram" class="chart-container"></div>
+        </section>
+
+        <section class="chart-section">
+          <div class="chart-skeleton" aria-hidden="true"></div>
+          <div id="rooms-distribution" class="chart-container"></div>
+        </section>
+
+        <section class="chart-section">
+          <div class="chart-skeleton" aria-hidden="true"></div>
+          <div id="price-per-area-histogram-rent" class="chart-container"></div>
+        </section>
+
+        <section class="chart-section">
+          <div class="chart-skeleton" aria-hidden="true"></div>
+          <div id="price-per-area-histogram-sale" class="chart-container"></div>
+        </section>
+
+        <section class="chart-section">
+          <div class="chart-skeleton" aria-hidden="true"></div>
+          <div id="listing-location-grid-map" class="chart-container"></div>
+        </section>
+      </div>
+
+      <p class="data-basis-map-description" data-i18n="dataBasis.mapDescription">
+        Aggregated coordinate distribution of recently collected listings, rounded to a privacy-safe grid — not a street-level map.
+      </p>
+    </section>
   </main>
 
   <footer>
