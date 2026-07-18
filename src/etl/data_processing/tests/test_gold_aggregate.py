@@ -30,6 +30,7 @@ from gold_aggregate import (  # noqa: E402
     build_aggregation_json,
     build_population_block,
     latest_by_property,
+    listing_location_grid_last_3m,
     price_per_area_histogram,
     rooms_distribution,
     search_config_summary,
@@ -75,6 +76,8 @@ def _make_listing(**overrides: Any) -> Dict[str, Any]:
         "rooms": 3,
         "bathrooms": 2,
         "hasLift": True,
+        "latitude": 39.469077,
+        "longitude": -0.3799074,
     }
     base.update(overrides)
     return base
@@ -1024,3 +1027,135 @@ class TestPricePerAreaHistogram:
 
     def test_empty_input_returns_empty_list(self) -> None:
         assert price_per_area_histogram(pd.DataFrame(columns=_BASE_COLS)) == []
+
+
+# ---------------------------------------------------------------------------
+# Privacy-safe last-3-month location grid (FEATURE-011, task 11.3, review H1)
+# ---------------------------------------------------------------------------
+
+_GEO_BASE_COLS = _BASE_COLS + ["latitude", "longitude"]
+
+# Fields that must NEVER appear in a listing_location_grid_last_3m record —
+# any of these would let a public dashboard visitor re-identify an
+# individual listing (review H1).
+_FORBIDDEN_GEO_FIELDS = {
+    "propertyCode",
+    "address",
+    "price",
+    "priceByArea",
+    "latitude_raw",
+    "longitude_raw",
+}
+
+
+class TestListingLocationGridLast3Months:
+    """
+    listing_location_grid_last_3m emits only rounded, count-aggregated geo
+    cells — never raw per-listing coordinates or identifying fields (H1).
+    """
+
+    def test_never_emits_forbidden_fields(self) -> None:
+        """
+        H1: no emitted record may contain propertyCode, address, exact
+        price, or any field other than the documented allow-list.
+        """
+        rows = [
+            _make_listing(
+                propertyCode="P1",
+                latitude=39.469077,
+                longitude=-0.3799074,
+                snapshot_date=date(2023, 4, 9),
+            ),
+            _make_listing(
+                propertyCode="P2",
+                latitude=39.4692874,
+                longitude=-0.3788613,
+                snapshot_date=date(2023, 4, 9),
+            ),
+        ]
+        result = listing_location_grid_last_3m(
+            _df(rows), window_months=ROLLING_KPI_WINDOW_MONTHS
+        )
+        assert result, "fixture must produce at least one grid cell"
+
+        allowed_keys = {
+            "operation",
+            "district",
+            "neighborhood",
+            "latitude",
+            "longitude",
+            "count_listings",
+        }
+        for record in result:
+            assert set(record.keys()) == allowed_keys, (
+                f"Unexpected keys in record: " f"{set(record.keys()) - allowed_keys}"
+            )
+            assert not _FORBIDDEN_GEO_FIELDS & set(record.keys())
+
+    def test_coordinates_are_rounded_before_grouping(self) -> None:
+        """Two nearby raw coordinates collapse into the same rounded cell."""
+        rows = [
+            _make_listing(
+                propertyCode="P1",
+                latitude=39.469077,
+                longitude=-0.3799074,
+                snapshot_date=date(2023, 4, 9),
+            ),
+            _make_listing(
+                propertyCode="P2",
+                latitude=39.4692874,  # rounds to the same 3-decimal cell
+                longitude=-0.3798512,  # rounds to the same 3-decimal cell
+                snapshot_date=date(2023, 4, 9),
+            ),
+        ]
+        result = listing_location_grid_last_3m(_df(rows))
+        assert len(result) == 1
+        assert result[0]["count_listings"] == 2
+        # Rounded to 3 decimals — never the unrounded raw input value.
+        assert result[0]["latitude"] == round(39.469077, 3)
+        assert result[0]["longitude"] == round(-0.3799074, 3)
+
+    def test_excludes_rows_older_than_the_rolling_window(self) -> None:
+        """Rows older than the rolling 3-month window must be excluded."""
+        rows = [
+            _make_listing(
+                propertyCode="RECENT",
+                snapshot_date=date(2023, 4, 9),
+                latitude=39.469077,
+                longitude=-0.3799074,
+            ),
+            _make_listing(
+                propertyCode="OLD",
+                snapshot_date=date(2022, 1, 1),  # far outside the window
+                latitude=39.5,
+                longitude=-0.5,
+            ),
+        ]
+        result = listing_location_grid_last_3m(_df(rows))
+        # Only the recent row's cell should be present.
+        assert len(result) == 1
+        assert result[0]["latitude"] == round(39.469077, 3)
+
+    def test_multiple_listings_reduce_payload_cardinality(self) -> None:
+        """Grouping reduces the number of emitted rows vs. raw listing count."""
+        rows = [
+            _make_listing(
+                propertyCode=f"P{i}",
+                latitude=39.469077,
+                longitude=-0.3799074,
+                snapshot_date=date(2023, 4, 9),
+            )
+            for i in range(10)
+        ]
+        result = listing_location_grid_last_3m(_df(rows))
+        assert len(result) == 1
+        assert result[0]["count_listings"] == 10
+
+    def test_empty_input_returns_empty_list(self) -> None:
+        assert listing_location_grid_last_3m(pd.DataFrame(columns=_GEO_BASE_COLS)) == []
+
+    def test_missing_geo_columns_returns_empty_list(self) -> None:
+        """No latitude/longitude columns at all → empty, not a KeyError."""
+        rows = [_make_listing()]
+        df = _df(rows).drop(columns=["latitude", "longitude"])
+        assert listing_location_grid_last_3m(df) == []
