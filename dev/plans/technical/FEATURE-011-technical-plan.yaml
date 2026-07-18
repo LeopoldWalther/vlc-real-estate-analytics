@@ -224,7 +224,7 @@ tasks:
       Add a tablist to index.html, wrap the existing dashboard content in the Trend Analysis
       tabpanel, add a Data Basis tabpanel shell, and style the tab bar mobile-first with existing
       design tokens. Do not wire rendering logic yet.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: ["11.6"]

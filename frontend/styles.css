@@ -561,3 +561,48 @@ footer a {
     transition: none;
   }
 }
+
+/* Dashboard tab bar — mobile-first: horizontally scrollable row of tabs,
+   each a >=44px touch target per the project's existing convention. */
+.tab-bar {
+  display: flex;
+  gap: var(--space-2);
+  padding: 0 var(--space-6);
+  overflow-x: auto;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tab-button {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  border-bottom: 3px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tab-button:hover {
+  color: var(--color-text-heading);
+}
+
+.tab-button[aria-selected="true"] {
+  color: var(--color-accent);
+  border-bottom-color: var(--color-accent);
+}
+
+.tab-panel[hidden] {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .tab-bar {
+    overflow-x: visible;
+  }
+}

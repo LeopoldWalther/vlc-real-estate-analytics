@@ -69,9 +69,44 @@
     </div>
   </header>
 
+  <!-- aria-live region announcing loading/ready/error state transitions to assistive tech -->
+  <div id="status-announcer" class="visually-hidden" aria-live="polite"></div>
+
+  <!-- Dashboard tab bar. app.js (task 11.10) wires click/hashchange handling via
+       frontend/src/tab_state.js; this markup only declares the accessible
+       tablist/tabpanel structure and starting visibility. -->
+  <nav class="tab-bar" role="tablist" aria-label="Dashboard sections">
+    <button
+      type="button"
+      role="tab"
+      id="tab-trend-analysis"
+      class="tab-button"
+      aria-controls="panel-trend-analysis"
+      aria-selected="true"
+      data-tab-id="trend-analysis"
+      data-i18n="tabs.trendAnalysis"
+    >Trend Analysis</button>
+    <button
+      type="button"
+      role="tab"
+      id="tab-data-basis"
+      class="tab-button"
+      aria-controls="panel-data-basis"
+      aria-selected="false"
+      tabindex="-1"
+      data-tab-id="data-basis"
+      data-i18n="tabs.dataBasis"
+    >Data Basis</button>
+  </nav>
+
   <main>
-    <!-- aria-live region announcing loading/ready/error state transitions to assistive tech -->
-    <div id="status-announcer" class="visually-hidden" aria-live="polite"></div>
+    <section
+      id="panel-trend-analysis"
+      class="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-trend-analysis"
+      tabindex="0"
+    >
 
     <!-- Global error/retry block — shown when the single data load fails. Hidden by default. -->
     <div id="dashboard-error" class="dashboard-error" hidden>
@@ -182,6 +217,19 @@
         <div id="boxplot-by-neighborhood-sale" class="chart-container"></div>
       </section>
     </div>
+    </section>
+
+    <!-- Data Basis tabpanel — hidden until activated. Content (search-config
+         summary + chart containers) is added by task 11.10 once the chart
+         renderers (11.8) and search_config formatter/i18n (11.9) exist. -->
+    <section
+      id="panel-data-basis"
+      class="tab-panel"
+      role="tabpanel"
+      aria-labelledby="tab-data-basis"
+      tabindex="0"
+      hidden
+    ></section>
   </main>
 
   <footer>
