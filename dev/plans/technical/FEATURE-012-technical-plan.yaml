@@ -411,7 +411,7 @@ tasks:
       Add PIPELINE_HEALTH_LAYER.md documenting the JSON schema, four ampel rules, metric dimensions,
       Cost Explorer exclusions, insufficient-history behavior, CloudFront path, and dev-to-prod
       deployment validation steps. Run all required validation gates.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 3
     depends_on: ["12.4", "12.9", "12.10", "12.11"]

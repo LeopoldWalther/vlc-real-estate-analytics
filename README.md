@@ -399,6 +399,7 @@ aws logs tail /aws/lambda/dev-silver-cleaner       --region eu-central-1 --follo
 
 - [DATA_COLLECTION_LAYER.md](documentation/DATA_COLLECTION_LAYER.md) — Bronze Collector architecture
 - [DATA_PROCESSING_LAYER.md](documentation/DATA_PROCESSING_LAYER.md) — Silver Cleaner architecture
+- [PIPELINE_HEALTH_LAYER.md](documentation/PIPELINE_HEALTH_LAYER.md) — Pipeline Health monitoring (traffic-light tab, Ampel rules, deployment & manual validation)
 
 ## Contributing
 
