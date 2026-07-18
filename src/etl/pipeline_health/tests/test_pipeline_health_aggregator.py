@@ -99,7 +99,7 @@ class TestPipelineHealthAggregator:
         aggregator.aggregate()
         document = json.loads(store.get_bytes(OUTPUT_KEY))
 
-        assert document["schema_version"] == "1.0"
+        assert document["schema_version"] == "1.1"
         assert "generated_at" in document
         assert document["overall_status"] == YELLOW
         for key in ("execution_success", "execution_duration", "api_quota", "aws_cost"):

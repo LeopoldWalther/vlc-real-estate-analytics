@@ -24,7 +24,7 @@ from health_checks import GREEN, HealthCheck, HealthCheckResult, worst_status
 logger = logging.getLogger()
 
 #: JSON schema version for gold/pipeline_health/latest.json.
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"
 
 #: Output key, mirroring gold_aggregator's "latest.json" convention.
 OUTPUT_KEY = "gold/pipeline_health/latest.json"

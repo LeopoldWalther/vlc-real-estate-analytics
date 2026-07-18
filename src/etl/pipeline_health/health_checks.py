@@ -138,10 +138,20 @@ LOGS_INSIGHTS_LOOKBACK_SECONDS = 30 * 24 * 60 * 60
 
 @dataclass(frozen=True)
 class _InvocationRecord:
-    """One parsed ``REPORT`` log event: duration and success/failure."""
+    """One parsed ``REPORT`` log event: timing, success/failure and timestamp."""
 
     duration_seconds: float
     succeeded: bool
+    timestamp: str
+    """ISO-8601 timestamp of the invocation (FEATURE-013, task 13.2)."""
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to the JSON-safe shape exposed in ``recent_invocations``."""
+        return {
+            "timestamp": self.timestamp,
+            "succeeded": self.succeeded,
+            "duration_seconds": self.duration_seconds,
+        }
 
 
 class LogsInsightsQueryError(Exception):
@@ -153,6 +163,31 @@ class LogsInsightsQueryError(Exception):
     must catch this and translate it into a non-crashing yellow/red
     :class:`HealthCheckResult` — it must never escape ``evaluate()``.
     """
+
+
+#: Logs Insights ``@timestamp`` wire format (e.g. "2026-01-01 00:00:00.000").
+_LOGS_INSIGHTS_TIMESTAMP_FORMAT = "%Y-%m-%d %H:%M:%S.%f"
+
+
+def _parse_logs_insights_timestamp(raw: str) -> str:
+    """
+    Parse a Logs Insights ``@timestamp`` value into an ISO-8601 string.
+
+    Args:
+        raw: The raw ``@timestamp`` field value, e.g.
+            ``"2026-01-01 00:00:00.000"``.
+
+    Returns:
+        The ISO-8601 representation of *raw*, or *raw* unchanged if it
+        does not match the expected format (never raises — malformed
+        timestamps degrade gracefully rather than breaking evaluate()).
+    """
+    if not raw:
+        return raw
+    try:
+        return datetime.strptime(raw, _LOGS_INSIGHTS_TIMESTAMP_FORMAT).isoformat()
+    except ValueError:
+        return raw
 
 
 class _LogsInsightsExecutionHistory:
@@ -274,6 +309,7 @@ class _LogsInsightsExecutionHistory:
         return _InvocationRecord(
             duration_seconds=duration_ms / 1000.0,
             succeeded=not bool(error_marker),
+            timestamp=_parse_logs_insights_timestamp(fields.get("@timestamp", "")),
         )
 
 
@@ -343,14 +379,27 @@ class ExecutionSuccessCheck:
             }
 
         latest = records[0]
+        recent_invocations = [record.to_dict() for record in records]
         if not latest.succeeded:
-            return RED, {"status": RED, "invocations_checked": count}
+            return RED, {
+                "status": RED,
+                "invocations_checked": count,
+                "recent_invocations": recent_invocations,
+            }
 
         earlier_failed = any(not record.succeeded for record in records[1:])
         if earlier_failed:
-            return YELLOW, {"status": YELLOW, "invocations_checked": count}
+            return YELLOW, {
+                "status": YELLOW,
+                "invocations_checked": count,
+                "recent_invocations": recent_invocations,
+            }
 
-        detail: Dict[str, Any] = {"status": GREEN, "invocations_checked": count}
+        detail: Dict[str, Any] = {
+            "status": GREEN,
+            "invocations_checked": count,
+            "recent_invocations": recent_invocations,
+        }
         if count < self._window:
             detail["insufficient_history"] = True
         return GREEN, detail
@@ -432,6 +481,7 @@ class ExecutionDurationCheck:
             "status": status,
             "invocations_checked": count,
             "max_duration_seconds": max_duration,
+            "recent_invocations": [record.to_dict() for record in records],
         }
         if count < self._window:
             detail["insufficient_history"] = True
