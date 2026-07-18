@@ -16,7 +16,7 @@
  */
 
 /** Ordered list of currently valid tab ids. */
-export const TAB_IDS = ['trend-analysis', 'data-basis'];
+export const TAB_IDS = ['trend-analysis', 'data-basis', 'pipeline-health'];
 
 /** Tab id shown/activated when no valid hash is present. */
 export const DEFAULT_TAB_ID = 'trend-analysis';

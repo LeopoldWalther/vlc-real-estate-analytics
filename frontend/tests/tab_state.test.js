@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { TAB_IDS, DEFAULT_TAB_ID, resolveActiveTab, buildTabHash } from '../src/tab_state.js';
 
 describe('tab_state.js', () => {
-  it('exports the current valid tab ids', () => {
-    expect(TAB_IDS).toEqual(['trend-analysis', 'data-basis']);
+  it('exports the current valid tab ids, including pipeline-health (FEATURE-012)', () => {
+    expect(TAB_IDS).toEqual(['trend-analysis', 'data-basis', 'pipeline-health']);
   });
 
   it('exports a default tab id that is a member of TAB_IDS', () => {
@@ -37,9 +37,19 @@ describe('tab_state.js', () => {
     expect(resolveActiveTab('#unknown', extendedIds, 'data-basis')).toBe('data-basis');
   });
 
+  it('resolves the pipeline-health hash directly against TAB_IDS now that it is a member (task 12.11)', () => {
+    expect(resolveActiveTab('#pipeline-health')).toBe('pipeline-health');
+  });
+
+  it('does not change the default tab now that pipeline-health has been added', () => {
+    expect(DEFAULT_TAB_ID).toBe('trend-analysis');
+    expect(resolveActiveTab('#not-a-real-tab')).toBe('trend-analysis');
+  });
+
   it('builds a stable URL hash for a tab id', () => {
     expect(buildTabHash('trend-analysis')).toBe('#trend-analysis');
     expect(buildTabHash('data-basis')).toBe('#data-basis');
+    expect(buildTabHash('pipeline-health')).toBe('#pipeline-health');
   });
 
   it('buildTabHash and resolveActiveTab round-trip for every valid tab id', () => {
