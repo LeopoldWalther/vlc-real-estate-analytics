@@ -19,6 +19,7 @@ from typing import Any, Dict, List
 import pandas as pd
 import pytest
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from gold_aggregate import (  # noqa: E402
     ROLLING_KPI_WINDOW_MONTHS,
@@ -28,6 +29,12 @@ from gold_aggregate import (  # noqa: E402
     apply_scope,
     build_aggregation_json,
     build_population_block,
+    latest_by_property,
+    price_per_area_histogram,
+    rooms_distribution,
+    search_config_summary,
+    size_histogram_10sqm,
+    weekly_listing_volume,
 )
 
 # ---------------------------------------------------------------------------
@@ -828,3 +835,192 @@ class TestPopulationBlockLast3MonthsField:
         # this group while the all-time field still reports it.
         assert block["boxplot_by_neighborhood_last_3m"] == []
         assert len(block["boxplot_by_neighborhood"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Data Basis pure aggregation helpers (FEATURE-011, task 11.2)
+# ---------------------------------------------------------------------------
+
+
+class TestSearchConfigSummary:
+    """search_config_summary() serializes the shared search constants."""
+
+    def test_returns_stable_public_schema_keys(self) -> None:
+        summary = search_config_summary()
+        assert set(summary.keys()) == {
+            "center_lat",
+            "center_lon",
+            "distance_m",
+            "min_size_m2",
+            "max_size_m2",
+            "elevator",
+            "preservation",
+            "property_type",
+            "sale_credential_label",
+            "rent_credential_label",
+        }
+
+    def test_values_match_shared_search_config_module(self) -> None:
+        from common.search_config import IDEALISTA_SEARCH_PARAMS
+
+        summary = search_config_summary()
+        assert summary["center_lat"] == IDEALISTA_SEARCH_PARAMS["center_lat"]
+        assert summary["center_lon"] == IDEALISTA_SEARCH_PARAMS["center_lon"]
+        assert summary["distance_m"] == IDEALISTA_SEARCH_PARAMS["distance_m"]
+        assert summary["property_type"] == IDEALISTA_SEARCH_PARAMS["property_type"]
+
+    def test_does_not_expose_collector_internal_fields(self) -> None:
+        """M2: no base_url/order/sort/max_items collector-internal leakage."""
+        summary = search_config_summary()
+        assert "base_url" not in summary
+        assert "order" not in summary
+        assert "sort" not in summary
+        assert "max_items" not in summary
+        assert "language" not in summary
+        assert "country" not in summary
+
+
+class TestWeeklyListingVolume:
+    """weekly_listing_volume groups deduped rows by operation + snapshot_date."""
+
+    def test_groups_by_operation_and_snapshot_date(self) -> None:
+        rows = [
+            _make_listing(
+                operation="sale", snapshot_date=date(2023, 4, 9), propertyCode="S1"
+            ),
+            _make_listing(
+                operation="sale", snapshot_date=date(2023, 4, 9), propertyCode="S2"
+            ),
+            _make_listing(
+                operation="rent", snapshot_date=date(2023, 4, 9), propertyCode="R1"
+            ),
+            _make_listing(
+                operation="sale", snapshot_date=date(2023, 4, 16), propertyCode="S3"
+            ),
+        ]
+        result = weekly_listing_volume(_df(rows))
+        by_key = {
+            (r["operation"], r["snapshot_date"]): r["count_listings"] for r in result
+        }
+        assert by_key[("sale", "2023-04-09")] == 2
+        assert by_key[("rent", "2023-04-09")] == 1
+        assert by_key[("sale", "2023-04-16")] == 1
+
+    def test_includes_data_outside_the_three_scope_districts(self) -> None:
+        """Data Basis operates on unscoped Silver data, unlike general/relevant."""
+        rows = [_make_listing(district="Benimaclet", propertyCode="P1")]
+        result = weekly_listing_volume(_df(rows))
+        assert result[0]["count_listings"] == 1
+
+    def test_empty_input_returns_empty_list(self) -> None:
+        assert weekly_listing_volume(pd.DataFrame(columns=_BASE_COLS)) == []
+
+
+class TestLatestByProperty:
+    """latest_by_property keeps only the newest snapshot per (operation, propertyCode)."""
+
+    def test_keeps_latest_snapshot_row_per_property(self) -> None:
+        rows = [
+            _make_listing(
+                propertyCode="P1", snapshot_date=date(2023, 4, 9), size=100.0
+            ),
+            _make_listing(
+                propertyCode="P1", snapshot_date=date(2023, 4, 16), size=105.0
+            ),
+        ]
+        result = latest_by_property(_df(rows))
+        assert len(result) == 1
+        assert result.iloc[0]["size"] == 105.0
+
+    def test_distinguishes_by_operation(self) -> None:
+        rows = [
+            _make_listing(propertyCode="P1", operation="sale"),
+            _make_listing(propertyCode="P1", operation="rent"),
+        ]
+        result = latest_by_property(_df(rows))
+        assert len(result) == 2
+
+    def test_empty_input_returns_empty_dataframe(self) -> None:
+        result = latest_by_property(pd.DataFrame(columns=_BASE_COLS))
+        assert result.empty
+
+
+class TestSizeHistogram10sqm:
+    """size_histogram_10sqm bins listings into deterministic 10 m2 buckets."""
+
+    def test_bins_are_10sqm_wide_and_deterministic(self) -> None:
+        rows = [
+            _make_listing(propertyCode="P1", size=101.0),
+            _make_listing(propertyCode="P2", size=109.0),
+            _make_listing(propertyCode="P3", size=110.0),
+        ]
+        result = size_histogram_10sqm(_df(rows))
+        by_bin = {
+            (r["bin_start_m2"], r["bin_end_m2"]): r["count_listings"] for r in result
+        }
+        assert by_bin[(100, 110)] == 2
+        assert by_bin[(110, 120)] == 1
+
+    def test_emits_operation_field(self) -> None:
+        rows = [_make_listing(operation="rent", size=105.0)]
+        result = size_histogram_10sqm(_df(rows))
+        assert result[0]["operation"] == "rent"
+
+    def test_empty_input_returns_empty_list(self) -> None:
+        assert size_histogram_10sqm(pd.DataFrame(columns=_BASE_COLS)) == []
+
+
+class TestRoomsDistribution:
+    """rooms_distribution emits operation, rooms, count_listings."""
+
+    def test_counts_per_operation_and_room_count(self) -> None:
+        rows = [
+            _make_listing(propertyCode="P1", operation="sale", rooms=2),
+            _make_listing(propertyCode="P2", operation="sale", rooms=2),
+            _make_listing(propertyCode="P3", operation="sale", rooms=3),
+            _make_listing(propertyCode="P4", operation="rent", rooms=2),
+        ]
+        result = rooms_distribution(_df(rows))
+        by_key = {(r["operation"], r["rooms"]): r["count_listings"] for r in result}
+        assert by_key[("sale", 2)] == 2
+        assert by_key[("sale", 3)] == 1
+        assert by_key[("rent", 2)] == 1
+
+    def test_empty_input_returns_empty_list(self) -> None:
+        assert rooms_distribution(pd.DataFrame(columns=_BASE_COLS)) == []
+
+
+class TestPricePerAreaHistogram:
+    """price_per_area_histogram bins priceByArea with operation-specific widths."""
+
+    def test_sale_and_rent_use_different_bin_widths(self) -> None:
+        rows = [
+            _make_listing(propertyCode="S1", operation="sale", priceByArea=2500.0),
+            _make_listing(propertyCode="S2", operation="sale", priceByArea=2600.0),
+            _make_listing(propertyCode="R1", operation="rent", priceByArea=10.0),
+            _make_listing(propertyCode="R2", operation="rent", priceByArea=10.5),
+        ]
+        result = price_per_area_histogram(_df(rows))
+        sale_bins = {
+            (r["bin_start_price_m2"], r["bin_end_price_m2"])
+            for r in result
+            if r["operation"] == "sale"
+        }
+        rent_bins = {
+            (r["bin_start_price_m2"], r["bin_end_price_m2"])
+            for r in result
+            if r["operation"] == "rent"
+        }
+        # Sale bins are much wider (hundreds of EUR/m2) than rent bins
+        # (single-digit EUR/m2) — the two scales must not share bin edges.
+        sale_widths = {end - start for start, end in sale_bins}
+        rent_widths = {end - start for start, end in rent_bins}
+        assert sale_widths != rent_widths
+
+    def test_emits_count_listings_field(self) -> None:
+        rows = [_make_listing(operation="sale", priceByArea=2500.0)]
+        result = price_per_area_histogram(_df(rows))
+        assert result[0]["count_listings"] == 1
+
+    def test_empty_input_returns_empty_list(self) -> None:
+        assert price_per_area_histogram(pd.DataFrame(columns=_BASE_COLS)) == []

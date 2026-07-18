@@ -56,6 +56,8 @@ from typing import Any, Callable, Dict, List, Optional, cast
 
 import pandas as pd
 
+from common.search_config import IDEALISTA_SEARCH_PARAMS
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -562,6 +564,246 @@ def _boxplot_by_neighborhood_last_months(
     windowed = df[parsed_dates >= window_start]
 
     return _boxplot_summary(windowed, min_count=min_count)
+
+
+# ---------------------------------------------------------------------------
+# Data Basis pure aggregation helpers (FEATURE-011)
+# ---------------------------------------------------------------------------
+#
+# These helpers operate on UNSCOPED Silver data (all districts, not just the
+# 3 scope districts used by general/relevant) and must never alter
+# apply_scope(), _dedup(), or any general/relevant behaviour (review H2).
+# They feed the additive top-level `data_basis` block wired in
+# gold_aggregator.py (task 11.4).
+
+# Operation-specific bin widths for the price-per-m2 histogram: sale and
+# rent prices live on very different scales (hundreds vs. single-digit
+# EUR/m2), so a single bin width would make one side unreadable.
+_PRICE_PER_AREA_BIN_WIDTH: Dict[str, float] = {"sale": 250.0, "rent": 1.0}
+_DEFAULT_PRICE_PER_AREA_BIN_WIDTH: float = 250.0
+
+# Bin width for the listing-size histogram (m2).
+_SIZE_HISTOGRAM_BIN_WIDTH_M2: int = 10
+
+
+def search_config_summary() -> Dict[str, Any]:
+    """
+    Serialize the shared Idealista search constants for the public dashboard.
+
+    Reads exclusively from :data:`common.search_config.IDEALISTA_SEARCH_PARAMS`
+    (single source of truth shared with :class:`bronze_collector.SearchConfig`,
+    review M2) and re-shapes it into a small, stable public schema — the
+    dashboard never sees collector-internal fields (``base_url``, ``order``,
+    ``sort``, ``max_items``, ``language``, ``country``) that could change for
+    reasons unrelated to the search itself.
+
+    Returns:
+        Dict with keys: center_lat, center_lon, distance_m, min_size_m2,
+        max_size_m2, elevator, preservation, property_type,
+        sale_credential_label, rent_credential_label.
+    """
+    params = IDEALISTA_SEARCH_PARAMS
+    return {
+        "center_lat": params["center_lat"],
+        "center_lon": params["center_lon"],
+        "distance_m": params["distance_m"],
+        "min_size_m2": params["min_size_m2"],
+        "max_size_m2": params["max_size_m2"],
+        "elevator": params["elevator"],
+        "preservation": params["preservation"],
+        "property_type": params["property_type"],
+        "sale_credential_label": params["sale_credential_label"],
+        "rent_credential_label": params["rent_credential_label"],
+    }
+
+
+def weekly_listing_volume(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """
+    Count listings per (operation, snapshot_date).
+
+    Callers must pass rows already deduped within each snapshot (e.g. via
+    :func:`_dedup`) — this helper does not dedup itself, matching the
+    per-snapshot dedup semantics used everywhere else in the gold layer.
+    Unlike general/relevant, this is computed over UNSCOPED data: every
+    district contributes, not just the 3 scope districts.
+
+    Args:
+        df: Per-snapshot-deduped listings DataFrame (any scope).
+
+    Returns:
+        List of record dicts: operation, snapshot_date, count_listings.
+        Empty list when input is empty.
+    """
+    if df.empty:
+        return []
+
+    grp = (
+        df.groupby(["operation", "snapshot_date"])
+        .agg(count_listings=("propertyCode", "count"))
+        .reset_index()
+    )
+    grp["snapshot_date"] = grp["snapshot_date"].apply(
+        lambda v: v.isoformat() if isinstance(v, date) else str(v)
+    )
+    return cast(List[Dict[str, Any]], grp.to_dict(orient="records"))
+
+
+def latest_by_property(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Keep only the most recent snapshot row per (operation, propertyCode).
+
+    Used by the Data Basis distribution datasets (size, rooms, price/m2),
+    which describe "what's currently listed" rather than full history —
+    unlike the per-snapshot dedup used for time-series datasets.
+
+    Args:
+        df: Listings DataFrame (any scope), with a ``snapshot_date`` column.
+
+    Returns:
+        DataFrame with at most one row per (operation, propertyCode),
+        keeping the row with the latest parsed ``snapshot_date``. Returns
+        an empty copy (same columns) when the input is empty.
+    """
+    if df.empty:
+        return df.copy()
+
+    working = df.copy()
+    working["_parsed_snapshot"] = pd.to_datetime(
+        working["snapshot_date"], errors="coerce"
+    )
+    working = working.sort_values("_parsed_snapshot", kind="stable")
+    deduped = working.drop_duplicates(subset=["operation", "propertyCode"], keep="last")
+    return deduped.drop(columns=["_parsed_snapshot"])
+
+
+def size_histogram_10sqm(
+    df: pd.DataFrame, bin_width_m2: int = _SIZE_HISTOGRAM_BIN_WIDTH_M2
+) -> List[Dict[str, Any]]:
+    """
+    Bin listings into deterministic 10 m2 size buckets, per operation.
+
+    Bin edges are computed as ``floor(size / bin_width) * bin_width`` so the
+    same size always falls into the same bin regardless of the surrounding
+    data (deterministic bin edges).
+
+    Args:
+        df: Listings DataFrame (typically latest-by-property deduped).
+        bin_width_m2: Bucket width in m2. Defaults to 10.
+
+    Returns:
+        List of record dicts: operation, bin_start_m2, bin_end_m2,
+        count_listings. Empty list when input is empty or ``size`` is
+        entirely missing.
+    """
+    if df.empty:
+        return []
+
+    working = df.dropna(subset=["size"])
+    if working.empty:
+        return []
+
+    bin_start = (working["size"] // bin_width_m2 * bin_width_m2).astype(int)
+    binned = pd.DataFrame(
+        {
+            "operation": working["operation"],
+            "bin_start_m2": bin_start,
+            "bin_end_m2": bin_start + bin_width_m2,
+        }
+    )
+    grp = (
+        binned.groupby(["operation", "bin_start_m2", "bin_end_m2"])
+        .size()
+        .reset_index(name="count_listings")
+        .sort_values(["operation", "bin_start_m2"])
+    )
+    return cast(List[Dict[str, Any]], grp.to_dict(orient="records"))
+
+
+def rooms_distribution(df: pd.DataFrame) -> List[Dict[str, Any]]:
+    """
+    Count listings per (operation, rooms).
+
+    Args:
+        df: Listings DataFrame (typically latest-by-property deduped).
+
+    Returns:
+        List of record dicts: operation, rooms, count_listings. Empty list
+        when input is empty or ``rooms`` is entirely missing.
+    """
+    if df.empty:
+        return []
+
+    working = df.dropna(subset=["rooms"]).copy()
+    if working.empty:
+        return []
+
+    working["rooms"] = working["rooms"].astype(int)
+    grp = (
+        working.groupby(["operation", "rooms"])
+        .size()
+        .reset_index(name="count_listings")
+        .sort_values(["operation", "rooms"])
+    )
+    return cast(List[Dict[str, Any]], grp.to_dict(orient="records"))
+
+
+def price_per_area_histogram(
+    df: pd.DataFrame,
+    bin_width_by_operation: Optional[Dict[str, float]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Bin listings by priceByArea (EUR/m2), with operation-specific bin widths.
+
+    Sale and rent prices per m2 live on very different scales, so each
+    operation gets its own bin width (:data:`_PRICE_PER_AREA_BIN_WIDTH`) —
+    sharing bin edges across operations would make one side unreadable.
+
+    Args:
+        df: Listings DataFrame (typically latest-by-property deduped).
+        bin_width_by_operation: Optional override of the default per-operation
+            bin widths (mainly for tests).
+
+    Returns:
+        List of record dicts: operation, bin_start_price_m2,
+        bin_end_price_m2, count_listings. Empty list when input is empty or
+        ``priceByArea`` is entirely missing.
+    """
+    if df.empty:
+        return []
+
+    working = df.dropna(subset=["priceByArea"])
+    if working.empty:
+        return []
+
+    widths = bin_width_by_operation or _PRICE_PER_AREA_BIN_WIDTH
+
+    records: List[Dict[str, Any]] = []
+    for operation, group in working.groupby("operation"):
+        width = widths.get(str(operation), _DEFAULT_PRICE_PER_AREA_BIN_WIDTH)
+        bin_start = (group["priceByArea"] // width * width).astype(float)
+        binned = pd.DataFrame(
+            {
+                "bin_start_price_m2": bin_start,
+                "bin_end_price_m2": bin_start + width,
+            }
+        )
+        counts = (
+            binned.groupby(["bin_start_price_m2", "bin_end_price_m2"])
+            .size()
+            .reset_index(name="count_listings")
+            .sort_values("bin_start_price_m2")
+        )
+        for row in counts.to_dict(orient="records"):
+            records.append(
+                {
+                    "operation": operation,
+                    "bin_start_price_m2": float(row["bin_start_price_m2"]),
+                    "bin_end_price_m2": float(row["bin_end_price_m2"]),
+                    "count_listings": int(row["count_listings"]),
+                }
+            )
+
+    return records
 
 
 # ---------------------------------------------------------------------------
