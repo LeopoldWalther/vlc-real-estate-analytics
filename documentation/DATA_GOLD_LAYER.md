@@ -34,8 +34,9 @@ FEATURE-005 (static visualization web app)
 
 | File | Purpose |
 |---|---|
+| `src/etl/common/search_config.py` | Single source of truth for Idealista search parameters — shared by the collector and the gold `search_config` dataset (FEATURE-011) |
 | `src/etl/data_processing/gold_aggregate.py` | Pure (AWS-free) aggregation helpers — analytical math, shared by both the legacy entry point and the strategies |
-| `src/etl/data_processing/gold_aggregator.py` | `GoldAggregator` + `Aggregation` strategies — orchestration and dataset composition |
+| `src/etl/data_processing/gold_aggregator.py` | `GoldAggregator` + `Aggregation` strategies — orchestration and dataset composition, including the additive `data_basis` strategies |
 | `src/etl/data_processing/gold_aggregation_lambda.py` | Thin Lambda handler — Factory wire-up + response shaping |
 | `src/etl/data_processing/tests/test_gold_aggregate.py` | Unit tests for the pure aggregation helpers |
 | `src/etl/data_processing/tests/test_gold_aggregator.py` | Unit tests for the strategies + `GoldAggregator` (includes the golden-master gate) |
@@ -113,6 +114,134 @@ Neighborhoods where either the sale or rent side has fewer than `min_count` list
 
 ---
 
+## Data Basis Block (FEATURE-011)
+
+`data_basis` is an **additive top-level sibling** of `general`/`relevant`, introduced to power a
+"Data Basis" dashboard tab that explains *how* the underlying data was collected (search
+parameters, weekly collection volume, and listing distributions) — schema-version stays `"1.0"`.
+
+**Key differences from `general`/`relevant`:**
+
+- **Unscoped.** Data Basis datasets are computed over the **entire** silver history — every
+  district, not just the 3 scope districts (`apply_scope()` is never applied here).
+- **Two dedup semantics, chosen per dataset:**
+  - **Per-snapshot dedup** (`_dedup`, identical to `general`/`relevant`) for
+    `weekly_listing_volume` — the same property re-listed in a later week must still contribute to
+    each week's count.
+  - **Latest-by-property dedup** (`latest_by_property`) for `size_histogram_10sqm`,
+    `rooms_distribution`, `price_per_area_histogram`, and `listing_location_grid_last_3m` — these
+    describe "what's currently on the market", so only the most recent snapshot per
+    `(operation, propertyCode)` is kept.
+- **Strategy classes live in `gold_aggregator.py` only.** The legacy pure entry point
+  `gold_aggregate.build_aggregation_json()` intentionally does **not** emit `data_basis` — only
+  `GoldAggregator` (the production path used by `gold_aggregation_lambda.py`) does.
+
+### Datasets
+
+| Dataset | Dedup | Description |
+|---|---|---|
+| `search_config` | n/a (static) | Public, stable serialization of the shared Idealista search parameters (see [Search Config](#search-config) below). Always exactly one record. |
+| `weekly_listing_volume` | per-snapshot | Listing counts per `(operation, snapshot_date)`, across all districts. |
+| `size_histogram_10sqm` | latest-by-property | Listing counts binned into deterministic 10 m² buckets, per operation. |
+| `rooms_distribution` | latest-by-property | Listing counts per `(operation, rooms)`. |
+| `price_per_area_histogram` | latest-by-property | Listing counts binned by `priceByArea` (EUR/m²), with **operation-specific bin widths** (sale: 250 EUR/m², rent: 1 EUR/m²) — sale and rent price/m² live on very different scales, so sharing bin edges would make one side unreadable. |
+| `listing_location_grid_last_3m` | latest-by-property + rolling window | Privacy-safe geo aggregate for the map (see [Privacy-Safe Location Grid](#privacy-safe-location-grid) below). |
+
+### Search Config
+
+Both the bronze-layer collector (`bronze_collector.SearchConfig`, which builds the actual Idealista
+API request) and this dataset read from **one shared constant module**,
+`src/etl/common/search_config.py` (`IDEALISTA_SEARCH_PARAMS`) — there is no second, independently
+maintained copy of the search radius, size range, property type, or elevator/preservation filters.
+
+`search_config_summary()` re-shapes the shared constant into a small, **stable public schema** so
+the dashboard never depends on collector-internal field names:
+
+```json
+{
+  "center_lat": 39.4693441,
+  "center_lon": -0.379561,
+  "distance_m": 1500,
+  "min_size_m2": 100,
+  "max_size_m2": 160,
+  "elevator": true,
+  "preservation": "good",
+  "property_type": "homes",
+  "sale_credential_label": "LVW",
+  "rent_credential_label": "PMV"
+}
+```
+
+### Privacy-Safe Location Grid
+
+`listing_location_grid_last_3m` powers the dashboard's schematic map **without ever exposing an
+individual listing's location**:
+
+- **Rolling 3-month window.** Reuses the FEATURE-010 rolling-window helper
+  (`_rolling_window_start` / `ROLLING_KPI_WINDOW_MONTHS`) — the window is anchored to
+  `max(snapshot_date)` in the data, never wall-clock "now".
+- **Latest-by-property dedup**, so a re-listed property contributes only its most recent location.
+- **Coordinates are rounded to 3 decimal degrees (≈ 80–110 m in Valencia) BEFORE grouping.** Rows
+  are then grouped by `(operation, district, neighborhood, latitude_rounded, longitude_rounded)`
+  and only the **count** of listings per cell is emitted.
+- **Only rounded/aggregated grid cells with counts are ever emitted.** Every record has *exactly*
+  these keys — `operation`, `district`, `neighborhood`, `latitude`, `longitude`,
+  `count_listings` — and **never** `propertyCode`, address-like fields, exact `price`, or an
+  unrounded coordinate. This is enforced by an explicit test
+  (`TestListingLocationGridLast3Months::test_never_emits_forbidden_fields` in
+  `test_gold_aggregate.py`) asserting the forbidden fields are absent from every record.
+
+Example record:
+
+```json
+{
+  "operation": "sale",
+  "district": "Extramurs",
+  "neighborhood": "La Petxina",
+  "latitude": 39.474,
+  "longitude": -0.39,
+  "count_listings": 7
+}
+```
+
+### Sample `data_basis` Block
+
+```json
+{
+  "search_config": [
+    {
+      "center_lat": 39.4693441,
+      "center_lon": -0.379561,
+      "distance_m": 1500,
+      "min_size_m2": 100,
+      "max_size_m2": 160,
+      "elevator": true,
+      "preservation": "good",
+      "property_type": "homes",
+      "sale_credential_label": "LVW",
+      "rent_credential_label": "PMV"
+    }
+  ],
+  "weekly_listing_volume": [
+    { "operation": "sale", "snapshot_date": "2023-04-09", "count_listings": 42 }
+  ],
+  "size_histogram_10sqm": [
+    { "operation": "sale", "bin_start_m2": 100, "bin_end_m2": 110, "count_listings": 15 }
+  ],
+  "rooms_distribution": [
+    { "operation": "sale", "rooms": 3, "count_listings": 28 }
+  ],
+  "price_per_area_histogram": [
+    { "operation": "sale", "bin_start_price_m2": 2250.0, "bin_end_price_m2": 2500.0, "count_listings": 9 }
+  ],
+  "listing_location_grid_last_3m": [
+    { "operation": "sale", "district": "Extramurs", "neighborhood": "La Petxina", "latitude": 39.474, "longitude": -0.39, "count_listings": 7 }
+  ]
+}
+```
+
+---
+
 ## JSON Contract v1.0
 
 This schema is **frozen**. FEATURE-005 depends on this exact shape. Do not change field names or structure without bumping `schema_version`.
@@ -133,7 +262,8 @@ This schema is **frozen**. FEATURE-005 depends on this exact shape. Do not chang
     "bathrooms_gte": 2
   },
   "general": { ... },
-  "relevant": { ... }
+  "relevant": { ... },
+  "data_basis": { ... }
 }
 ```
 
