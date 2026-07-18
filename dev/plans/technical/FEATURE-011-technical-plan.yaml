@@ -417,7 +417,7 @@ tasks:
       Run full backend/frontend validation, deploy the updated gold Lambda to dev first, refresh
       latest.json, visually verify the Data Basis tab in dev, then promote to prod. Sync all workflow
       statuses after verification.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: ["11.5", "11.11"]

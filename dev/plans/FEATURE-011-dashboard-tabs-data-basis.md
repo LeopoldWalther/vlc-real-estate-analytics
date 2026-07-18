@@ -1,6 +1,6 @@
 # FEATURE-011 — Tab navigation + "Data Basis" tab (search params, collection volume, size/rooms/price distributions, geo map)
 
-**Status:** 🟡 In progress (backend tasks 11.1–11.5 done; frontend tasks pending) · **Effort:** L (~3–3.5 d) · **Priority:** Medium
+**Status:** ✅ Done — deployed and verified on dev and prod · **Effort:** L (~3–3.5 d) · **Priority:** Medium
 **Branch root:** `feature/dashboard-tabs-data-basis` · **Created:** 2026-08-04 · **Updated:** 2026-08-04
 
 > Authored by `@architect`. Reviewed by `@reviewer` (see `dev/reviews/REVIEW-FEATURE-011.md`).
@@ -355,5 +355,19 @@ basemap, no tiles, no external call:
     (`dev/plans/FEATURE-012-pipeline-health-monitoring.md`) via an overly broad `git add`; both
     were caught before merging and fixed with `git reset HEAD~1 -- <file>` +
     `git commit --amend --no-edit`. That file remains untracked and outside this feature's scope.
-  - Task 11.12 (deploy verification/closeout) is out of scope for this session per the operator's
-    instructions and remains `not_started`.
+  - Task 11.12 (deploy verification/closeout) completed: backend pytest (176 passed, 3 skipped) and
+    frontend `npx vitest run` (190/190) green; dev gold Lambda already matched the merged code
+    (`terraform plan` showed "No changes"); dev and prod `latest.json` both independently verified
+    via direct S3 fetch to contain the full `data_basis` block (`search_config`,
+    `weekly_listing_volume`, `size_histogram_10sqm`, `rooms_distribution`,
+    `price_per_area_histogram`, `listing_location_grid_last_3m`) with no forbidden fields
+    (`propertyCode`/`address`/exact `price`/`listing_id`) in the location grid. Prod's
+    `gold-aggregator` Lambda code was updated via `terraform apply` (code-hash change only) and
+    manually invoked once to refresh `latest.json` (2,357,780 bytes) prior to promotion, since prod
+    had not yet run with the new code. Frontend assets (`index.html`, `app.js`, `styles.css`,
+    `src/**`) were synced to both `dev-vlc-frontend-assets` and `prod-vlc-frontend-assets` S3
+    buckets (mirroring `deploy-frontend.yml`'s `aws s3 sync ... --delete`), followed by a CloudFront
+    invalidation (`/*`) on both distributions. Live verification via `curl` confirmed
+    `role="tablist"` markup and the "Data Basis" tab label render on both
+    `vlc-report-dev.leopoldwalther.com` and `vlc-report.leopoldwalther.com`. Leftover artifacts
+    (`infrastructure/environments/dev/gold.tfplan`, `.venv-check/`) were deleted.
