@@ -25,6 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, Optional, Protocol, Tuple
 
+from common.metrics_publisher import MetricsPublisher
 from common.notifier import Notifier
 from common.object_store import ObjectStore
 from common.search_config import IDEALISTA_SEARCH_PARAMS
@@ -35,6 +36,36 @@ logger = logging.getLogger()
 # Constants (unchanged from the pre-refactor module)
 API_TIMEOUT_SECONDS = 30
 OAUTH_TOKEN_URL = "https://api.idealista.com/oauth/token"
+
+# FEATURE-012 (task 12.3): API-quota instrumentation constants.
+METRICS_NAMESPACE = "VlcRealEstate/Idealista"
+API_REQUESTS_METRIC_NAME = "ApiRequests"
+
+#: Credential-set labels the review (finding H1) requires explicitly:
+#: LVW = sale, PMV = rent.
+CREDENTIAL_SET_BY_OPERATION = {"sale": "LVW", "rent": "PMV"}
+
+
+class NoOpMetricsPublisher:
+    """
+    :class:`~common.metrics_publisher.MetricsPublisher` no-op default.
+
+    Keeps ``metrics_publisher`` an optional collaborator (existing
+    callers/tests that predate FEATURE-012 keep working unchanged)
+    without sprinkling ``if self._metrics is not None`` checks through
+    the collection loop (None Object pattern).
+    """
+
+    def publish(
+        self,
+        namespace: str,
+        metric_name: str,
+        value: float,
+        unit: str,
+        dimensions: Dict[str, str],
+        timestamp: Optional[datetime] = None,
+    ) -> None:
+        """Discard the datapoint; no metrics backend configured."""
 
 
 class IdealistaAPIError(Exception):
@@ -267,6 +298,7 @@ class BronzeCollector:
         s3_prefix: str = "bronze/idealista/",
         sale_config: Optional[SearchConfig] = None,
         rent_config: Optional[SearchConfig] = None,
+        metrics_publisher: Optional[MetricsPublisher] = None,
     ) -> None:
         """
         Args:
@@ -281,6 +313,10 @@ class BronzeCollector:
                 :meth:`SearchConfig.sale`).
             rent_config: Rent search strategy (defaults to
                 :meth:`SearchConfig.rent`).
+            metrics_publisher: Optional (FEATURE-012, task 12.3) edge for
+                publishing per-attempt ``ApiRequests`` quota metrics.
+                Defaults to a no-op publisher so existing callers that
+                predate this feature keep working unchanged.
         """
         self._object_store = object_store
         self._secrets = secrets_provider
@@ -291,6 +327,7 @@ class BronzeCollector:
         self._s3_prefix = s3_prefix
         self._sale_config = sale_config or SearchConfig.sale()
         self._rent_config = rent_config or SearchConfig.rent()
+        self._metrics = metrics_publisher or NoOpMetricsPublisher()
 
     def collect(self, test_mode: bool = False) -> CollectionResult:
         """
@@ -389,30 +426,38 @@ class BronzeCollector:
             url = url_template % page
             logger.info(f"Processing {operation} page {page}/{total_pages}")
 
-            # Fetch
-            response_json = self._api.fetch_page(
-                credentials["api_key"], credentials["api_secret"], url
-            )
-
-            # Parse — only to learn totalPages; the raw body is persisted.
+            # FEATURE-012 (task 12.3, review H1): the metric must count
+            # every ATTEMPTED search request, including ones that later
+            # fail to parse or persist. The `finally` block below runs
+            # exactly once per page regardless of how this try block
+            # exits, so quota pressure is never silently under-reported.
             try:
-                response_data = json.loads(response_json)
-            except json.JSONDecodeError as e:
-                logger.error(
-                    f"Error parsing JSON response for {operation} page {page}: {e}"
+                # Fetch
+                response_json = self._api.fetch_page(
+                    credentials["api_key"], credentials["api_secret"], url
                 )
-                raise IdealistaAPIError(f"Invalid JSON response: {e}")
-            total_pages = response_data.get("totalPages", total_pages)
 
-            # Persist
-            key = f"{self._s3_prefix}{operation}_{timestamp}_{page}.json"
-            data = response_json.encode("utf-8")
-            try:
-                self._object_store.put_bytes(key, data, "application/json")
-            except Exception as e:
-                logger.error(f"Error uploading to S3: {e}")
-                raise IdealistaAPIError(f"Failed to upload to S3: {e}")
-            bytes_written += len(data)
+                # Parse — only to learn totalPages; raw body is persisted.
+                try:
+                    response_data = json.loads(response_json)
+                except json.JSONDecodeError as e:
+                    logger.error(
+                        f"Error parsing JSON response for {operation} page {page}: {e}"
+                    )
+                    raise IdealistaAPIError(f"Invalid JSON response: {e}")
+                total_pages = response_data.get("totalPages", total_pages)
+
+                # Persist
+                key = f"{self._s3_prefix}{operation}_{timestamp}_{page}.json"
+                data = response_json.encode("utf-8")
+                try:
+                    self._object_store.put_bytes(key, data, "application/json")
+                except Exception as e:
+                    logger.error(f"Error uploading to S3: {e}")
+                    raise IdealistaAPIError(f"Failed to upload to S3: {e}")
+                bytes_written += len(data)
+            finally:
+                self._publish_attempt_metric(operation)
 
             page += 1
 
@@ -422,6 +467,34 @@ class BronzeCollector:
             f"{pages_processed} pages written to S3"
         )
         return pages_processed, bytes_written
+
+    def _publish_attempt_metric(self, operation: str) -> None:
+        """
+        Emit one ``ApiRequests`` datapoint for an attempted search page.
+
+        Called once per page from a ``finally`` block (task 12.3, review
+        H1) so failed/partial pages are counted exactly like successful
+        ones. Failures from the metrics backend must never fail the
+        collection run, matching the :class:`~common.notifier.Notifier`
+        convention.
+
+        Args:
+            operation: ``'sale'`` or ``'rent'`` — mapped to its
+                credential-set label (LVW/PMV).
+        """
+        try:
+            self._metrics.publish(
+                namespace=METRICS_NAMESPACE,
+                metric_name=API_REQUESTS_METRIC_NAME,
+                value=1.0,
+                unit="Count",
+                dimensions={
+                    "CredentialSet": CREDENTIAL_SET_BY_OPERATION[operation],
+                    "Operation": operation,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001 — never fail the run
+            logger.error(f"Error publishing API request metric: {exc}")
 
     def _notify_success(self, result: CollectionResult) -> None:
         """
@@ -468,11 +541,15 @@ Automated notification from AWS Lambda
 
 
 __all__: List[str] = [
+    "API_REQUESTS_METRIC_NAME",
     "API_TIMEOUT_SECONDS",
     "BronzeCollector",
     "CollectionResult",
+    "CREDENTIAL_SET_BY_OPERATION",
     "IdealistaAPIError",
     "IdealistaApiClient",
+    "METRICS_NAMESPACE",
+    "NoOpMetricsPublisher",
     "OAUTH_TOKEN_URL",
     "SearchApiClient",
     "SearchConfig",

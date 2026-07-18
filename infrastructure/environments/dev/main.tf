@@ -79,6 +79,27 @@ module "gold_aggregator" {
 }
 
 # ---------------------------------------------------------------------------
+# Pipeline health observer — independent Lambda that monitors the 3 pipeline
+# Lambdas (bronze/silver/gold) and writes gold/pipeline_health/latest.json.
+# Deliberately NOT wired into the Step Functions state machine below: it
+# observes the pipeline on its own weekly EventBridge schedule and must keep
+# working even if the orchestrated pipeline run itself fails.
+# ---------------------------------------------------------------------------
+module "pipeline_health" {
+  source = "../../modules/lambda_pipeline_health"
+
+  environment    = var.environment
+  aws_region     = var.aws_region
+  s3_bucket_name = module.listings_bucket.listings_bucket_name
+  s3_bucket_arn  = module.listings_bucket.listings_bucket_arn
+  pipeline_function_names = [
+    module.idealista_collector.function_name,
+    module.silver_cleaner.function_name,
+    module.gold_aggregator.function_name,
+  ]
+}
+
+# ---------------------------------------------------------------------------
 # Pipeline orchestrator — Step Functions state machine that runs
 # bronze -> silver -> gold in sequence every Sunday at 12:00 UTC.
 #

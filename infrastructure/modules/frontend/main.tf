@@ -144,6 +144,18 @@ resource "aws_cloudfront_distribution" "frontend" {
     cache_policy_id        = aws_cloudfront_cache_policy.data_short_ttl.id
   }
 
+  # Data behaviour — pipeline health observer JSON, same short TTL policy as
+  # gold aggregations (review H2: this prefix was previously not routed to
+  # the data bucket at all, so the tab could never load its data).
+  ordered_cache_behavior {
+    path_pattern           = "/${var.pipeline_health_prefix}/*"
+    allowed_methods        = ["GET", "HEAD"]
+    cached_methods         = ["GET", "HEAD"]
+    target_origin_id       = "data-bucket"
+    viewer_protocol_policy = "redirect-to-https"
+    cache_policy_id        = aws_cloudfront_cache_policy.data_short_ttl.id
+  }
+
   # Map S3/OAC 403 and 404 to index.html so a stale/direct URL renders the
   # app rather than a raw S3 XML error (review L1).
   custom_error_response {
@@ -217,6 +229,23 @@ resource "aws_s3_bucket_policy" "listings_oac" {
         }
         Action   = "s3:GetObject"
         Resource = "${var.listings_bucket_arn}/${var.gold_prefix}/*"
+        Condition = {
+          StringEquals = {
+            "AWS:SourceArn" = aws_cloudfront_distribution.frontend.arn
+          }
+        }
+      },
+      {
+        # Review H2: grants CloudFront read access to the pipeline health
+        # observer's output, alongside (not instead of) the existing gold
+        # aggregations statement above.
+        Sid    = "AllowCloudFrontOACPipelineHealth"
+        Effect = "Allow"
+        Principal = {
+          Service = "cloudfront.amazonaws.com"
+        }
+        Action   = "s3:GetObject"
+        Resource = "${var.listings_bucket_arn}/${var.pipeline_health_prefix}/*"
         Condition = {
           StringEquals = {
             "AWS:SourceArn" = aws_cloudfront_distribution.frontend.arn

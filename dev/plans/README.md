@@ -18,6 +18,7 @@ small, version-controlled, independently testable tasks.
 | FEATURE-009 | Frontend redesign: clean, modern, mobile-first dashboard | 🟢 | `feature/frontend-redesign` | M–L (~16.5–18 h) | Medium | Unassigned |
 | FEATURE-010 | Rolling 3-month median for rent/sale KPI tiles | 🟢 | `feature/rolling-3m-median-kpis` | M (~1–1.5 d) | Medium | @implementer |
 | FEATURE-011 | Dashboard tabs & Data Basis (deployed dev+prod) | ✅ | `feature/dashboard-tabs-data-basis` | L (~3–3.5 d) | Medium | @implementer |
+| FEATURE-012 | Pipeline Health monitoring (traffic light: bronze/silver/gold, API quota, AWS cost) | 🟢 | `feature/pipeline-health-monitoring` | L (~3.5–4 d) | Medium | @implementer |
 
 **Status:** 🔵 planned · 🟡 in progress · 🟢 complete · 🔴 blocked
 

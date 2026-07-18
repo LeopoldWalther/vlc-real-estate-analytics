@@ -25,6 +25,7 @@ from bronze_collector import (  # noqa: F401 — re-exported for compatibility
     IdealistaApiClient,
     SearchConfig,
 )
+from common.metrics_publisher import CloudWatchMetricsPublisher
 from common.notifier import SnsNotifier
 from common.object_store import S3ObjectStore
 from common.secrets_provider import SecretsManagerProvider
@@ -81,6 +82,9 @@ def build_collector(env: Dict[str, str]) -> BronzeCollector:
         secret_name_lvw=secret_name_lvw,
         secret_name_pmv=secret_name_pmv,
         s3_prefix=s3_prefix,
+        # FEATURE-012 (task 12.3): publish per-attempt quota metrics so
+        # the pipeline-health Lambda can evaluate API-quota pressure.
+        metrics_publisher=CloudWatchMetricsPublisher(),
     )
 
 

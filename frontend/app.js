@@ -13,6 +13,7 @@
  */
 
 import { DataSource } from './src/data_source.js';
+import { PipelineHealthDataSource } from './src/pipeline_health_data_source.js';
 import { priceTimeSeriesRentRenderer, priceTimeSeriesSaleRenderer } from './src/charts/price_time_series.js';
 import { priceTimeSeriesDistrictRentRenderer, priceTimeSeriesDistrictSaleRenderer } from './src/charts/price_time_series_district.js';
 import { rentVsSaleRatioRenderer } from './src/charts/rent_vs_sale_ratio.js';
@@ -29,6 +30,7 @@ import { MAX_SCOPE_SELECTION, extractDistricts, extractNeighborhoods, filterPopu
 import { t, isRtl, resolveLocale } from './src/i18n.js';
 import { resolveActiveTab, buildTabHash } from './src/tab_state.js';
 import { formatSearchConfigSummary } from './src/search_config.js';
+import { overallBadgeLabel, buildSubLightRows, unavailableMessage } from './src/pipeline_health.js';
 
 const THEME_STORAGE_KEY = 'vlc-dashboard-theme';
 const LOCALE_STORAGE_KEY = 'vlc-dashboard-locale';
@@ -123,6 +125,16 @@ const LOAD_STATE_MESSAGE_KEYS = {
 };
 
 const dataSource = new DataSource(window.CONFIG.DATA_URL);
+
+// Independent data source for the Pipeline Health tab (task 12.11) — its
+// load lifecycle is fully decoupled from `dataSource`/`cachedData` above:
+// it is only fetched lazily, the first time the pipeline-health tab is
+// activated, and a failure here never affects the Trend Analysis/Data
+// Basis load state.
+const pipelineHealthDataSource = new PipelineHealthDataSource(
+  window.CONFIG.PIPELINE_HEALTH_URL ?? '/gold/pipeline_health/latest.json',
+);
+let pipelineHealthDocument = null;
 
 // Active population — starts on 'general'; toggle switches to 'relevant'.
 let activePopulation = 'general';
@@ -465,6 +477,63 @@ function resizeDataBasisCharts() {
   }
 }
 
+/**
+ * Render the Pipeline Health tab: fetch its independent JSON (lazily, once)
+ * and render the overall badge + one row per sub-light check, or the
+ * neutral "not yet available" message on any load failure.
+ *
+ * Never throws — PipelineHealthDataSource.loadOrUnavailable() already
+ * resolves to null on any failure, and this function renders the
+ * unavailable state for that case rather than propagating.
+ */
+async function renderPipelineHealthTab() {
+  if (pipelineHealthDocument === null) {
+    pipelineHealthDocument = await pipelineHealthDataSource.loadOrUnavailable();
+  }
+
+  const overallEl = document.getElementById('pipeline-health-overall');
+  const sublightsEl = document.getElementById('pipeline-health-sublights');
+  const unavailableEl = document.getElementById('pipeline-health-unavailable');
+  if (!overallEl || !sublightsEl || !unavailableEl) return;
+
+  if (!pipelineHealthDocument) {
+    overallEl.hidden = true;
+    sublightsEl.hidden = true;
+    unavailableEl.hidden = false;
+    unavailableEl.textContent = unavailableMessage(currentLocale);
+    return;
+  }
+
+  overallEl.hidden = false;
+  sublightsEl.hidden = false;
+  unavailableEl.hidden = true;
+
+  overallEl.setAttribute('data-status', pipelineHealthDocument.overall_status);
+  overallEl.textContent = overallBadgeLabel(pipelineHealthDocument.overall_status, currentLocale);
+
+  sublightsEl.textContent = '';
+  for (const row of buildSubLightRows(pipelineHealthDocument, currentLocale)) {
+    const li = document.createElement('li');
+    li.className = 'pipeline-health-sublight';
+    li.setAttribute('data-status', pipelineHealthDocument[row.id]?.status ?? '');
+
+    const dot = document.createElement('span');
+    dot.className = 'pipeline-health-sublight-dot';
+    dot.setAttribute('aria-hidden', 'true');
+
+    const label = document.createElement('span');
+    label.className = 'pipeline-health-sublight-label';
+    label.textContent = `${row.label}: ${row.statusLabel}`;
+
+    const summary = document.createElement('span');
+    summary.className = 'pipeline-health-sublight-summary';
+    summary.textContent = row.summary;
+
+    li.append(dot, label, summary);
+    sublightsEl.appendChild(li);
+  }
+}
+
 const tabButtons = Array.from(document.querySelectorAll('.tab-button'));
 const tabPanels = Array.from(document.querySelectorAll('.tab-panel'));
 
@@ -502,6 +571,12 @@ function activateTab(tabId, { updateHash = true } = {}) {
     } else {
       resizeDataBasisCharts();
     }
+  }
+  // Pipeline Health is independent of cachedData/dataSource entirely (it
+  // has its own DataSource) — it is loaded/rendered on its own first
+  // activation, regardless of whether the main gold data has loaded yet.
+  if (tabId === 'pipeline-health' && !renderedTabs.has('pipeline-health')) {
+    renderPipelineHealthTab().then(() => renderedTabs.add('pipeline-health'));
   }
 }
 
@@ -581,6 +656,9 @@ function setLocale(nextLocale) {
     if (renderedTabs.has('data-basis')) {
       renderDataBasisTab(currentContext, { initial: false });
     }
+  }
+  if (renderedTabs.has('pipeline-health')) {
+    renderPipelineHealthTab();
   }
 }
 

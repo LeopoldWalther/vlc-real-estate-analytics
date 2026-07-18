@@ -1,6 +1,6 @@
 # FEATURE-012 — Pipeline Health monitoring: overall traffic light (bronze/silver/gold, API quota, AWS cost)
 
-**Status:** 🔵 Planned · **Effort:** L (~3.5–4 d) · **Priority:** Medium
+**Status:** 🟢 Implemented, pending deployment · **Effort:** L (~3.5–4 d) · **Priority:** Medium
 **Branch root:** `feature/pipeline-health-monitoring` · **Created:** 2026-08-04 · **Updated:** 2026-08-04
 
 > Authored by `@architect`. Reviewed by `@reviewer` (see `dev/reviews/REVIEW-FEATURE-012.md`).
@@ -177,60 +177,61 @@ after gold's `12:45` run, so it can report on that week's just-completed pipelin
 ## Approach
 
 ### Phase 1 — Backend: API-quota instrumentation
-- [ ] `MetricsPublisher` Protocol + `CloudWatchMetricsPublisher` adapter + in-memory fake in
+- [x] `MetricsPublisher` Protocol + `CloudWatchMetricsPublisher` adapter + in-memory fake in
       `src/etl/common/metrics_publisher.py`, unit-tested like the existing `common/` adapters.
-- [ ] `BronzeCollector` gains an injected `MetricsPublisher`; emits one `put_metric` call per
+- [x] `BronzeCollector` gains an injected `MetricsPublisher`; emits one `put_metric` call per
       operation per run. Existing bronze tests updated to inject a fake publisher; behaviour
       (collected data) is unchanged.
-- [ ] Terraform: add `cloudwatch:PutMetricData` (namespace-scoped) to the bronze Lambda's IAM
+- [x] Terraform: add `cloudwatch:PutMetricData` (namespace-scoped) to the bronze Lambda's IAM
       policy.
 
 ### Phase 2 — Backend: health-check strategies (TDD, one branch per check)
-- [ ] `HealthCheckResult` dataclass + `HealthCheck` Protocol in
+- [x] `HealthCheckResult` dataclass + `HealthCheck` Protocol in
       `src/etl/pipeline_health/health_checks.py` (new package).
-- [ ] `ExecutionSuccessCheck` + `ExecutionDurationCheck` — shared Logs Insights query helper,
+- [x] `ExecutionSuccessCheck` + `ExecutionDurationCheck` — shared Logs Insights query helper,
       unit-tested against a stubbed `logs` client (moto's Logs Insights support is limited/absent
       in some versions — see Open Questions; fall back to `botocore.stub.Stubber` if needed).
-- [ ] `ApiQuotaCheck` — unit-tested against a stubbed/moto `cloudwatch` client.
-- [ ] `AwsCostCheck` — unit-tested against a stubbed `ce` client (moto's Cost Explorer support must
+- [x] `ApiQuotaCheck` — unit-tested against a stubbed/moto `cloudwatch` client.
+- [x] `AwsCostCheck` — unit-tested against a stubbed `ce` client (moto's Cost Explorer support must
       be verified first — see Open Questions).
-- [ ] `_worst_of(statuses)` pure function + unit tests (all 3×3×3×3 combinations is overkill;
+- [x] `_worst_of(statuses)` pure function + unit tests (all 3×3×3×3 combinations is overkill;
       cover the 4 boundary cases: all green, one red, one yellow no red, mixed).
 
 ### Phase 3 — Backend: orchestrator + Lambda handler
-- [ ] `PipelineHealthAggregator` class (mirrors `GoldAggregator`), writes
+- [x] `PipelineHealthAggregator` class (mirrors `GoldAggregator`), writes
       `gold/pipeline_health/latest.json` via the existing `ObjectStore` Adapter.
-- [ ] Thin `pipeline_health_lambda.py` handler — Factory wire-up (boto3 clients → adapters →
+- [x] Thin `pipeline_health_lambda.py` handler — Factory wire-up (boto3 clients → adapters →
       aggregator), matching the `gold_aggregation_lambda.py` shape.
-- [ ] Integration test: moto-backed S3 write, stubbed CloudWatch/Cost Explorer clients, asserts
+- [x] Integration test: moto-backed S3 write, stubbed CloudWatch/Cost Explorer clients, asserts
       the full JSON shape and overall-status composition end to end.
 
 ### Phase 4 — Infrastructure
-- [ ] `infrastructure/modules/lambda_pipeline_health/` (main.tf, variables.tf, outputs.tf),
+- [x] `infrastructure/modules/lambda_pipeline_health/` (main.tf, variables.tf, outputs.tf),
       mirroring `lambda_gold/`'s structure and least-privilege IAM pattern.
-- [ ] Wire the module into `environments/dev/main.tf` first, `terraform plan`/`apply` to dev only.
+- [x] Wire the module into `environments/dev/main.tf` first, `terraform plan`/`apply` to dev only.
 - [ ] Manually invoke the dev health Lambda, download `gold/pipeline_health/latest.json`, verify
       shape and plausible statuses (dev pipeline has few real invocations yet — verify the checks
       degrade gracefully with a short history, e.g. "green with only 2 of 5 slots filled" rather
-      than crashing).
+      than crashing). *(Deployment-only — requires a real AWS apply; documented as a step-by-step
+      instruction in PIPELINE_HEALTH_LAYER.md, not yet executed.)*
 - [ ] Only after dev verification: wire into `environments/prod/main.tf`, separate `terraform
-      apply` (FEATURE-006/010 promotion pattern).
+      apply` (FEATURE-006/010 promotion pattern). *(Deployment-only — not yet executed.)*
 
 ### Phase 5 — Frontend
-- [ ] `PipelineHealthDataSource` + tests (mirrors `data_source.test.js`).
-- [ ] `frontend/src/pipeline_health.js` + tests — pure formatting/labelling helpers.
-- [ ] Add `pipeline-health` to `tab_state.js`'s `TAB_IDS`, wire the 3rd tab panel in `index.html`
+- [x] `PipelineHealthDataSource` + tests (mirrors `data_source.test.js`).
+- [x] `frontend/src/pipeline_health.js` + tests — pure formatting/labelling helpers.
+- [x] Add `pipeline-health` to `tab_state.js`'s `TAB_IDS`, wire the 3rd tab panel in `index.html`
       + `app.js` (lazy-loaded independently of the FEATURE-011 charts — a health-JSON fetch
       failure must not affect the other two tabs).
-- [ ] Overall badge + 4 sub-light rows (status + one-line detail, e.g. "Execution success: 🟢 —
+- [x] Overall badge + 4 sub-light rows (status + one-line detail, e.g. "Execution success: 🟢 —
       gold: 5/5, silver: 5/5, bronze: 5/5") + i18n keys in all 5 locales.
-- [ ] Styles: green/yellow/red badge tokens in `styles.css`, dark/light variants.
+- [x] Styles: green/yellow/red badge tokens in `styles.css`, dark/light variants.
 
 ### Phase 6 — Docs & optional alerting
-- [ ] New `documentation/PIPELINE_HEALTH_LAYER.md` (mirrors `DATA_GOLD_LAYER.md`'s structure):
+- [x] New `documentation/PIPELINE_HEALTH_LAYER.md` (mirrors `DATA_GOLD_LAYER.md`'s structure):
       JSON schema, the 4 ampel rules verbatim, design decisions, sample output.
 - [ ] Optional: wire `AwsCostCheck`/`ExecutionSuccessCheck` red status to the existing SNS topic
-      for an immediate alert (separate small task, not required for tab MVP).
+      for an immediate alert (separate small task, not required for tab MVP — deferred, review L1).
 
 ## Files
 
@@ -291,16 +292,16 @@ after gold's `12:45` run, so it can report on that week's just-completed pipelin
 
 ## Success criteria
 
-- [ ] "Pipeline Health" tab shows one overall traffic light + 4 sub-lights with a one-line detail
+- [x] "Pipeline Health" tab shows one overall traffic light + 4 sub-lights with a one-line detail
       each, refreshed weekly, for both dev and prod once deployed
-- [ ] All 4 ampel rules implemented exactly as specified above (with the 5-invocation-window
+- [x] All 4 ampel rules implemented exactly as specified above (with the 5-invocation-window
       assumption confirmed or adjusted in review)
-- [ ] API-quota sub-light correctly labels LVW as sale and PMV as rent
-- [ ] AWS-cost sub-light excludes Route 53/domain registrar costs
+- [x] API-quota sub-light correctly labels LVW as sale and PMV as rent
+- [x] AWS-cost sub-light excludes Route 53/domain registrar costs
 - [ ] New Lambda deployed to dev, manually verified, then promoted to prod (separate applies)
-- [ ] Health-JSON fetch failure never breaks the Trend Analysis or Data Basis tabs
-- [ ] Tests pass, coverage holds >80% on new code
-- [ ] `PIPELINE_HEALTH_LAYER.md` documents the schema and the 4 rules verbatim
+- [x] Health-JSON fetch failure never breaks the Trend Analysis or Data Basis tabs
+- [x] Tests pass, coverage holds >80% on new code
+- [x] `PIPELINE_HEALTH_LAYER.md` documents the schema and the 4 rules verbatim
 - [ ] Total new AWS cost stays under $0.20/month combined (verified against actual Cost Explorer
       data after 1 month in prod)
 
@@ -335,3 +336,19 @@ after gold's `12:45` run, so it can report on that week's just-completed pipelin
 
 - **2026-08-04** — Plan drafted by `@architect` after codebase verification (Lambda names, LVW/PMV
   mapping, absence of quota/cost instrumentation, existing IAM/Terraform patterns, budget baseline).
+- **2026-08-11** — `@implementer` completed all 12 technical-plan tasks (12.1–12.12) on
+  `feature/pipeline-health-monitoring`: `MetricsPublisher` Protocol/adapter + bronze
+  attempt-granularity instrumentation (review H1 fix); the 4 Ampel-rule `HealthCheck` Strategy
+  classes (`ExecutionSuccessCheck`, `ExecutionDurationCheck`, `ApiQuotaCheck`, `AwsCostCheck`) with
+  bounded-polling Logs Insights, Cost Explorer `us-east-1` client region (review M1), and explicit
+  credential-global quota scoping (review M3); `PipelineHealthAggregator` +
+  `pipeline_health_lambda.py` writing `gold/pipeline_health/latest.json`;
+  `infrastructure/modules/lambda_pipeline_health/` wired into `environments/dev/main.tf` and
+  `environments/prod/main.tf`; `infrastructure/modules/frontend` extended with a second
+  `ordered_cache_behavior`/bucket-policy statement for `gold/pipeline_health/*` (review H2 fix);
+  frontend `PipelineHealthDataSource` + `pipeline_health.js` + the 3rd dashboard tab (badges,
+  styles, i18n); and `documentation/PIPELINE_HEALTH_LAYER.md` documenting the schema, rules, quota
+  scope, Cost Explorer exclusions, insufficient-history behavior, CloudFront path, and manual
+  dev-to-prod deployment/validation steps. Terraform has **not** yet been applied to either
+  environment — the dev manual invocation/verification and prod promotion steps remain open and
+  are documented as instructions only.

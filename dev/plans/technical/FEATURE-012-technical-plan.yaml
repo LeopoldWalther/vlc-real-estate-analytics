@@ -28,7 +28,7 @@ tasks:
       HealthCheckResult dataclass, HealthCheck Protocol, JSON schema constants, and a pure
       worst_status helper. Encode insufficient-history details without treating short history as
       an exception.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 1.5
     depends_on: []
@@ -60,7 +60,7 @@ tasks:
       TDD, RED first. Add a common MetricsPublisher Protocol, CloudWatchMetricsPublisher adapter,
       and in-memory fake. The adapter must support namespace, metric name, value, unit, dimensions,
       and an optional timestamp while keeping boto3 construction at the edge.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: []
@@ -92,7 +92,7 @@ tasks:
       datapoint per attempted Idealista search page request, including requests that later fail
       parsing or persistence. Preserve existing Lambda response fields and FEATURE-007 state-machine
       compatibility. Label LVW as sale and PMV as rent.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 3
     depends_on: ["12.2"]
@@ -128,7 +128,7 @@ tasks:
       Add least-privilege CloudWatch PutMetricData permission to the bronze Lambda role using a
       cloudwatch:namespace condition for VlcRealEstate/Idealista. Do not broaden S3, Secrets Manager,
       or SNS permissions.
-    status: "not_started"
+    status: "done"
     complexity: "small"
     estimated_hours: 1
     depends_on: ["12.3"]
@@ -157,7 +157,7 @@ tasks:
       and ExecutionDurationCheck. Use stubbed clients rather than relying on moto support. Cover
       query success, query failure, timeout, 0 invocations, short history, and the green/yellow/red
       boundary cases.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 4
     depends_on: ["12.1"]
@@ -191,7 +191,7 @@ tasks:
       fully completed calendar months. Make the quota scope explicit: credential-global if dev/prod
       share credentials, or environment-filtered if separate credentials are configured. Document
       the chosen dimension semantics in returned details.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2.5
     depends_on: ["12.1", "12.3"]
@@ -220,10 +220,7 @@ tasks:
   - id: "12.7"
     title: "Implement AWS cost health check"
     description: >
-      TDD, RED first. Implement AwsCostCheck using Cost Explorer GetCostAndUsage, grouped by service,
-      month-to-date, excluding documented domain/registrar service names. Ensure the Lambda factory
-      can construct the CE client with the correct global/US endpoint region.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2.5
     depends_on: ["12.1"]
@@ -256,7 +253,7 @@ tasks:
       runs the four checks, composes overall_status with worst_status, and writes
       gold/pipeline_health/latest.json via ObjectStore. The handler is a thin Factory that injects
       boto3 clients at the edge, including explicit Cost Explorer client configuration.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 4
     depends_on: ["12.5", "12.6", "12.7"]
@@ -294,7 +291,7 @@ tasks:
       but packaging pipeline_health plus common only. Add least-privilege IAM for Logs Insights,
       CloudWatch GetMetricData, Cost Explorer, S3 PutObject to gold/pipeline_health/*, logging, and
       an independent weekly EventBridge schedule after gold.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 4
     depends_on: ["12.8"]
@@ -333,7 +330,7 @@ tasks:
       serves /gold/pipeline_health/* from the listings bucket with the short data cache policy, and
       the listings bucket OAC policy grants read access to both gold/aggregations/* and
       gold/pipeline_health/*.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: ["12.9"]
@@ -366,7 +363,7 @@ tasks:
       TDD, RED first. Add PipelineHealthDataSource, pure formatting/render helpers, tab id wiring,
       DOM panel wiring, i18n keys, and badge styles. Health JSON fetch failure must render a neutral
       not-yet-available state and must not change the Trend Analysis or Data Basis load lifecycle.
-    status: "not_started"
+    status: "done"
     complexity: "high"
     estimated_hours: 5
     depends_on: ["12.8", "12.10"]
@@ -414,7 +411,7 @@ tasks:
       Add PIPELINE_HEALTH_LAYER.md documenting the JSON schema, four ampel rules, metric dimensions,
       Cost Explorer exclusions, insufficient-history behavior, CloudFront path, and dev-to-prod
       deployment validation steps. Run all required validation gates.
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 3
     depends_on: ["12.4", "12.9", "12.10", "12.11"]

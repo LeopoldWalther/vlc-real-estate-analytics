@@ -107,6 +107,17 @@ const en = {
   'charts.price-per-area-histogram-sale.xaxis': 'Sale price per m² (€)',
   'charts.price-per-area-histogram-sale.yaxis': 'Listings',
   'charts.listing-locations-map.title': 'Collected listing locations',
+
+  'tabs.pipelineHealth': 'Pipeline Health',
+  'pipelineHealth.overallLabel': 'Overall status: {status}',
+  'pipelineHealth.status.green': 'Green',
+  'pipelineHealth.status.yellow': 'Yellow',
+  'pipelineHealth.status.red': 'Red',
+  'pipelineHealth.check.executionSuccess': 'Execution success',
+  'pipelineHealth.check.executionDuration': 'Execution duration',
+  'pipelineHealth.check.apiQuota': 'API quota',
+  'pipelineHealth.check.awsCost': 'AWS cost',
+  'pipelineHealth.notAvailable': 'Pipeline health data is not yet available.',
 };
 
 const de = {
@@ -199,6 +210,17 @@ const de = {
   'charts.price-per-area-histogram-sale.xaxis': 'Kaufpreis pro m² (€)',
   'charts.price-per-area-histogram-sale.yaxis': 'Inserate',
   'charts.listing-locations-map.title': 'Standorte erfasster Inserate',
+
+  'tabs.pipelineHealth': 'Pipeline-Zustand',
+  'pipelineHealth.overallLabel': 'Gesamtstatus: {status}',
+  'pipelineHealth.status.green': 'Grün',
+  'pipelineHealth.status.yellow': 'Gelb',
+  'pipelineHealth.status.red': 'Rot',
+  'pipelineHealth.check.executionSuccess': 'Ausführungserfolg',
+  'pipelineHealth.check.executionDuration': 'Ausführungsdauer',
+  'pipelineHealth.check.apiQuota': 'API-Kontingent',
+  'pipelineHealth.check.awsCost': 'AWS-Kosten',
+  'pipelineHealth.notAvailable': 'Pipeline-Zustandsdaten sind noch nicht verfügbar.',
 };
 
 const es = {
@@ -291,6 +313,17 @@ const es = {
   'charts.price-per-area-histogram-sale.xaxis': 'Precio de venta por m² (€)',
   'charts.price-per-area-histogram-sale.yaxis': 'Anuncios',
   'charts.listing-locations-map.title': 'Ubicaciones de los anuncios recopilados',
+
+  'tabs.pipelineHealth': 'Estado del pipeline',
+  'pipelineHealth.overallLabel': 'Estado general: {status}',
+  'pipelineHealth.status.green': 'Verde',
+  'pipelineHealth.status.yellow': 'Amarillo',
+  'pipelineHealth.status.red': 'Rojo',
+  'pipelineHealth.check.executionSuccess': 'Éxito de ejecución',
+  'pipelineHealth.check.executionDuration': 'Duración de ejecución',
+  'pipelineHealth.check.apiQuota': 'Cuota de la API',
+  'pipelineHealth.check.awsCost': 'Coste de AWS',
+  'pipelineHealth.notAvailable': 'Los datos de estado del pipeline aún no están disponibles.',
 };
 
 const ar = {
@@ -383,6 +416,17 @@ const ar = {
   'charts.price-per-area-histogram-sale.xaxis': 'سعر البيع لكل م² (€)',
   'charts.price-per-area-histogram-sale.yaxis': 'الإعلانات',
   'charts.listing-locations-map.title': 'مواقع الإعلانات التي تم جمعها',
+
+  'tabs.pipelineHealth': 'سلامة خط الأنابيب',
+  'pipelineHealth.overallLabel': 'الحالة العامة: {status}',
+  'pipelineHealth.status.green': 'أخضر',
+  'pipelineHealth.status.yellow': 'أصفر',
+  'pipelineHealth.status.red': 'أحمر',
+  'pipelineHealth.check.executionSuccess': 'نجاح التنفيذ',
+  'pipelineHealth.check.executionDuration': 'مدة التنفيذ',
+  'pipelineHealth.check.apiQuota': 'حصة واجهة برمجة التطبيقات',
+  'pipelineHealth.check.awsCost': 'تكلفة AWS',
+  'pipelineHealth.notAvailable': 'بيانات سلامة خط الأنابيب غير متوفرة بعد.',
 };
 
 const tr = {
@@ -475,6 +519,17 @@ const tr = {
   'charts.price-per-area-histogram-sale.xaxis': 'm² başına satış fiyatı (€)',
   'charts.price-per-area-histogram-sale.yaxis': 'İlanlar',
   'charts.listing-locations-map.title': 'Toplanan ilan konumları',
+
+  'tabs.pipelineHealth': 'Pipeline Sağlığı',
+  'pipelineHealth.overallLabel': 'Genel durum: {status}',
+  'pipelineHealth.status.green': 'Yeşil',
+  'pipelineHealth.status.yellow': 'Sarı',
+  'pipelineHealth.status.red': 'Kırmızı',
+  'pipelineHealth.check.executionSuccess': 'Yürütme başarısı',
+  'pipelineHealth.check.executionDuration': 'Yürütme süresi',
+  'pipelineHealth.check.apiQuota': 'API kotası',
+  'pipelineHealth.check.awsCost': 'AWS maliyeti',
+  'pipelineHealth.notAvailable': 'Pipeline sağlığı verileri henüz mevcut değil.',
 };
 
 const TRANSLATIONS = { en, de, es, ar, tr };
