@@ -54,7 +54,6 @@ const en = {
   'filters.selectUpToNeighborhoods': 'Select up to 3 neighborhoods',
   'filters.noDataAvailable': 'No data available',
 
-  'footer.dataUpdated': 'Data last updated: —',
   'footer.sourceLink': 'Source on GitHub',
 
   'charts.price-time-series-rent.title': 'Rent price per m² per month over time by neighbourhood',
@@ -182,7 +181,6 @@ const de = {
   'filters.selectUpToNeighborhoods': 'Bis zu 3 Stadtviertel auswählen',
   'filters.noDataAvailable': 'Keine Daten verfügbar',
 
-  'footer.dataUpdated': 'Daten zuletzt aktualisiert: —',
   'footer.sourceLink': 'Quellcode auf GitHub',
 
   'charts.price-time-series-rent.title': 'Mietpreis pro m² und Monat im Zeitverlauf nach Stadtviertel',
@@ -307,7 +305,6 @@ const es = {
   'filters.selectUpToNeighborhoods': 'Selecciona hasta 3 barrios',
   'filters.noDataAvailable': 'No hay datos disponibles',
 
-  'footer.dataUpdated': 'Datos actualizados por última vez: —',
   'footer.sourceLink': 'Código fuente en GitHub',
 
   'charts.price-time-series-rent.title': 'Precio de alquiler por m² al mes a lo largo del tiempo por barrio',
@@ -432,7 +429,6 @@ const ar = {
   'filters.selectUpToNeighborhoods': 'اختر حتى 3 أحياء',
   'filters.noDataAvailable': 'لا توجد بيانات متاحة',
 
-  'footer.dataUpdated': 'آخر تحديث للبيانات: —',
   'footer.sourceLink': 'المصدر على GitHub',
 
   'charts.price-time-series-rent.title': 'سعر الإيجار لكل م² شهريًا عبر الزمن حسب الحي',
@@ -557,7 +553,6 @@ const tr = {
   'filters.selectUpToNeighborhoods': 'En fazla 3 mahalle seçin',
   'filters.noDataAvailable': 'Veri bulunmuyor',
 
-  'footer.dataUpdated': 'Veriler son güncelleme: —',
   'footer.sourceLink': "GitHub'da kaynak kodu",
 
   'charts.price-time-series-rent.title': 'Mahalleye göre zaman içinde m² başına aylık kira fiyatı',

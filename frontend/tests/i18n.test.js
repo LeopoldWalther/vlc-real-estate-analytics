@@ -51,7 +51,7 @@ describe('t', () => {
       'population.sizeGte', 'population.lift', 'population.roomsGte', 'population.bathroomsGte', 'population.floorNot',
       'filters.districts', 'filters.neighborhoods', 'filters.clear', 'filters.badgeAll',
       'filters.selectUpToDistricts', 'filters.selectUpToNeighborhoods', 'filters.noDataAvailable',
-      'footer.dataUpdated', 'footer.sourceLink',
+      'footer.sourceLink',
       'charts.price-time-series-rent.title', 'charts.price-time-series-rent.yaxis',
       'charts.price-time-series-sale.title', 'charts.price-time-series-sale.yaxis',
       'charts.price-time-series-district-rent.title', 'charts.price-time-series-district-rent.yaxis',
