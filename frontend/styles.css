@@ -256,37 +256,11 @@ main {
   margin-bottom: var(--space-5);
 }
 
-.toggle-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-  padding: var(--space-3) var(--space-4);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  /* Equal share of the row alongside the two scope-filter dropdowns below
-     (.scope-filters is display:contents, so #district-filter/
-     #neighborhood-filter become direct flex children of .filter-bar with
-     the same flex-basis). */
-  flex: 1 1 240px;
-}
-
-.toggle-label {
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-heading);
-}
-
-.toggle-bar label {
-  font-size: var(--font-size-sm);
-  cursor: pointer;
-}
-
 /* District/neighborhood scope filters. display:contents removes this
    element from the flex layout entirely so its children (the two dropdowns
    + reset button) become direct flex items of .filter-bar, sized/aligned
-   identically to .toggle-bar rather than being squeezed into a nested
-   sub-row. */
+   identically to the population toggle rather than being squeezed into a
+   nested sub-row. */
 .scope-filters {
   display: contents;
 }
@@ -297,8 +271,8 @@ main {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  /* Same flex-basis as .toggle-bar so Population/Districts/Neighborhoods
-     end up equal width, spanning the full row. */
+  /* Same flex-basis so Population/Districts/Neighborhoods end up equal
+     width, spanning the full row. */
   flex: 1 1 240px;
 }
 
@@ -551,8 +525,9 @@ footer a {
 
 /* Touch targets: every interactive control is >= 44x44px at mobile widths. */
 #retry-button,
-.toggle-bar label,
-.toggle-bar input[type="radio"] {
+.scope-options label,
+.scope-options input[type="radio"],
+.scope-options input[type="checkbox"] {
   min-height: 44px;
   display: inline-flex;
   align-items: center;

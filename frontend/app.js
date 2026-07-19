@@ -930,7 +930,7 @@ async function run() {
   // second listener that would double-fire chart updates on every toggle).
   const toggleEl = document.getElementById('population-toggle');
   if (toggleEl && cachedData.relevant) {
-    toggleEl.style.display = 'flex';
+    toggleEl.hidden = false;
     if (!toggleEl.dataset.wired) {
       toggleEl.dataset.wired = 'true';
       toggleEl.addEventListener('change', async (e) => {
