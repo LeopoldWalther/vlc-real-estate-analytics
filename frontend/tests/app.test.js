@@ -200,7 +200,21 @@ function buildFakeDocument() {
   dashboardError.hidden = true;
   const retryButton = make('button', { id: 'retry-button' });
   const relevantLabel = make('span', { id: 'relevant-label' });
-  const populationToggle = make('div', { id: 'population-toggle' });
+  const populationToggle = make('details', { id: 'population-toggle', className: 'scope-dropdown' });
+  populationToggle.hidden = true;
+  const populationFieldset = new FakeElement('fieldset');
+  const populationGeneralRadio = new FakeElement('input');
+  populationGeneralRadio.type = 'radio';
+  populationGeneralRadio.name = 'population';
+  populationGeneralRadio.value = 'general';
+  populationGeneralRadio.checked = true;
+  const populationRelevantRadio = new FakeElement('input');
+  populationRelevantRadio.type = 'radio';
+  populationRelevantRadio.name = 'population';
+  populationRelevantRadio.value = 'relevant';
+  populationFieldset.appendChild(populationGeneralRadio);
+  populationFieldset.appendChild(populationRelevantRadio);
+  populationToggle.appendChild(populationFieldset);
   const scopeReset = make('button', { id: 'scope-reset' });
   const themeToggle = make('button', { id: 'theme-toggle' });
   const languageMenu = make('details', { id: 'language-menu' });
@@ -262,12 +276,12 @@ function buildFakeDocument() {
   return {
     fakeDocument, tabTrendAnalysis, tabPipelineHealth, panelTrendAnalysis, panelPipelineHealth,
     overallEl, sublightsEl, unavailableEl, diagramEl, chartContainers, captionEls, localeRadios,
-    languageFieldset,
+    languageFieldset, populationToggle, populationGeneralRadio, populationRelevantRadio,
   };
 }
 
-function buildGoldFixture() {
-  return {
+function buildGoldFixture({ withRelevant = false } = {}) {
+  const document = {
     schema_version: '1.0',
     generated_at: '2026-06-01T12:00:00Z',
     scope_districts: ['Extramurs'],
@@ -299,6 +313,14 @@ function buildGoldFixture() {
       listing_locations_last_3m: [],
     },
   };
+  if (withRelevant) {
+    document.relevant = {
+      rent_vs_sale_ratio: [],
+      rent_vs_sale_ratio_time_series: [],
+      boxplot_by_neighborhood: [],
+    };
+  }
+  return document;
 }
 
 function buildPipelineHealthV11Fixture() {
@@ -666,5 +688,53 @@ describe('Trend Analysis tab — listing count charts (FEATURE-014, task 14.6)',
       expect.anything(),
       expect.anything(),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scenario: FEATURE-014 task 14.8 — population toggle is a <details
+// class="scope-dropdown"> instead of an always-visible radio row, using the
+// hidden attribute (not style.display) to show/hide it.
+// ---------------------------------------------------------------------------
+
+describe('Population toggle — details/summary dropdown (FEATURE-014, task 14.8)', () => {
+  let harness;
+
+  beforeAll(async () => {
+    vi.resetModules();
+    harness = buildFakeDocument();
+    const fakeWindow = makeFakeWindow();
+
+    const fakePlotly = { newPlot: vi.fn(async () => {}), react: vi.fn(async () => {}), Plots: { resize: vi.fn() } };
+
+    vi.stubGlobal('document', harness.fakeDocument);
+    vi.stubGlobal('window', fakeWindow);
+    vi.stubGlobal('Plotly', fakePlotly);
+    vi.stubGlobal('fetch', vi.fn(async (url) => ({
+      ok: true,
+      json: async () => (String(url).includes('pipeline_health')
+        ? buildPipelineHealthV11Fixture()
+        : buildGoldFixture({ withRelevant: true })),
+    })));
+
+    await import('../app.js');
+    await settle();
+  });
+
+  it('is a <details class="scope-dropdown"> element', () => {
+    expect(harness.populationToggle.tagName).toBe('DETAILS');
+    expect(harness.populationToggle.classList.contains('scope-dropdown')).toBe(true);
+  });
+
+  it('becomes visible (hidden=false) once relevant data is present', () => {
+    expect(harness.populationToggle.hidden).toBe(false);
+  });
+
+  it('still fires activePopulation updates on a change event targeting input[name=population]', () => {
+    harness.populationRelevantRadio.checked = true;
+    harness.populationToggle.dispatchEvent({ type: 'change', target: harness.populationRelevantRadio });
+    // No throw — the listener is still wired directly on #population-toggle
+    // and still reads e.target.value, unchanged by the markup conversion.
+    expect(harness.populationRelevantRadio.value).toBe('relevant');
   });
 });

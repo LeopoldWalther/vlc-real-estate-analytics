@@ -130,12 +130,21 @@
          positioned above the KPI row so the whole dashboard reacts visibly
          to a selection change without scrolling. -->
     <div class="filter-bar">
-      <!-- Population toggle — hidden until JS confirms 'relevant' data exists -->
-      <div id="population-toggle" class="toggle-bar" style="display:none">
-        <span class="toggle-label" data-i18n="population.label">Population:</span>
-        <label><input type="radio" name="population" value="general" checked> <span data-i18n="population.all">All listings</span></label>
-        <label><input type="radio" name="population" value="relevant"> <span id="relevant-label" data-i18n="population.filteredFallback">Filtered apartments</span></label>
-      </div>
+      <!-- Population toggle — hidden until JS confirms 'relevant' data exists.
+           A <details class="scope-dropdown"> to match the Districts/
+           Neighborhoods scope filters (FEATURE-014, task 14.8); visibility
+           is toggled via the hidden attribute, not inline style. -->
+      <details id="population-toggle" class="scope-dropdown" hidden>
+        <summary>
+          <span data-i18n="population.label">Population:</span>
+          <span class="scope-badge" data-i18n="population.all">All listings</span>
+        </summary>
+        <fieldset class="scope-options">
+          <legend class="visually-hidden" data-i18n="population.label">Population:</legend>
+          <label><input type="radio" name="population" value="general" checked> <span data-i18n="population.all">All listings</span></label>
+          <label><input type="radio" name="population" value="relevant"> <span id="relevant-label" data-i18n="population.filteredFallback">Filtered apartments</span></label>
+        </fieldset>
+      </details>
 
       <!-- District/neighborhood scope filters — checkbox lists are populated by
            app.js/filters.js once data loads. Both cap at 3 selections. -->
