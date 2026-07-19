@@ -75,10 +75,14 @@ const GENERAL_ONLY_RENDERERS = [
 
 const ALL_RENDERERS = [...GENERAL_ONLY_RENDERERS, ...TOGGLE_RENDERERS];
 
-// Data Basis tab renderers — consume the unscoped, unfiltered
-// data_basis block directly (never applyScope()'d), so the district/
-// neighbourhood/population filters that affect Trend Analysis charts never
-// touch these.
+// Data Basis tab renderers. Every record in data_basis already carries a
+// district/neighbourhood dimension, so listing-locations-map is scoped via
+// applyScope() (district/neighbourhood only — population toggle has no
+// effect on the Data Basis tab in this feature; that requires the
+// re-aggregated per-population data_basis datasets deferred to FEATURE-016).
+// The other 4 Data Basis renderers do NOT yet carry a district/neighbourhood
+// dimension in their aggregated rows, so they remain unscoped/unfiltered
+// until FEATURE-016 re-dimensions them.
 const DATA_BASIS_RENDERERS = [
   listingLocationsMapRenderer,
   weeklyListingVolumeRenderer,
@@ -87,6 +91,10 @@ const DATA_BASIS_RENDERERS = [
   sizeHistogramRenderer,
   roomsDistributionRenderer,
 ];
+
+// Data Basis renderer ids that ARE scope-aware (district/neighbourhood only).
+// See DATA_BASIS_RENDERERS comment above for why the rest are excluded.
+const SCOPED_DATA_BASIS_RENDERER_IDS = new Set([listingLocationsMapRenderer.id]);
 
 // Renderer ids whose x-axis is a plain date timeline — they share the
 // generic 'charts.xaxis.date' i18n key instead of a per-renderer xaxis key
@@ -475,9 +483,13 @@ function renderSearchConfigPanel() {
 }
 
 /**
- * Render every Data Basis chart against the unscoped data_basis block (never
- * applyScope()'d — district/neighbourhood/population filters only affect
- * Trend Analysis) plus the search-config panel.
+ * Render every Data Basis chart plus the search-config panel.
+ *
+ * Only listing-locations-map (SCOPED_DATA_BASIS_RENDERER_IDS) is passed
+ * through applyScope() — district/neighbourhood filters only, since the
+ * population toggle has no effect on the Data Basis tab in this feature. The
+ * other 4 charts render against the unscoped data_basis block until
+ * FEATURE-016 re-dimensions their aggregations.
  *
  * @param {{viewport: string, colorScheme: string}} context
  * @param {{initial: boolean}} [options]
@@ -485,7 +497,10 @@ function renderSearchConfigPanel() {
 async function renderDataBasisTab(context, { initial = true } = {}) {
   renderSearchConfigPanel();
   for (const renderer of DATA_BASIS_RENDERERS) {
-    await plotChart(renderer, cachedData.data_basis, context, { initial });
+    const populationBlock = SCOPED_DATA_BASIS_RENDERER_IDS.has(renderer.id)
+      ? applyScope(cachedData.data_basis)
+      : cachedData.data_basis;
+    await plotChart(renderer, populationBlock, context, { initial });
   }
 }
 
