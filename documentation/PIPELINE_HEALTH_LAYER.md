@@ -44,7 +44,7 @@ FEATURE-005 static visualization web app — "Pipeline Health" tab
 | `frontend/src/pipeline_health.js` | Pure formatting/chart-data helpers: overall badge, sub-light rows, unavailable message, threshold captions, and the 4 `buildXSeries()` helpers that reduce v1.1 `recent_invocations`/`monthly_cost_by_service` into null-safe chart series |
 | `frontend/src/pipeline_health_diagram.js` | Pure Medallion diagram model (`buildDiagramModel`) + DOM-free SVG string renderer (`renderDiagramSvg`) |
 | `frontend/src/charts/pipeline_execution_success_chart.js` | Plotly renderer — one marker+line trace per Lambda, invocation success/failure over time |
-| `frontend/src/charts/pipeline_execution_duration_chart.js` | Plotly renderer — grouped bars of invocation duration per Lambda, with the 300s/600s threshold reference lines |
+| `frontend/src/charts/pipeline_execution_duration_chart.js` | Plotly renderer — grouped bars of invocation duration per Lambda, with the 60s/120s threshold reference lines |
 | `frontend/src/charts/pipeline_api_quota_chart.js` | Plotly renderer — grouped bars of monthly API requests per credential set, with the 80/95-request threshold reference lines |
 | `frontend/src/charts/pipeline_aws_cost_chart.js` | Plotly renderer — stacked bars of monthly AWS cost per service |
 | `frontend/app.js` | Wires the Pipeline Health tab: fetches/caches the document, renders the overall badge/sub-lights/diagram/4 charts/threshold captions, and re-renders (without refetching) on locale/theme changes |
@@ -209,10 +209,10 @@ The overall `execution_success` status is `worst_status()` across all 3 monitore
 Reads the same per-invocation records as Rule 1 (shared `_LogsInsightsExecutionHistory` evidence,
 same 5-invocation window) and takes the **maximum** invocation duration per function:
 
-- **red** — `max_duration_seconds > 600` (`DURATION_RED_THRESHOLD_SECONDS = 10 * 60`).
-- **yellow** — `max_duration_seconds >= 300` (`DURATION_YELLOW_THRESHOLD_SECONDS = 5 * 60`) and
-  `<= 600`; OR the Logs Insights query failed/timed out; OR there is no invocation history yet.
-- **green** — `max_duration_seconds < 300`.
+- **red** — `max_duration_seconds > 120` (`DURATION_RED_THRESHOLD_SECONDS = 120`).
+- **yellow** — `max_duration_seconds >= 60` (`DURATION_YELLOW_THRESHOLD_SECONDS = 60`) and
+  `<= 120`; OR the Logs Insights query failed/timed out; OR there is no invocation history yet.
+- **green** — `max_duration_seconds < 60`.
 
 The overall `execution_duration` status is `worst_status()` across all 3 monitored functions.
 
@@ -342,7 +342,7 @@ The dashboard's "Pipeline Health" tab (`frontend/index.html` `#panel-pipeline-he
    rule, so the chart is never shown without its interpretation:
    - *Execution success history* — per-function success/failure markers over the `recent_invocations`
      window.
-   - *Execution duration history* — per-function duration bars, with the 300s/600s threshold lines.
+   - *Execution duration history* — per-function duration bars, with the 60s/120s threshold lines.
    - *API quota history* — per-credential-set (sale/rent) monthly request-volume bars, with the
      80/95-request threshold lines.
    - *AWS cost history* — a stacked bar of monthly cost per AWS service, over the last 5 completed
