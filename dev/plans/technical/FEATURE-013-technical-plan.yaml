@@ -365,7 +365,7 @@ tasks:
   - id: "13.14"
     title: "Docs, validation, and deployment readiness"
     description: "Document schema v1.1 and UI changes; run required checks; deploy dev first, verify real JSON/UI, then promote to prod."
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 3
     depends_on: ["13.13"]

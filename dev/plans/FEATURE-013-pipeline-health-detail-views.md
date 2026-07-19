@@ -469,3 +469,22 @@ incremental cost is one extra Cost Explorer API call per pipeline-health Lambda 
   current `health_checks.py`/frontend implementation; confirmed the Logs Insights query already
   selects `@timestamp` (just discarded) and the API-quota check already has usable history, so
   backend scope is narrowed to execution-history exposure + one new AWS-cost history adapter.
+- **Implementation (tasks 13.1–13.14)** — All 14 tasks implemented by `@implementer` via strict
+  TDD, one branch + commit per task, merged `--no-ff` into `main` in dependency order. Full test
+  suites green throughout: 265 backend tests (`pytest src/etl -q`), 273 frontend tests
+  (`npx vitest run`). `black`/`ruff` clean; `terraform fmt -check -recursive` and
+  `terraform validate` clean for both `dev` and `prod`; `python dev/tools/validate_workflow.py`
+  passes.
+  - **Dev deployment & verification (task 13.14) — completed:** `terraform apply` in
+    `infrastructure/environments/dev` deployed the updated `pipeline-health` Lambda code
+    (schema v1.1); the Lambda was manually invoked and wrote a fresh
+    `gold/pipeline_health/latest.json` confirmed via `aws s3 cp` to have `schema_version: "1.1"`,
+    well-formed `recent_invocations` (5 entries per monitored function) and a 5-entry, oldest-first
+    `monthly_cost_by_service` list. The dev CloudFront distribution was confirmed to still serve
+    that JSON directly (review H2 regression check). The updated frontend bundle (`app.js`,
+    `index.html`, `styles.css`, and the 6 new `src/**` modules) was synced to the dev assets bucket
+    and the dev CloudFront cache invalidated; all 5 new JS modules and the new markup/CSS were
+    confirmed reachable (HTTP 200) through the dev CloudFront URL.
+  - **Prod promotion — intentionally not performed.** Per explicit instruction, prod deployment is
+    held for a separate, explicitly-approved apply after dev verification is reviewed. Status stays
+    🟡 *In progress* (not 🟢 *Complete*) until that promotion happens.
