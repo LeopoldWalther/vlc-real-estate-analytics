@@ -165,13 +165,20 @@ function buildFakeDocument() {
   const tabTrendAnalysis = make('button', { id: 'tab-trend-analysis', className: 'tab-button' });
   tabTrendAnalysis.dataset.tabId = 'trend-analysis';
   tabTrendAnalysis.setAttribute('data-tab-id', 'trend-analysis');
+  const tabDataBasis = make('button', { id: 'tab-data-basis', className: 'tab-button' });
+  tabDataBasis.dataset.tabId = 'data-basis';
+  tabDataBasis.setAttribute('data-tab-id', 'data-basis');
   const tabPipelineHealth = make('button', { id: 'tab-pipeline-health', className: 'tab-button' });
   tabPipelineHealth.dataset.tabId = 'pipeline-health';
   tabPipelineHealth.setAttribute('data-tab-id', 'pipeline-health');
 
   const panelTrendAnalysis = make('section', { id: 'panel-trend-analysis', className: 'tab-panel' });
+  const panelDataBasis = make('section', { id: 'panel-data-basis', className: 'tab-panel' });
+  panelDataBasis.hidden = true;
   const panelPipelineHealth = make('section', { id: 'panel-pipeline-health', className: 'tab-panel' });
   panelPipelineHealth.hidden = true;
+
+  const filterBar = make('div', { id: 'filter-bar', className: 'filter-bar' });
 
   const overallEl = make('div', { id: 'pipeline-health-overall' });
   const sublightsEl = make('ul', { id: 'pipeline-health-sublights' });
@@ -247,18 +254,34 @@ function buildFakeDocument() {
   districtsFieldset.setAttribute('data-scope-options', 'districts');
   const neighborhoodsFieldset = new FakeElement('fieldset');
   neighborhoodsFieldset.setAttribute('data-scope-options', 'neighborhoods');
-  panelTrendAnalysis.appendChild(districtsFieldset);
-  panelTrendAnalysis.appendChild(neighborhoodsFieldset);
+  // Shared filter-bar (task 14.13): scope fieldsets live in filterBar, not
+  // inside panel-trend-analysis, matching the hoisted production markup.
+  filterBar.appendChild(populationToggle);
+  filterBar.appendChild(districtsFieldset);
+  filterBar.appendChild(neighborhoodsFieldset);
+
+  // Data Basis tab needs its own chart containers so renderDataBasisTab()
+  // can run without error once the tab is activated (task 14.13/14.14).
+  const dataBasisChartIds = ['listing-locations-map', 'weekly-listing-volume', 'size-histogram', 'rooms-distribution', 'price-per-area-histogram-sale', 'price-per-area-histogram-rent'];
+  const dataBasisContainers = {};
+  for (const id of dataBasisChartIds) {
+    dataBasisContainers[id] = make('div', { id });
+    panelDataBasis.appendChild(dataBasisContainers[id]);
+  }
+  const searchConfigDl = make('dl', { id: 'data-basis-search-config' });
+  panelDataBasis.appendChild(searchConfigDl);
 
   root.appendChild(make('div', { id: 'status-announcer' }));
   root.appendChild(tabTrendAnalysis);
+  root.appendChild(tabDataBasis);
   root.appendChild(tabPipelineHealth);
+  root.appendChild(filterBar);
   root.appendChild(panelTrendAnalysis);
+  root.appendChild(panelDataBasis);
   root.appendChild(panelPipelineHealth);
   root.appendChild(dashboardError);
   root.appendChild(retryButton);
   root.appendChild(relevantLabel);
-  root.appendChild(populationToggle);
   root.appendChild(scopeReset);
   root.appendChild(themeToggle);
   root.appendChild(languageMenu);
@@ -274,9 +297,10 @@ function buildFakeDocument() {
   };
 
   return {
-    fakeDocument, tabTrendAnalysis, tabPipelineHealth, panelTrendAnalysis, panelPipelineHealth,
+    fakeDocument, tabTrendAnalysis, tabDataBasis, tabPipelineHealth, panelTrendAnalysis, panelDataBasis, panelPipelineHealth,
     overallEl, sublightsEl, unavailableEl, diagramEl, chartContainers, captionEls, localeRadios,
     languageFieldset, populationToggle, populationGeneralRadio, populationRelevantRadio,
+    filterBar, districtsFieldset, dataBasisContainers,
   };
 }
 
@@ -736,5 +760,68 @@ describe('Population toggle — details/summary dropdown (FEATURE-014, task 14.8
     // No throw — the listener is still wired directly on #population-toggle
     // and still reads e.target.value, unchanged by the markup conversion.
     expect(harness.populationRelevantRadio.value).toBe('relevant');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scenario: FEATURE-014 task 14.13 — shared filter-bar hoisted above both
+// Trend Analysis and Data Basis; hidden only on Pipeline Health; scope
+// changes re-render whichever tab(s) are relevant.
+// ---------------------------------------------------------------------------
+
+describe('Shared filter-bar (FEATURE-014, task 14.13)', () => {
+  let harness;
+  let plotlyReact;
+
+  beforeAll(async () => {
+    vi.resetModules();
+    harness = buildFakeDocument();
+    const fakeWindow = makeFakeWindow();
+
+    plotlyReact = vi.fn(async () => {});
+    const fakePlotly = { newPlot: vi.fn(async () => {}), react: plotlyReact, Plots: { resize: vi.fn() } };
+
+    vi.stubGlobal('document', harness.fakeDocument);
+    vi.stubGlobal('window', fakeWindow);
+    vi.stubGlobal('Plotly', fakePlotly);
+    vi.stubGlobal('fetch', vi.fn(async (url) => ({
+      ok: true,
+      json: async () => (String(url).includes('pipeline_health') ? buildPipelineHealthV11Fixture() : buildGoldFixture()),
+    })));
+
+    await import('../app.js');
+    await settle();
+  });
+
+  it('is visible on the Trend Analysis tab (initial tab)', () => {
+    expect(harness.filterBar.hidden).toBe(false);
+  });
+
+  it('is hidden on the Pipeline Health tab', async () => {
+    harness.tabPipelineHealth.dispatchEvent({ type: 'click' });
+    await settle();
+    expect(harness.filterBar.hidden).toBe(true);
+  });
+
+  it('is visible again on the Data Basis tab', async () => {
+    harness.tabDataBasis.dispatchEvent({ type: 'click' });
+    await settle();
+    expect(harness.filterBar.hidden).toBe(false);
+  });
+
+  it('re-renders the Data Basis tab (via Plotly.react) on a district scope change once Data Basis has been visited', async () => {
+    const checkbox = harness.districtsFieldset.querySelector('input');
+    expect(checkbox).toBeTruthy();
+    const reactCallsBefore = plotlyReact.mock.calls.length;
+
+    checkbox.checked = true;
+    harness.districtsFieldset.dispatchEvent({ type: 'change', target: checkbox });
+    await settle();
+
+    const dataBasisContainerSet = new Set(Object.values(harness.dataBasisContainers));
+    const touchedDataBasis = plotlyReact.mock.calls
+      .slice(reactCallsBefore)
+      .some(([container]) => dataBasisContainerSet.has(container));
+    expect(touchedDataBasis).toBe(true);
   });
 });

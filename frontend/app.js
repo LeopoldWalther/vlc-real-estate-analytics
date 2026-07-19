@@ -644,6 +644,11 @@ function activateTab(tabId, { updateHash = true } = {}) {
   for (const panel of tabPanels) {
     panel.hidden = panel.id !== `panel-${tabId}`;
   }
+  // Shared filter-bar (FEATURE-014, task 14.13) — visible on Trend Analysis
+  // and Data Basis (both consume the same district/neighbourhood/population
+  // selection state), hidden only on Pipeline Health, which has no filters.
+  const filterBarEl = document.getElementById('filter-bar');
+  if (filterBarEl) filterBarEl.hidden = tabId === 'pipeline-health';
   if (updateHash) {
     window.location.hash = buildTabHash(tabId);
   }
@@ -857,12 +862,22 @@ function renderScopeFilters() {
 /**
  * React to a district/neighborhood scope change: rebuild the filter UI and
  * re-render the KPI row + every chart against the newly scoped data.
+ *
+ * Re-renders whichever tab(s) are relevant: Trend Analysis always (its KPIs/
+ * charts are always scope-aware), and Data Basis too if it has already been
+ * rendered at least once (FEATURE-014, task 14.13) — the shared filter-bar
+ * now sits above both tabs, so a scope change while on Data Basis must
+ * refresh it (today this only visibly changes listing-locations-map, task
+ * 14.14; the other Data Basis charts remain unscoped until FEATURE-016).
  */
 async function onScopeChange() {
   renderScopeFilters();
   if (!cachedData) return;
   renderKpis(applyScope(cachedData[activePopulation]));
   await renderAllCharts(currentContext, { initial: false });
+  if (renderedTabs.has('data-basis')) {
+    await renderDataBasisTab(currentContext, { initial: false });
+  }
 }
 
 // Event delegation: one listener per fieldset handles all its checkboxes,
