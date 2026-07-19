@@ -142,6 +142,114 @@ export function formatDistrictSeries(block, operation = null) {
   }));
 }
 
+/**
+ * Convert a price_time_series_district records array into one Plotly
+ * scatter trace per (operation, district) pair, plotting count_listings
+ * (number of listings observed in that snapshot) instead of price.
+ *
+ * Mirrors formatDistrictSeries's grouping/shape exactly — only the plotted
+ * y value differs (count_listings vs mean_priceByArea) — so the two
+ * listing-count-over-time charts (FEATURE-014, task 14.4) share the same
+ * trace/meta contract as the existing price charts.
+ *
+ * @param {Array<{
+ *   operation: string,
+ *   district: string,
+ *   snapshot_date: string,
+ *   count_listings: number,
+ *   mean_priceByArea: number
+ * }>|null|undefined} block
+ * @returns {Array<object>} Plotly scatter traces.
+ */
+export function formatDistrictCountSeries(block, operation = null) {
+  if (!block || block.length === 0) {
+    return [];
+  }
+
+  const records = operation !== null ? block.filter((r) => r.operation === operation) : block;
+  if (records.length === 0) {
+    return [];
+  }
+
+  const groups = new Map();
+  for (const record of records) {
+    const key = `${record.operation}|${record.district}`;
+    if (!groups.has(key)) {
+      groups.set(key, { operation: record.operation, district: record.district, x: [], y: [] });
+    }
+    const g = groups.get(key);
+    g.x.push(record.snapshot_date);
+    g.y.push(record.count_listings);
+  }
+
+  return Array.from(groups.values()).map((g) => ({
+    name: `${g.operation} \u2013 ${g.district}`,
+    x: g.x,
+    y: g.y,
+    type: 'scatter',
+    mode: lineMode(g.x.length),
+    meta: { operation: g.operation, district: g.district },
+  }));
+}
+
+/**
+ * Convert a price_time_series_neighborhood records array into one Plotly
+ * scatter trace per (operation, neighbourhood) pair, plotting count_listings
+ * instead of mean_priceByArea. Mirrors formatSeries's grouping/shape exactly
+ * (FEATURE-014, task 14.4).
+ *
+ * @param {Array<{
+ *   operation: string,
+ *   district: string,
+ *   neighborhood: string,
+ *   snapshot_date: string,
+ *   count_listings: number,
+ *   mean_priceByArea: number
+ * }>|null|undefined} block
+ * @returns {Array<object>} Plotly scatter traces, one per
+ *   (operation, neighbourhood) pair.
+ */
+export function formatNeighborhoodCountSeries(block, operation = null) {
+  if (!block || block.length === 0) {
+    return [];
+  }
+
+  const records = operation !== null ? block.filter((r) => r.operation === operation) : block;
+  if (records.length === 0) {
+    return [];
+  }
+
+  const groups = new Map();
+  for (const record of records) {
+    const key = `${record.operation}|${record.neighborhood}`;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        operation: record.operation,
+        neighborhood: record.neighborhood,
+        district: record.district,
+        x: [],
+        y: [],
+      });
+    }
+    const group = groups.get(key);
+    group.x.push(record.snapshot_date);
+    group.y.push(record.count_listings);
+  }
+
+  return Array.from(groups.values()).map((g) => ({
+    name: `${g.operation} \u2013 ${g.neighborhood}`,
+    x: g.x,
+    y: g.y,
+    type: 'scatter',
+    mode: lineMode(g.x.length),
+    meta: {
+      operation: g.operation,
+      neighborhood: g.neighborhood,
+      district: g.district,
+    },
+  }));
+}
+
 
 /**
  * Convert rent_vs_sale_ratio records into one Plotly scatter trace per
