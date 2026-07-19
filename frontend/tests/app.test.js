@@ -330,11 +330,22 @@ function buildGoldFixture({ withRelevant = false } = {}) {
     },
     data_basis: {
       search_config: [],
-      weekly_listing_volume: [],
+      weekly_listing_volume: [
+        { operation: 'sale', snapshot_date: '2026-05-25', count_listings: 5 },
+      ],
       size_histogram_10sqm: [],
       rooms_distribution: [],
       price_per_area_histogram: [],
-      listing_locations_last_3m: [],
+      listing_locations_last_3m: [
+        {
+          operation: 'sale', district: 'Extramurs', neighborhood: 'Arrancapins',
+          latitude: 39.470, longitude: -0.385,
+        },
+        {
+          operation: 'rent', district: 'Poblats Marítims', neighborhood: 'El Cabanyal',
+          latitude: 39.465, longitude: -0.325,
+        },
+      ],
     },
   };
   if (withRelevant) {
@@ -823,5 +834,72 @@ describe('Shared filter-bar (FEATURE-014, task 14.13)', () => {
       .slice(reactCallsBefore)
       .some(([container]) => dataBasisContainerSet.has(container));
     expect(touchedDataBasis).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scenario: FEATURE-014 task 14.14 — only listing-locations-map is
+// district/neighbourhood scope-aware on the Data Basis tab; the other 4
+// Data Basis charts stay unscoped until FEATURE-016 re-dimensions them.
+// ---------------------------------------------------------------------------
+
+describe('Scoped Data Basis map (FEATURE-014, task 14.14)', () => {
+  let harness;
+  let plotlyReact;
+
+  beforeAll(async () => {
+    vi.resetModules();
+    harness = buildFakeDocument();
+    const fakeWindow = makeFakeWindow();
+
+    plotlyReact = vi.fn(async () => {});
+    const fakePlotly = { newPlot: vi.fn(async () => {}), react: plotlyReact, Plots: { resize: vi.fn() } };
+
+    vi.stubGlobal('document', harness.fakeDocument);
+    vi.stubGlobal('window', fakeWindow);
+    vi.stubGlobal('Plotly', fakePlotly);
+    vi.stubGlobal('fetch', vi.fn(async (url) => ({
+      ok: true,
+      json: async () => (String(url).includes('pipeline_health') ? buildPipelineHealthV11Fixture() : buildGoldFixture()),
+    })));
+
+    await import('../app.js');
+    await settle();
+
+    // Visit Data Basis once so its charts render (lazy-rendered on first
+    // activation), then narrow the district scope to 'Extramurs' — the
+    // fixture's listing_locations_last_3m has one 'Extramurs' row and one
+    // 'Poblats Marítims' row, so the map should narrow to a single trace.
+    harness.tabDataBasis.dispatchEvent({ type: 'click' });
+    await settle();
+
+    const checkbox = harness.districtsFieldset.querySelector('input');
+    checkbox.checked = true;
+    harness.districtsFieldset.dispatchEvent({ type: 'change', target: checkbox });
+    await settle();
+  });
+
+  function lastTracesFor(container) {
+    const calls = plotlyReact.mock.calls.filter(([c]) => c === container);
+    return calls[calls.length - 1]?.[1];
+  }
+
+  it('narrows listing-locations-map to only the selected district', () => {
+    const traces = lastTracesFor(harness.dataBasisContainers['listing-locations-map']);
+    expect(traces).toBeTruthy();
+    // One trace per neighbourhood present after filtering to Extramurs —
+    // the Poblats Marítims / El Cabanyal trace must be gone.
+    const traceNames = traces.map((trace) => trace.name);
+    expect(traceNames).toContain('Arrancapins');
+    expect(traceNames).not.toContain('El Cabanyal');
+  });
+
+  it('leaves weekly-listing-volume (and the other unscoped charts) unaffected by the scope change', () => {
+    const traces = lastTracesFor(harness.dataBasisContainers['weekly-listing-volume']);
+    expect(traces).toBeTruthy();
+    // Still reflects the full, unfiltered data_basis.weekly_listing_volume
+    // fixture row — scope filtering never reached this renderer.
+    const saleTrace = traces.find((trace) => trace.name === 'sale');
+    expect(saleTrace.y).toEqual([5]);
   });
 });
