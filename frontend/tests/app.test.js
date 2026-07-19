@@ -222,6 +222,7 @@ function buildFakeDocument() {
   const trendChartIds = [
     'price-time-series-rent', 'price-time-series-sale',
     'price-time-series-district-rent', 'price-time-series-district-sale',
+    'listing-count-time-series-district', 'listing-count-time-series-neighborhood',
     'rent-vs-sale-ratio', 'rent-vs-sale-ratio-time-series',
     'boxplot-by-neighborhood-rent', 'boxplot-by-neighborhood-sale',
   ];
@@ -273,8 +274,18 @@ function buildGoldFixture() {
     min_count: 5,
     relevant_filter: null,
     general: {
-      price_time_series_neighborhood: [],
-      price_time_series_district: [],
+      price_time_series_neighborhood: [
+        {
+          operation: 'sale', district: 'Extramurs', neighborhood: 'Arrancapins',
+          snapshot_date: '2026-05-01', count_listings: 12, mean_priceByArea: 2500.0,
+        },
+      ],
+      price_time_series_district: [
+        {
+          operation: 'sale', district: 'Extramurs',
+          snapshot_date: '2026-05-01', count_listings: 30, mean_priceByArea: 2400.0,
+        },
+      ],
       rent_vs_sale_ratio: [],
       rent_vs_sale_ratio_time_series: [],
       boxplot_by_neighborhood: [],
@@ -603,5 +614,57 @@ describe('Pipeline Health tab detail views — locale change re-render (task 13.
     for (const checkId of PIPELINE_CHECK_IDS) {
       expect(harness.captionEls[checkId].textContent.length).toBeGreaterThan(0);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Scenario: FEATURE-014 task 14.6 — listing-count-over-time charts wired
+// into the Trend Analysis tab alongside the existing general-only charts.
+// ---------------------------------------------------------------------------
+
+describe('Trend Analysis tab — listing count charts (FEATURE-014, task 14.6)', () => {
+  let harness;
+  let plotlyNewPlot;
+
+  beforeAll(async () => {
+    vi.resetModules();
+    harness = buildFakeDocument();
+    const fakeWindow = makeFakeWindow();
+
+    plotlyNewPlot = vi.fn(async () => {});
+    const fakePlotly = { newPlot: plotlyNewPlot, react: vi.fn(async () => {}), Plots: { resize: vi.fn() } };
+
+    vi.stubGlobal('document', harness.fakeDocument);
+    vi.stubGlobal('window', fakeWindow);
+    vi.stubGlobal('Plotly', fakePlotly);
+    vi.stubGlobal('fetch', vi.fn(async (url) => ({
+      ok: true,
+      json: async () => (String(url).includes('pipeline_health') ? buildPipelineHealthV11Fixture() : buildGoldFixture()),
+    })));
+
+    await import('../app.js');
+    await settle();
+  });
+
+  it('mounts both listing-count charts via Plotly.newPlot alongside the existing general-only charts', () => {
+    expect(plotlyNewPlot).toHaveBeenCalledWith(
+      harness.fakeDocument.getElementById('listing-count-time-series-district'),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+    expect(plotlyNewPlot).toHaveBeenCalledWith(
+      harness.fakeDocument.getElementById('listing-count-time-series-neighborhood'),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
+    // Existing Trend Analysis charts remain unaffected.
+    expect(plotlyNewPlot).toHaveBeenCalledWith(
+      harness.fakeDocument.getElementById('price-time-series-district-rent'),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 });
