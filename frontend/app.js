@@ -16,6 +16,8 @@ import { DataSource } from './src/data_source.js';
 import { PipelineHealthDataSource } from './src/pipeline_health_data_source.js';
 import { priceTimeSeriesRentRenderer, priceTimeSeriesSaleRenderer } from './src/charts/price_time_series.js';
 import { priceTimeSeriesDistrictRentRenderer, priceTimeSeriesDistrictSaleRenderer } from './src/charts/price_time_series_district.js';
+import { listingCountTimeSeriesDistrictRenderer } from './src/charts/listing_count_time_series_district.js';
+import { listingCountTimeSeriesNeighborhoodRenderer } from './src/charts/listing_count_time_series_neighborhood.js';
 import { rentVsSaleRatioRenderer } from './src/charts/rent_vs_sale_ratio.js';
 import { ratioTimeSeriesRenderer } from './src/charts/rent_vs_sale_ratio_time_series.js';
 import { boxplotRentRenderer, boxplotSaleRenderer } from './src/charts/boxplot_by_neighborhood.js';
@@ -67,6 +69,8 @@ const GENERAL_ONLY_RENDERERS = [
   priceTimeSeriesSaleRenderer,
   priceTimeSeriesDistrictRentRenderer,
   priceTimeSeriesDistrictSaleRenderer,
+  listingCountTimeSeriesDistrictRenderer,
+  listingCountTimeSeriesNeighborhoodRenderer,
 ];
 
 const ALL_RENDERERS = [...GENERAL_ONLY_RENDERERS, ...TOGGLE_RENDERERS];
@@ -92,6 +96,8 @@ const SHARED_DATE_XAXIS_RENDERER_IDS = new Set([
   'price-time-series-sale',
   'price-time-series-district-rent',
   'price-time-series-district-sale',
+  'listing-count-time-series-district',
+  'listing-count-time-series-neighborhood',
   'rent-vs-sale-ratio-time-series',
   'weekly-listing-volume',
 ]);
@@ -101,6 +107,8 @@ const containers = {
   'price-time-series-sale':          document.getElementById('price-time-series-sale'),
   'price-time-series-district-rent': document.getElementById('price-time-series-district-rent'),
   'price-time-series-district-sale': document.getElementById('price-time-series-district-sale'),
+  'listing-count-time-series-district': document.getElementById('listing-count-time-series-district'),
+  'listing-count-time-series-neighborhood': document.getElementById('listing-count-time-series-neighborhood'),
   'rent-vs-sale-ratio':              document.getElementById('rent-vs-sale-ratio'),
   'rent-vs-sale-ratio-time-series':  document.getElementById('rent-vs-sale-ratio-time-series'),
   'boxplot-by-neighborhood-rent':    document.getElementById('boxplot-by-neighborhood-rent'),

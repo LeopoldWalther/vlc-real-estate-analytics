@@ -56,6 +56,8 @@ describe('t', () => {
       'charts.price-time-series-sale.title', 'charts.price-time-series-sale.yaxis',
       'charts.price-time-series-district-rent.title', 'charts.price-time-series-district-rent.yaxis',
       'charts.price-time-series-district-sale.title', 'charts.price-time-series-district-sale.yaxis',
+      'charts.listing-count-time-series-district.title', 'charts.listing-count-time-series-district.yaxis',
+      'charts.listing-count-time-series-neighborhood.title', 'charts.listing-count-time-series-neighborhood.yaxis',
       'charts.rent-vs-sale-ratio.title', 'charts.rent-vs-sale-ratio.xaxis', 'charts.rent-vs-sale-ratio.yaxis',
       'charts.rent-vs-sale-ratio-time-series.title', 'charts.rent-vs-sale-ratio-time-series.yaxis',
       'charts.boxplot-by-neighborhood-rent.title', 'charts.boxplot-by-neighborhood-rent.yaxis',
