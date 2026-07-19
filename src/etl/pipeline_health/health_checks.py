@@ -123,8 +123,8 @@ class HealthCheck(Protocol):
 EXECUTION_HISTORY_WINDOW = 5
 
 #: Rule 2 duration thresholds, in seconds.
-DURATION_YELLOW_THRESHOLD_SECONDS = 5 * 60
-DURATION_RED_THRESHOLD_SECONDS = 10 * 60
+DURATION_YELLOW_THRESHOLD_SECONDS = 60
+DURATION_RED_THRESHOLD_SECONDS = 120
 
 #: Bounded Logs Insights polling (review M2): never block indefinitely.
 LOGS_INSIGHTS_MAX_POLL_ATTEMPTS = 10

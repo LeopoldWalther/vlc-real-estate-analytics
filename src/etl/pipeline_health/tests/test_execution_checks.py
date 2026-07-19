@@ -227,11 +227,11 @@ class TestExecutionSuccessCheck:
 
 
 class TestExecutionDurationCheck:
-    """Ampel rule 2: duration thresholds at 5 and 10 minutes."""
+    """Ampel rule 2: duration thresholds at 60 and 120 seconds (FEATURE-014)."""
 
-    def test_all_under_five_minutes_is_green(self, logs_client: Any) -> None:
+    def test_all_under_sixty_seconds_is_green(self, logs_client: Any) -> None:
         stubber = Stubber(logs_client)
-        rows = [_report_row(60_000) for _ in range(5)]  # 1 minute each
+        rows = [_report_row(30_000) for _ in range(5)]  # 30 seconds each
         for _ in FUNCTION_NAMES:
             _stub_query(stubber, rows)
         stubber.activate()
@@ -246,7 +246,7 @@ class TestExecutionDurationCheck:
     ) -> None:
         """FEATURE-013 task 13.2: per-invocation history is exposed in detail."""
         stubber = Stubber(logs_client)
-        rows = [_report_row(60_000)] * 4 + [_report_row(6 * 60_000)]
+        rows = [_report_row(30_000)] * 4 + [_report_row(90_000)]
         for _ in FUNCTION_NAMES:
             _stub_query(stubber, rows)
         stubber.activate()
@@ -257,16 +257,16 @@ class TestExecutionDurationCheck:
         for detail in result.details["functions"].values():
             recent = detail["recent_invocations"]
             assert len(recent) == 5
-            assert recent[0]["duration_seconds"] == 60.0
+            assert recent[0]["duration_seconds"] == 30.0
             for entry in recent:
                 assert "timestamp" in entry
                 datetime.fromisoformat(entry["timestamp"])
 
-    def test_duration_between_five_and_ten_minutes_is_yellow(
+    def test_duration_between_sixty_and_120_seconds_is_yellow(
         self, logs_client: Any
     ) -> None:
         stubber = Stubber(logs_client)
-        rows = [_report_row(60_000)] * 4 + [_report_row(6 * 60_000)]  # 6 minutes
+        rows = [_report_row(30_000)] * 4 + [_report_row(90_000)]  # 90 seconds
         for _ in FUNCTION_NAMES:
             _stub_query(stubber, rows)
         stubber.activate()
@@ -276,9 +276,9 @@ class TestExecutionDurationCheck:
 
         assert result.status == YELLOW
 
-    def test_duration_over_ten_minutes_is_red(self, logs_client: Any) -> None:
+    def test_duration_over_120_seconds_is_red(self, logs_client: Any) -> None:
         stubber = Stubber(logs_client)
-        rows = [_report_row(60_000)] * 4 + [_report_row(11 * 60_000)]  # 11 minutes
+        rows = [_report_row(30_000)] * 4 + [_report_row(130_000)]  # 130 seconds
         for _ in FUNCTION_NAMES:
             _stub_query(stubber, rows)
         stubber.activate()
