@@ -1,8 +1,8 @@
 /**
  * pipelineExecutionDurationChartRenderer — grouped bar chart of recent
  * invocation durations per monitored Lambda function, with horizontal
- * reference lines at the 5-minute (yellow) and 10-minute (red) Ampel
- * thresholds (FEATURE-013, task 13.8).
+ * reference lines at the 60-second (yellow) and 120-second (red) Ampel
+ * thresholds (FEATURE-013, task 13.8; tightened in FEATURE-014, task 14.2).
  *
  * Design pattern: Strategy + Factory (mirrors pipeline_execution_success_chart.js).
  *
@@ -15,8 +15,8 @@ import { buildLayout } from '../chart_theme.js';
 import { buildExecutionDurationSeries } from '../pipeline_health.js';
 
 //: Mirrors health_checks.DURATION_YELLOW_THRESHOLD_SECONDS / DURATION_RED_THRESHOLD_SECONDS.
-export const DURATION_YELLOW_THRESHOLD_SECONDS = 5 * 60;
-export const DURATION_RED_THRESHOLD_SECONDS = 10 * 60;
+export const DURATION_YELLOW_THRESHOLD_SECONDS = 60;
+export const DURATION_RED_THRESHOLD_SECONDS = 120;
 
 /**
  * @param {Array<{functionName: string, points: Array<{timestamp: string, durationSeconds: number}>}>} series
