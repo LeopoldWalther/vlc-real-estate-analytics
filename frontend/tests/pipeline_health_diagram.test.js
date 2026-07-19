@@ -33,15 +33,45 @@ const DOCUMENT = {
 };
 
 describe('buildDiagramModel', () => {
-  it('creates 4 nodes (bronze, silver, gold, pipeline-health) and expected edges', () => {
+  it('creates 6 nodes (source, bronze, silver, gold, dashboard, pipeline-health) and expected edges', () => {
     const model = buildDiagramModel(DOCUMENT);
-    expect(model.nodes).toHaveLength(4);
-    expect(model.nodes.map((n) => n.id)).toEqual(['bronze', 'silver', 'gold', 'pipeline-health']);
+    expect(model.nodes).toHaveLength(6);
+    expect(model.nodes.map((n) => n.id)).toEqual([
+      'source',
+      'bronze',
+      'silver',
+      'gold',
+      'dashboard',
+      'pipeline-health',
+    ]);
     expect(model.edges.length).toBeGreaterThan(0);
     for (const edge of model.edges) {
       expect(model.nodes.some((n) => n.id === edge.from)).toBe(true);
       expect(model.nodes.some((n) => n.id === edge.to)).toBe(true);
     }
+  });
+
+  it('connects the horizontal flow source -> bronze -> silver -> gold -> dashboard', () => {
+    const model = buildDiagramModel(DOCUMENT);
+    const flowEdges = model.edges.filter((e) => e.to !== 'pipeline-health');
+    expect(flowEdges).toEqual([
+      { from: 'source', to: 'bronze' },
+      { from: 'bronze', to: 'silver' },
+      { from: 'silver', to: 'gold' },
+      { from: 'gold', to: 'dashboard' },
+    ]);
+  });
+
+  it('fans an edge from every flow node to the pipeline-health observer', () => {
+    const model = buildDiagramModel(DOCUMENT);
+    const observerEdges = model.edges.filter((e) => e.to === 'pipeline-health');
+    expect(observerEdges.map((e) => e.from)).toEqual(['source', 'bronze', 'silver', 'gold', 'dashboard']);
+  });
+
+  it('always reports the source and dashboard context nodes as unknown', () => {
+    const model = buildDiagramModel(DOCUMENT);
+    expect(model.nodes.find((n) => n.id === 'source').status).toBe(UNKNOWN);
+    expect(model.nodes.find((n) => n.id === 'dashboard').status).toBe(UNKNOWN);
   });
 
   it('derives each stage status as the worst of execution_success/execution_duration', () => {
@@ -84,7 +114,7 @@ describe('buildDiagramModel', () => {
 
   it('produces a valid all-unknown model for a null document', () => {
     const model = buildDiagramModel(null);
-    expect(model.nodes).toHaveLength(4);
+    expect(model.nodes).toHaveLength(6);
     expect(model.nodes.every((n) => n.status === UNKNOWN)).toBe(true);
   });
 
@@ -104,6 +134,20 @@ describe('renderDiagramSvg', () => {
     expect(svg).toContain('data-status="yellow"');
   });
 
+  it('renders arrowhead markers on edge lines instead of plain unmarked lines', () => {
+    const model = buildDiagramModel(DOCUMENT);
+    const svg = renderDiagramSvg(model, 'en');
+    expect(svg).toContain('<marker id="pipeline-health-arrowhead"');
+    expect(svg).toContain('marker-end="url(#pipeline-health-arrowhead)"');
+  });
+
+  it('renders a localized "Status: <value>" label for each node', () => {
+    const model = buildDiagramModel(DOCUMENT);
+    const svg = renderDiagramSvg(model, 'en');
+    expect(svg).toContain('Status: Green');
+    expect(svg).toContain('Status: Yellow');
+  });
+
   it('renders localized labels for each node', () => {
     const model = buildDiagramModel(DOCUMENT);
     const svgEn = renderDiagramSvg(model, 'en');
@@ -116,5 +160,6 @@ describe('renderDiagramSvg', () => {
     expect(() => renderDiagramSvg(model, 'en')).not.toThrow();
     const svg = renderDiagramSvg(model, 'en');
     expect(svg).toContain('data-status="unknown"');
+    expect(svg).toContain('Status: Unknown');
   });
 });

@@ -136,6 +136,9 @@ const en = {
   'pipelineHealth.diagram.silver': 'Silver (cleaned)',
   'pipelineHealth.diagram.gold': 'Gold (aggregated)',
   'pipelineHealth.diagram.observer': 'Pipeline Health (observer)',
+  'pipelineHealth.diagram.source': 'Idealista API (data source)',
+  'pipelineHealth.diagram.dashboard': 'Dashboard (data visualization)',
+  'pipelineHealth.diagram.statusLabel': 'Status',
 };
 
 const de = {
@@ -254,6 +257,9 @@ const de = {
   'pipelineHealth.diagram.silver': 'Silver (bereinigt)',
   'pipelineHealth.diagram.gold': 'Gold (aggregiert)',
   'pipelineHealth.diagram.observer': 'Pipeline-Zustand (Beobachter)',
+  'pipelineHealth.diagram.source': 'Idealista API (Datenquelle)',
+  'pipelineHealth.diagram.dashboard': 'Dashboard (Datenvisualisierung)',
+  'pipelineHealth.diagram.statusLabel': 'Status',
 };
 
 const es = {
@@ -372,6 +378,9 @@ const es = {
   'pipelineHealth.diagram.silver': 'Silver (datos limpios)',
   'pipelineHealth.diagram.gold': 'Gold (datos agregados)',
   'pipelineHealth.diagram.observer': 'Estado del pipeline (observador)',
+  'pipelineHealth.diagram.source': 'API de Idealista (fuente de datos)',
+  'pipelineHealth.diagram.dashboard': 'Panel (visualización de datos)',
+  'pipelineHealth.diagram.statusLabel': 'Estado',
 };
 
 const ar = {
@@ -490,6 +499,9 @@ const ar = {
   'pipelineHealth.diagram.silver': 'الفضية (بيانات منظفة)',
   'pipelineHealth.diagram.gold': 'الذهبية (بيانات مجمعة)',
   'pipelineHealth.diagram.observer': 'سلامة خط الأنابيب (مراقب)',
+  'pipelineHealth.diagram.source': 'واجهة برمجة Idealista (مصدر البيانات)',
+  'pipelineHealth.diagram.dashboard': 'لوحة المعلومات (تصور البيانات)',
+  'pipelineHealth.diagram.statusLabel': 'الحالة',
 };
 
 const tr = {
@@ -608,6 +620,9 @@ const tr = {
   'pipelineHealth.diagram.silver': 'Silver (temizlenmiş)',
   'pipelineHealth.diagram.gold': 'Gold (toplanmış)',
   'pipelineHealth.diagram.observer': 'Pipeline Sağlığı (gözlemci)',
+  'pipelineHealth.diagram.source': 'Idealista API (veri kaynağı)',
+  'pipelineHealth.diagram.dashboard': 'Gösterge paneli (veri görselleştirme)',
+  'pipelineHealth.diagram.statusLabel': 'Durum',
 };
 
 const TRANSLATIONS = { en, de, es, ar, tr };
