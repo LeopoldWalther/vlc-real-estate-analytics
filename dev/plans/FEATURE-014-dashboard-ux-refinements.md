@@ -1,7 +1,15 @@
 # FEATURE-014 — Dashboard UX refinements: health thresholds, trend counts, population dropdown, footer cleanup, Data Basis shared filter-bar
 
-**Status:** 🔵 Planned · **Effort:** M–L (~22.5 h) · **Priority:** Medium
+**Status:** 🟢 Implemented (pending PR/review) · **Effort:** M–L (~22.5 h) · **Priority:** Medium
 **Branch root:** `feature/dashboard-ux-refinements` · **Created:** 2026-07-19 · **Updated:** 2026-07-19
+
+> **Implementation note (2026-07-19, `@implementer`):** all 12 tasks in
+> [FEATURE-014-technical-plan.yaml](technical/FEATURE-014-technical-plan.yaml) are implemented,
+> tested, and merged locally into `main` (one task per branch, TDD RED→GREEN, one commit per task).
+> Full backend suite: 266 passed, 3 skipped. Full frontend suite: 308 passed. Coverage on all
+> changed backend modules is 95–100%. `python dev/tools/validate_workflow.py` passes (only a
+> pre-existing, unrelated warning about the untracked FEATURE-015 stray files). Nothing has been
+> pushed to `origin` or deployed — this is local-only, ready for review before any PR/deploy.
 **Reviewed:** 2026-07-19 by `@reviewer` — see [REVIEW-FEATURE-014.md](../reviews/REVIEW-FEATURE-014.md)
 
 > Authored by `@architect` from five verbatim, project-owner-requested dashboard changes. Note on

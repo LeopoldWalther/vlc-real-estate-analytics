@@ -21,7 +21,7 @@ tasks:
   - id: "14.1"
     title: "Tighten pipeline execution duration thresholds (backend)"
     description: "Change DURATION_YELLOW_THRESHOLD_SECONDS 5*60->60 and DURATION_RED_THRESHOLD_SECONDS 10*60->120 in health_checks.py; update ExecutionDurationCheck boundary tests."
-    status: "not_started"
+    status: "done"
     complexity: "small"
     estimated_hours: 1.5
     depends_on: []
@@ -48,7 +48,7 @@ tasks:
   - id: "14.2"
     title: "Tighten pipeline execution duration thresholds (frontend chart + i18n)"
     description: "Mirror the 60s/120s thresholds in pipeline_execution_duration_chart.js and update the executionDuration threshold caption in all 5 i18n locales; update chart + i18n tests."
-    status: "not_started"
+    status: "done"
     complexity: "small"
     estimated_hours: 2
     depends_on: ["14.1"]
@@ -78,7 +78,7 @@ tasks:
   - id: "14.3"
     title: "Document tightened thresholds"
     description: "Update documentation/PIPELINE_HEALTH_LAYER.md wherever it references the old 5/10-minute (300s/600s) execution duration rule."
-    status: "not_started"
+    status: "done"
     complexity: "small"
     estimated_hours: 0.5
     depends_on: []
@@ -102,7 +102,7 @@ tasks:
   - id: "14.4"
     title: "Add listing-count-over-time transforms (district + neighbourhood)"
     description: "Add formatDistrictCountSeries and formatNeighborhoodCountSeries to transforms.js, mirroring formatDistrictSeries/formatSeries but plotting count_listings instead of mean_priceByArea."
-    status: "not_started"
+    status: "done"
     complexity: "small"
     estimated_hours: 2
     depends_on: []
@@ -128,7 +128,7 @@ tasks:
   - id: "14.5"
     title: "Add listing-count-over-time chart renderers"
     description: "Add listing_count_time_series_district.js and listing_count_time_series_neighborhood.js chart renderer modules, mirroring price_time_series_district.js's Strategy+Factory pattern."
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2.5
     depends_on: ["14.4"]
@@ -159,7 +159,7 @@ tasks:
   - id: "14.6"
     title: "Wire listing-count charts into Trend Analysis tab"
     description: "Register both new renderers in GENERAL_ONLY_RENDERERS, add chart containers to index.html's Trend Analysis chart-grid, add i18n titles/axis keys (5 locales), add ids to SHARED_DATE_XAXIS_RENDERER_IDS."
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: ["14.5"]
@@ -189,7 +189,7 @@ tasks:
   - id: "14.7"
     title: "Add regression test for count_listings presence in price time series"
     description: "Add a backend test in test_gold_aggregator.py asserting count_listings is present and correct on price_time_series_district/price_time_series_neighborhood records, documenting the dependency introduced by task 14.5/14.6."
-    status: "not_started"
+    status: "done"
     complexity: "small"
     estimated_hours: 1
     depends_on: []
@@ -212,7 +212,7 @@ tasks:
   - id: "14.8"
     title: "Convert population toggle to a details/summary dropdown"
     description: "Replace the always-visible population radio-button row with a <details class=scope-dropdown> matching Districts/Neighborhoods; update show/hide logic in app.js from style.display to the hidden attribute; update DOM-builder test helpers."
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 3
     depends_on: []
@@ -243,7 +243,7 @@ tasks:
   - id: "14.9"
     title: "Remove dead footer 'Data last updated' span"
     description: "Remove the never-populated #data-updated footer span and its footer.dataUpdated i18n key (all 5 locales); remove the key from the i18n expected-keys test list."
-    status: "not_started"
+    status: "done"
     complexity: "small"
     estimated_hours: 1
     depends_on: []
@@ -272,7 +272,7 @@ tasks:
   - id: "14.13"
     title: "Hoist shared filter-bar UI above both Trend Analysis and Data Basis tabs"
     description: "Move the .filter-bar markup out of #panel-trend-analysis into a single shared location inside <main>, before both tab panels; update app.js filter-bar visibility logic (hidden only on Pipeline Health tab) and re-render wiring so scope/population changes refresh whichever tab(s) are active."
-    status: "not_started"
+    status: "done"
     complexity: "large"
     estimated_hours: 3.5
     depends_on: ["14.8"]
@@ -303,7 +303,7 @@ tasks:
   - id: "14.14"
     title: "Scope the Data Basis listing-locations-map to district/neighbourhood filters"
     description: "renderDataBasisTab() applies applyScope() (district/neighbourhood only) to the unfiltered data_basis block before rendering listing_locations_map.js, which already carries district/neighborhood on every record; population-based data_basis_relevant splitting and re-aggregated histogram/volume/rooms/price-per-area filtering are deferred to FEATURE-016 (see notes) since the 4 other Data Basis datasets do not yet carry a district/neighbourhood dimension."
-    status: "not_started"
+    status: "done"
     complexity: "small"
     estimated_hours: 1.5
     depends_on: ["14.13"]
@@ -330,7 +330,7 @@ tasks:
   - id: "14.16"
     title: "Full validation, coverage check, and deployment readiness"
     description: "Run the full backend/frontend test suites, confirm >80% coverage on new/changed modules, run workflow-consistency validation, and prepare dev deployment/verification notes before any prod promotion."
-    status: "not_started"
+    status: "done"
     complexity: "medium"
     estimated_hours: 2
     depends_on: ["14.2", "14.3", "14.6", "14.7", "14.9", "14.14"]
