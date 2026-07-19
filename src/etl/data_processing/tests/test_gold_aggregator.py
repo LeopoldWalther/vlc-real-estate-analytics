@@ -98,6 +98,48 @@ class TestGoldenMasterViaAggregator:
             key=f"{GOLD_PREFIX}/latest.json", size_bytes=len(actual)
         )
 
+    def test_count_listings_present_on_price_time_series_datasets(self) -> None:
+        """FEATURE-014 (task 14.7): regression guard.
+
+        Documents an existing dependency introduced by the frontend's new
+        listing-count-over-time charts (tasks 14.4-14.6): both
+        price_time_series_district and price_time_series_neighborhood must
+        keep emitting a correct, present ``count_listings`` field per record
+        — those charts read it directly, with no backend changes required.
+        No production code changes accompany this test.
+        """
+        store = _store_with_silver(load_silver_fixture())
+
+        with mock.patch("gold_aggregate.datetime") as frozen_dt:
+            frozen_dt.now.return_value = _FROZEN_NOW
+            result = make_aggregator(store).aggregate()
+
+        document = json.loads(store.get_bytes(result.key))
+
+        district_records = document["general"]["price_time_series_district"]
+        neighborhood_records = document["general"]["price_time_series_neighborhood"]
+
+        assert len(district_records) > 0
+        assert len(neighborhood_records) > 0
+
+        for record in district_records:
+            assert "count_listings" in record
+            assert isinstance(record["count_listings"], int)
+            assert record["count_listings"] > 0
+
+        for record in neighborhood_records:
+            assert "count_listings" in record
+            assert isinstance(record["count_listings"], int)
+            assert record["count_listings"] > 0
+
+        # Golden-master snapshot check: the first record of each dataset
+        # today carries count_listings == 10 (10 rent listings for
+        # Ciutat Vella / El Carme on 2023-04-09) — pin the actual value, not
+        # just its presence, so a silent aggregation-logic regression (e.g.
+        # double-counting or an off-by-one) is caught too.
+        assert district_records[0]["count_listings"] == 10
+        assert neighborhood_records[0]["count_listings"] == 10
+
 
 class TestStrategyInterface:
     """Strategies are interchangeable behind the common interface."""
