@@ -44,7 +44,22 @@ describe('pipelineExecutionSuccessChartRenderer', () => {
     const bronze = fig.data.find((t) => t.name === 'bronze-collector');
     // Oldest-first: [failed, succeeded]
     expect(bronze.marker.color).toEqual(['#dc2626', '#16a34a']);
-    expect(bronze.y).toEqual([0, 1]);
+  });
+
+  it('places each function on its own constant horizontal row', () => {
+    const fig = pipelineExecutionSuccessChartRenderer.render(DOCUMENT);
+    const bronze = fig.data.find((t) => t.name === 'bronze-collector');
+    const silver = fig.data.find((t) => t.name === 'silver-cleaner');
+    // All points for a function share the same y (row) value.
+    expect(new Set(bronze.y).size).toBe(1);
+    expect(new Set(silver.y).size).toBe(1);
+    // Different functions occupy different rows.
+    expect(bronze.y[0]).not.toBe(silver.y[0]);
+  });
+
+  it('labels the y-axis with function names instead of Succeeded/Failed', () => {
+    const fig = pipelineExecutionSuccessChartRenderer.render(DOCUMENT);
+    expect(fig.layout.yaxis.ticktext).toEqual(['bronze-collector', 'silver-cleaner']);
   });
 
   it('returns a valid empty figure for null/empty input', () => {
