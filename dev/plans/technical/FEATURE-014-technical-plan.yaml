@@ -1,0 +1,372 @@
+metadata:
+  for_feature: "FEATURE-014"
+  title: "Dashboard UX refinements: health thresholds, trend counts, population dropdown, footer cleanup, Data Basis shared filter-bar"
+  created_by: "@architect"
+  created_at: "2026-07-19"
+  version: "2.0"
+  total_tasks: 12
+  estimated_hours: 22.5
+  risk_level: "low"
+  critical_path: ["14.8", "14.13", "14.14", "14.16"]
+  reviewed_plan: "dev/reviews/REVIEW-FEATURE-014.md"
+
+validation:
+  required_checks:
+    - "python-lint-and-test"
+    - "node-test"
+    - "workflow-consistency"
+  min_coverage: ">80% on new Python and frontend modules"
+
+tasks:
+  - id: "14.1"
+    title: "Tighten pipeline execution duration thresholds (backend)"
+    description: "Change DURATION_YELLOW_THRESHOLD_SECONDS 5*60->60 and DURATION_RED_THRESHOLD_SECONDS 10*60->120 in health_checks.py; update ExecutionDurationCheck boundary tests."
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 1.5
+    depends_on: []
+    branch: "feature/dashboard-ux-refinements/14.1-duration-thresholds-backend"
+    commit_message: "fix(health): tighten execution duration thresholds to 60s/120s"
+    acceptance_criteria:
+      - "RED: existing boundary tests fail against the new 60s/120s thresholds before the constant change"
+      - "GREEN: DURATION_YELLOW_THRESHOLD_SECONDS == 60 and DURATION_RED_THRESHOLD_SECONDS == 120"
+      - "GREEN: durations <60s are green, [60s,120s] are yellow, >120s are red"
+      - "GREEN: existing recent_invocations/timestamp behaviour is unchanged"
+    allowed_files:
+      - "src/etl/pipeline_health/health_checks.py"
+      - "src/etl/pipeline_health/tests/test_execution_checks.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["14.3"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/pipeline_health/health_checks.py"
+      - "src/etl/pipeline_health/tests/test_execution_checks.py"
+
+  - id: "14.2"
+    title: "Tighten pipeline execution duration thresholds (frontend chart + i18n)"
+    description: "Mirror the 60s/120s thresholds in pipeline_execution_duration_chart.js and update the executionDuration threshold caption in all 5 i18n locales; update chart + i18n tests."
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 2
+    depends_on: ["14.1"]
+    branch: "feature/dashboard-ux-refinements/14.2-duration-thresholds-frontend"
+    commit_message: "fix(frontend): mirror 60s/120s execution duration thresholds and captions"
+    acceptance_criteria:
+      - "RED: chart/i18n tests fail against old 300s/600s wording and shape values before the change"
+      - "GREEN: DURATION_YELLOW_THRESHOLD_SECONDS == 60 and DURATION_RED_THRESHOLD_SECONDS == 120 in the chart module"
+      - "GREEN: threshold shapes render at y=60 and y=120"
+      - "GREEN: pipelineHealth.threshold.executionDuration text states 60 seconds / 120 seconds in en/de/es/ar/tr"
+      - "GREEN: frontend/tests/i18n.test.js regex assertions match the new wording"
+    allowed_files:
+      - "frontend/src/charts/pipeline_execution_duration_chart.js"
+      - "frontend/tests/charts/pipeline_execution_duration_chart.test.js"
+      - "frontend/src/i18n.js"
+      - "frontend/tests/i18n.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/charts/pipeline_execution_duration_chart.js"
+      - "frontend/src/i18n.js"
+
+  - id: "14.3"
+    title: "Document tightened thresholds"
+    description: "Update documentation/PIPELINE_HEALTH_LAYER.md wherever it references the old 5/10-minute (300s/600s) execution duration rule."
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 0.5
+    depends_on: []
+    branch: "feature/dashboard-ux-refinements/14.3-docs-thresholds"
+    commit_message: "docs(health): document 60s/120s execution duration thresholds"
+    acceptance_criteria:
+      - "GREEN: PIPELINE_HEALTH_LAYER.md no longer references 5-minute/10-minute or 300s/600s duration thresholds"
+      - "GREEN: no unrelated content changed"
+    allowed_files:
+      - "documentation/PIPELINE_HEALTH_LAYER.md"
+    forbidden_files:
+      - "src/**"
+      - "frontend/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["14.1"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "documentation/PIPELINE_HEALTH_LAYER.md"
+
+  - id: "14.4"
+    title: "Add listing-count-over-time transforms (district + neighbourhood)"
+    description: "Add formatDistrictCountSeries and formatNeighborhoodCountSeries to transforms.js, mirroring formatDistrictSeries/formatSeries but plotting count_listings instead of mean_priceByArea."
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 2
+    depends_on: []
+    branch: "feature/dashboard-ux-refinements/14.4-count-series-transforms"
+    commit_message: "feat(frontend): add listing-count time-series transforms"
+    acceptance_criteria:
+      - "RED: tests for formatDistrictCountSeries/formatNeighborhoodCountSeries fail before they exist"
+      - "GREEN: null/empty input returns []"
+      - "GREEN: traces group by (operation, district) / (operation, neighbourhood) with y = count_listings"
+      - "GREEN: existing formatDistrictSeries/formatSeries behaviour is unchanged (no regression)"
+    allowed_files:
+      - "frontend/src/transforms.js"
+      - "frontend/tests/transforms.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["14.1", "14.2", "14.3"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/src/transforms.js"
+
+  - id: "14.5"
+    title: "Add listing-count-over-time chart renderers"
+    description: "Add listing_count_time_series_district.js and listing_count_time_series_neighborhood.js chart renderer modules, mirroring price_time_series_district.js's Strategy+Factory pattern."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2.5
+    depends_on: ["14.4"]
+    branch: "feature/dashboard-ux-refinements/14.5-count-chart-renderers"
+    commit_message: "feat(charts): add listing count per district/neighbourhood over time charts"
+    acceptance_criteria:
+      - "RED: renderer tests fail before the modules exist"
+      - "GREEN: both renderers expose stable {id, title, render} contract"
+      - "GREEN: null/empty population block returns a valid empty figure"
+      - "GREEN: well-formed input produces one trace per district/neighbourhood with y = count_listings"
+    allowed_files:
+      - "frontend/src/charts/listing_count_time_series_district.js"
+      - "frontend/src/charts/listing_count_time_series_neighborhood.js"
+      - "frontend/tests/listing_count_time_series_district.test.js"
+      - "frontend/tests/listing_count_time_series_neighborhood.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create:
+      - "frontend/src/charts/listing_count_time_series_district.js"
+      - "frontend/src/charts/listing_count_time_series_neighborhood.js"
+      - "frontend/tests/listing_count_time_series_district.test.js"
+      - "frontend/tests/listing_count_time_series_neighborhood.test.js"
+    files_to_modify: []
+
+  - id: "14.6"
+    title: "Wire listing-count charts into Trend Analysis tab"
+    description: "Register both new renderers in GENERAL_ONLY_RENDERERS, add chart containers to index.html's Trend Analysis chart-grid, add i18n titles/axis keys (5 locales), add ids to SHARED_DATE_XAXIS_RENDERER_IDS."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["14.5"]
+    branch: "feature/dashboard-ux-refinements/14.6-wire-count-charts"
+    commit_message: "feat(frontend): wire listing count charts into Trend Analysis tab"
+    acceptance_criteria:
+      - "GREEN: both new chart containers render on initial load alongside existing general-only charts"
+      - "GREEN: chart titles/axis labels are translated in all 5 locales"
+      - "GREEN: existing Trend Analysis charts/tests are unaffected"
+    allowed_files:
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "frontend/src/i18n.js"
+      - "frontend/tests/app.test.js"
+      - "frontend/tests/i18n.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/app.js"
+      - "frontend/index.html"
+      - "frontend/src/i18n.js"
+
+  - id: "14.7"
+    title: "Add regression test for count_listings presence in price time series"
+    description: "Add a backend test in test_gold_aggregator.py asserting count_listings is present and correct on price_time_series_district/price_time_series_neighborhood records, documenting the dependency introduced by task 14.5/14.6."
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 1
+    depends_on: []
+    branch: "feature/dashboard-ux-refinements/14.7-count-listings-regression-guard"
+    commit_message: "test(gold): guard count_listings on price time series aggregations"
+    acceptance_criteria:
+      - "GREEN: test explicitly asserts count_listings field presence/correctness on both datasets"
+      - "GREEN: no production code changes required (documents existing behaviour)"
+    allowed_files:
+      - "src/etl/data_processing/tests/test_gold_aggregator.py"
+    forbidden_files:
+      - "frontend/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["14.1", "14.2", "14.3", "14.4", "14.5", "14.6"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "src/etl/data_processing/tests/test_gold_aggregator.py"
+
+  - id: "14.8"
+    title: "Convert population toggle to a details/summary dropdown"
+    description: "Replace the always-visible population radio-button row with a <details class=scope-dropdown> matching Districts/Neighborhoods; update show/hide logic in app.js from style.display to the hidden attribute; update DOM-builder test helpers."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 3
+    depends_on: []
+    branch: "feature/dashboard-ux-refinements/14.8-population-dropdown"
+    commit_message: "feat(frontend): convert population toggle to a details dropdown"
+    acceptance_criteria:
+      - "RED: DOM structure tests fail against the old radio-row markup before the change"
+      - "GREEN: #population-toggle is a <details class=scope-dropdown> with a <summary> badge and the same two radio inputs inside a fieldset"
+      - "GREEN: change listener on input[name=population] still fires activePopulation updates unchanged"
+      - "GREEN: toggle show/hide-when-no-relevant-data behaviour is preserved using the hidden attribute"
+      - "GREEN: visual style matches #district-filter/#neighborhood-filter (reuses .scope-dropdown/.scope-options/.scope-badge)"
+    allowed_files:
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/app.js"
+      - "frontend/tests/app.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["14.1", "14.2", "14.3", "14.4", "14.5", "14.6", "14.7", "14.9"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/index.html"
+      - "frontend/styles.css"
+      - "frontend/app.js"
+
+  - id: "14.9"
+    title: "Remove dead footer 'Data last updated' span"
+    description: "Remove the never-populated #data-updated footer span and its footer.dataUpdated i18n key (all 5 locales); remove the key from the i18n expected-keys test list."
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 1
+    depends_on: []
+    branch: "feature/dashboard-ux-refinements/14.9-remove-dead-footer"
+    commit_message: "fix(frontend): remove dead footer last-updated span (duplicates KPI card)"
+    acceptance_criteria:
+      - "GREEN: #data-updated span no longer exists in frontend/index.html"
+      - "GREEN: footer.dataUpdated key removed from all 5 locales in i18n.js"
+      - "GREEN: frontend/tests/i18n.test.js no longer expects footer.dataUpdated"
+      - "GREEN: footer still renders the GitHub source link unchanged"
+      - "GREEN: #kpi-row 'last-updated' KPI card is unaffected"
+    allowed_files:
+      - "frontend/index.html"
+      - "frontend/src/i18n.js"
+      - "frontend/tests/i18n.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: ["14.1", "14.2", "14.3", "14.4", "14.5", "14.6", "14.7", "14.8"]
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/index.html"
+      - "frontend/src/i18n.js"
+
+  - id: "14.13"
+    title: "Hoist shared filter-bar UI above both Trend Analysis and Data Basis tabs"
+    description: "Move the .filter-bar markup out of #panel-trend-analysis into a single shared location inside <main>, before both tab panels; update app.js filter-bar visibility logic (hidden only on Pipeline Health tab) and re-render wiring so scope/population changes refresh whichever tab(s) are active."
+    status: "not_started"
+    complexity: "large"
+    estimated_hours: 3.5
+    depends_on: ["14.8"]
+    branch: "feature/dashboard-ux-refinements/14.13-shared-filter-bar"
+    commit_message: "feat(frontend): hoist shared filter-bar across Trend Analysis and Data Basis tabs"
+    acceptance_criteria:
+      - "GREEN: exactly one #population-toggle/#district-filter/#neighborhood-filter DOM instance exists"
+      - "GREEN: filter-bar is visible on Trend Analysis and Data Basis, hidden on Pipeline Health"
+      - "GREEN: changing scope/population while on Data Basis re-renders Data Basis charts; while on Trend Analysis re-renders Trend Analysis charts"
+      - "GREEN: no duplicate event listeners fire on repeated tab switches"
+      - "GREEN: existing Trend Analysis filter-bar CSS layout (.filter-bar next to #kpi-row) is visually unchanged"
+    allowed_files:
+      - "frontend/index.html"
+      - "frontend/app.js"
+      - "frontend/styles.css"
+      - "frontend/tests/app.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/index.html"
+      - "frontend/app.js"
+      - "frontend/styles.css"
+
+  - id: "14.14"
+    title: "Scope the Data Basis listing-locations-map to district/neighbourhood filters"
+    description: "renderDataBasisTab() applies applyScope() (district/neighbourhood only) to the unfiltered data_basis block before rendering listing_locations_map.js, which already carries district/neighborhood on every record; population-based data_basis_relevant splitting and re-aggregated histogram/volume/rooms/price-per-area filtering are deferred to FEATURE-016 (see notes) since the 4 other Data Basis datasets do not yet carry a district/neighbourhood dimension."
+    status: "not_started"
+    complexity: "small"
+    estimated_hours: 1.5
+    depends_on: ["14.13"]
+    branch: "feature/dashboard-ux-refinements/14.14-scope-data-basis-map"
+    commit_message: "feat(frontend): apply district/neighbourhood scope filter to Data Basis map"
+    acceptance_criteria:
+      - "GREEN: renderDataBasisTab() passes applyScope(cachedData.data_basis) to listing_locations_map.js"
+      - "GREEN: listing-locations-map narrows correctly to selected district/neighbourhood"
+      - "GREEN: the other 4 Data Basis renderers (weekly-listing-volume, size-histogram, rooms-distribution, price-per-area-histogram) are documented as NOT yet scope-filtered (known, temporary limitation tracked by FEATURE-016) and are unchanged/unaffected by this task"
+      - "GREEN: the population toggle has no effect on the Data Basis tab in this feature (data_basis stays population-unsplit until FEATURE-016); this is documented in the UI copy/docs, not silently inconsistent"
+      - "GREEN: search-config panel and other unaffected sections are unchanged"
+    allowed_files:
+      - "frontend/app.js"
+      - "frontend/tests/app.test.js"
+    forbidden_files:
+      - "src/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "frontend/app.js"
+
+  - id: "14.16"
+    title: "Full validation, coverage check, and deployment readiness"
+    description: "Run the full backend/frontend test suites, confirm >80% coverage on new/changed modules, run workflow-consistency validation, and prepare dev deployment/verification notes before any prod promotion."
+    status: "not_started"
+    complexity: "medium"
+    estimated_hours: 2
+    depends_on: ["14.2", "14.3", "14.6", "14.7", "14.9", "14.14"]
+    branch: "feature/dashboard-ux-refinements/14.16-validate-and-verify"
+    commit_message: "chore: validate FEATURE-014 and prepare deployment verification"
+    acceptance_criteria:
+      - "GREEN: pytest src/etl -q passes in full"
+      - "GREEN: npx vitest run passes in full"
+      - "GREEN: python dev/tools/validate_workflow.py reports no new inconsistencies for FEATURE-014"
+      - "GREEN: coverage >80% on all new/changed Python and frontend modules"
+      - "GREEN: dev deployment verification notes recorded before prod promotion is requested separately"
+      - "GREEN: FEATURE-016 stub plan exists and is referenced for the deferred Data Basis dimensioning/re-aggregation work"
+    allowed_files:
+      - "dev/plans/FEATURE-014-dashboard-ux-refinements.md"
+      - "dev/plans/README.md"
+    forbidden_files:
+      - "src/**"
+      - "frontend/**"
+      - "infrastructure/**"
+    can_run_parallel_with: []
+    reversible: true
+    files_to_create: []
+    files_to_modify:
+      - "dev/plans/FEATURE-014-dashboard-ux-refinements.md"
+      - "dev/plans/README.md"
+
+git_workflow:
+  branch_root: "feature/dashboard-ux-refinements"
+  commit_style: "One commit per task using the task commit_message"
+  merge_strategy: "Small independent items (14.1-14.3, 14.8, 14.9) may merge in any order once green; the count-chart slice (14.4-14.7) and the shared-filter-bar slice (14.8, 14.13, 14.14) are each sequential on their own critical path; 14.16 runs last."
+  pre_pr_checks:
+    - "python-lint-and-test"
+    - "node-test"
+    - "workflow-consistency"
+
+notes:
+  - "Do not touch unrelated idealista-web-scraper placeholder files (dev/plans/FEATURE-015-idealista-web-scraper.md, dev/plans/technical/FEATURE-015-technical-plan.yaml, dev/reviews/REVIEW-FEATURE-015.md) — these are untracked, stray artifacts from an unrelated session that happen to occupy the FEATURE-015 slot."
+  - "Reviewer split the original architect plan's Phase 5a/5b/5d (district/neighbourhood dimensions on 4 Data Basis datasets, additive data_basis_relevant population split, and the matching frontend re-aggregation adapters) into a follow-up feature. Because FEATURE-015 is already occupied by the stray idealista-scraper files above, the follow-up is FEATURE-016 (dev/plans/FEATURE-016-data-basis-dimensioned-filters.md, stub only — no technical plan yet)."
+  - "No new AWS resources or IAM actions are introduced; only existing gold/pipeline-health Lambda payloads grow marginally."

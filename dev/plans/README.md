@@ -20,6 +20,8 @@ small, version-controlled, independently testable tasks.
 | FEATURE-011 | Dashboard tabs & Data Basis (deployed dev+prod) | ✅ | `feature/dashboard-tabs-data-basis` | L (~3–3.5 d) | Medium | @implementer |
 | FEATURE-012 | Pipeline Health monitoring (traffic light: bronze/silver/gold, API quota, AWS cost) | 🟢 | `feature/pipeline-health-monitoring` | L (~3.5–4 d) | Medium | @implementer |
 | FEATURE-013 | Pipeline Health tab — detailed views & history (Medallion diagram, 4 KPI history charts, threshold captions) | 🟡 | `feature/pipeline-health-detail-views` | L (~35 h) | Medium | @implementer |
+| FEATURE-014 | Dashboard UX refinements: health thresholds, trend counts, population dropdown, footer cleanup, Data Basis shared filter-bar | 🔵 | `feature/dashboard-ux-refinements` | M–L (~22.5 h) | Medium | Unassigned |
+| FEATURE-016 | Data Basis: district/neighbourhood dimensions + population split for the remaining 4 charts (follow-up to FEATURE-014, split by @reviewer) | 🔵 | `feature/data-basis-dimensioned-filters` | M (~11.5 h, pending own review) | Medium | Unassigned |
 
 **Status:** 🔵 planned · 🟡 in progress · 🟢 complete · 🔴 blocked
 
@@ -47,6 +49,9 @@ graph TD
     F010 --> F011
     F011 --> F012[FEATURE-012 Pipeline Health monitoring]
     F012 --> F013[FEATURE-013 Pipeline Health detail views]
+    F011 --> F014[FEATURE-014 Dashboard UX refinements]
+    F013 --> F014
+    F014 --> F016[FEATURE-016 Data Basis dimensioned filters]
 ```
 
 ## Workflow at a glance
