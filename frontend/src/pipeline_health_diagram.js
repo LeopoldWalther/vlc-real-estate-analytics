@@ -122,9 +122,13 @@ export function buildDiagramModel(document, { stageFunctionNames = DEFAULT_STAGE
   });
 
   const flowIds = ['source', 'bronze', 'silver', 'gold', 'dashboard'];
+  // Only the 3 Medallion stages (not the source/dashboard context nodes)
+  // fan an arrow down to the pipeline-health observer — the observer
+  // monitors the Lambda-backed pipeline stages, not the external API or
+  // the dashboard consumer.
   const edges = [
     ...flowIds.slice(0, -1).map((from, i) => ({ from, to: flowIds[i + 1] })),
-    ...flowIds.map((from) => ({ from, to: 'pipeline-health' })),
+    ...stageIds.map((from) => ({ from, to: 'pipeline-health' })),
   ];
 
   return { nodes, edges };

@@ -62,10 +62,10 @@ describe('buildDiagramModel', () => {
     ]);
   });
 
-  it('fans an edge from every flow node to the pipeline-health observer', () => {
+  it('fans an edge from every Medallion stage (not source/dashboard) to the pipeline-health observer', () => {
     const model = buildDiagramModel(DOCUMENT);
     const observerEdges = model.edges.filter((e) => e.to === 'pipeline-health');
-    expect(observerEdges.map((e) => e.from)).toEqual(['source', 'bronze', 'silver', 'gold', 'dashboard']);
+    expect(observerEdges.map((e) => e.from)).toEqual(['bronze', 'silver', 'gold']);
   });
 
   it('always reports the source and dashboard context nodes as unknown', () => {
