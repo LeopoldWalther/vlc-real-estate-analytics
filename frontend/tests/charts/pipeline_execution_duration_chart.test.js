@@ -30,9 +30,9 @@ describe('pipelineExecutionDurationChartRenderer', () => {
     expect(typeof pipelineExecutionDurationChartRenderer.title).toBe('string');
   });
 
-  it('thresholds match backend constants (300s / 600s)', () => {
-    expect(DURATION_YELLOW_THRESHOLD_SECONDS).toBe(300);
-    expect(DURATION_RED_THRESHOLD_SECONDS).toBe(600);
+  it('thresholds match backend constants (60s / 120s)', () => {
+    expect(DURATION_YELLOW_THRESHOLD_SECONDS).toBe(60);
+    expect(DURATION_RED_THRESHOLD_SECONDS).toBe(120);
   });
 
   it('bars match duration_seconds values', () => {
@@ -43,11 +43,11 @@ describe('pipelineExecutionDurationChartRenderer', () => {
     expect(bronze.y).toEqual([100.0, 320.0]);
   });
 
-  it('threshold shapes exist at 300s and 600s', () => {
+  it('threshold shapes exist at 60s and 120s', () => {
     const fig = pipelineExecutionDurationChartRenderer.render(DOCUMENT);
     const shapeYValues = fig.layout.shapes.map((s) => s.y0);
-    expect(shapeYValues).toContain(300);
-    expect(shapeYValues).toContain(600);
+    expect(shapeYValues).toContain(60);
+    expect(shapeYValues).toContain(120);
   });
 
   it('returns a valid empty figure for null/empty input', () => {

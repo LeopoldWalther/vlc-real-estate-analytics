@@ -212,8 +212,8 @@ describe('locale completeness (all 5 locales must expose identical key sets)', (
   });
 
   it('threshold captions match the backend Ampel rule constants (English)', () => {
-    expect(t('en', 'pipelineHealth.threshold.executionDuration')).toMatch(/5 minutes/);
-    expect(t('en', 'pipelineHealth.threshold.executionDuration')).toMatch(/10 minutes/);
+    expect(t('en', 'pipelineHealth.threshold.executionDuration')).toMatch(/60 seconds/);
+    expect(t('en', 'pipelineHealth.threshold.executionDuration')).toMatch(/120 seconds/);
     expect(t('en', 'pipelineHealth.threshold.apiQuota')).toMatch(/80/);
     expect(t('en', 'pipelineHealth.threshold.apiQuota')).toMatch(/95/);
     expect(t('en', 'pipelineHealth.threshold.apiQuota')).toMatch(/100/);
